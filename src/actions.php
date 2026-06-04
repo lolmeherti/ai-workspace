@@ -8,11 +8,11 @@ use App\Agents\MemorySelector;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    $isApiRequest = isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false;
+    $isApiRequest = isset($_SERVER['HTTP_ACCEPT']) && (strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false || strpos($_SERVER['HTTP_ACCEPT'], 'text/event-stream') !== false);
     
     if ($isApiRequest) {
-        header('Content-Type: application/json');
         if (!$status->all_operational || !$db) {
+            header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => 'System offline.']);
             exit;
         }
@@ -24,16 +24,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cacheKey = $_POST['cache_key'] ?? null;
 
         if (empty($query) && empty($imageFile) && empty($cacheAction)) {
+            header('Content-Type: application/json');
             echo json_encode(['status' => 'error', 'message' => 'Empty prompt.']);
             exit;
         }
 
-        $searchDecider = new SearchDecider($agentManager);
-        $cacheEvaluator = new SemanticCacheEvaluator($agentManager);
-        $contextCondenser = new ContextCondenser($agentManager);
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+        
+        echo ":" . str_repeat(" ", 4096) . "\n\n";
+        @flush();
+
+        $searchDecider = clone new SearchDecider($agentManager);
+        $cacheEvaluator = clone new SemanticCacheEvaluator($agentManager);
+        $contextCondenser = clone new ContextCondenser($agentManager);
         $memorySelectorInstance = clone $db ? new MemorySelector($db, $agentManager) : null;
 
-        $chatManager = new ChatManager(
+        $chatManager = clone new ChatManager(
             $db, 
             $agentManager, 
             $memoryExtractor, 
@@ -43,9 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $contextCondenser
         );
 
-        $response = $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey);
+        $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, function($event, $data) {
+            echo "data: " . json_encode(['event' => $event, 'data' => $data]) . "\n\n";
+            @ob_flush();
+            @flush();
+        });
         
-        echo json_encode($response);
         exit;
     }
 

@@ -1,15 +1,12 @@
 let activeTab = currentActiveTab || 'chats';
 
-// Controller to handle switching sidebar panels cleanly
 function switchSidebarTab(tabName) {
     activeTab = tabName;
     
-    // Hide panels
     document.getElementById('panel-chats').classList.add('hidden');
     document.getElementById('panel-memories').classList.add('hidden');
     document.getElementById('panel-queries').classList.add('hidden');
 
-    // Reset tab navigation styles
     ['chats', 'memories', 'queries'].forEach(t => {
         const btn = document.getElementById(`tab-btn-${t}`);
         if (btn) {
@@ -17,7 +14,6 @@ function switchSidebarTab(tabName) {
         }
     });
 
-    // Display targets
     const targetPanel = document.getElementById(`panel-${tabName}`);
     if (targetPanel) {
         targetPanel.classList.remove('hidden');
@@ -28,12 +24,10 @@ function switchSidebarTab(tabName) {
         activeBtn.className = "flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 bg-slate-800 text-white shadow-md font-semibold border border-slate-700/50 cursor-pointer";
     }
 
-    // Preserve parameters inside window history
     const url = new URL(window.location);
     url.searchParams.set('tab', tabName);
     window.history.replaceState({}, '', url);
 
-    // Sync active settings form redirect parameters
     const settingsForm = document.querySelector('#settings-modal form');
     if (settingsForm) {
         const actionUrl = new URL(settingsForm.action, window.location.origin);
@@ -42,7 +36,6 @@ function switchSidebarTab(tabName) {
     }
 }
 
-// Inline edit triggers for memories tab
 function enableMemoryEdit(id) {
     document.getElementById(`memory-view-${id}`).classList.add('hidden');
     document.getElementById(`memory-edit-${id}`).classList.remove('hidden');
@@ -54,7 +47,6 @@ function disableMemoryEdit(id) {
     document.getElementById(`memory-edit-${id}`).classList.add('hidden');
 }
 
-// Parse markdown targets
 function parseMarkdownElements() {
     document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(function(el) {
         el.innerHTML = marked.parse(el.getAttribute('data-markdown'));
@@ -62,9 +54,8 @@ function parseMarkdownElements() {
     });
 }
 
-// Clipboard Copy Utility
 function copyToClipboard(button) {
-    const container = button.closest('.flex-col');
+    const container = button.closest('.chat-message-container');
     if (!container) return;
     
     const bubble = container.querySelector('[data-raw]');
@@ -85,12 +76,9 @@ function copyToClipboard(button) {
                 button.classList.add('text-slate-500', 'hover:text-cyan-400');
             }, 1500);
         }
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-    });
+    }).catch(err => {});
 }
 
-// Initial state setups
 parseMarkdownElements();
 switchSidebarTab(activeTab);
 
@@ -99,7 +87,6 @@ if (chatWindow) {
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// Image preview handling
 function previewImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -118,7 +105,6 @@ function removeImage() {
     document.getElementById('q').setAttribute('required', 'required');
 }
 
-// Map keydown action: enter submission
 const textareaInput = document.getElementById('q');
 if (textareaInput) {
     textareaInput.addEventListener('keydown', function(e) {
@@ -129,7 +115,220 @@ if (textareaInput) {
     });
 }
 
-// Submit via AJAX
+async function streamResponse(formData, originalMessage) {
+    const tplAi = document.getElementById('tpl-ai-message');
+    const aiNode = tplAi.content.cloneNode(true);
+    const aiWrapper = aiNode.querySelector('.ai-wrapper');
+    const aiBubble = aiNode.querySelector('.ai-bubble');
+    const aiLabelContainer = aiNode.querySelector('.ai-label-container');
+    
+    aiBubble.innerHTML = `
+        <div class="flex items-center gap-3 text-cyan-400 font-medium loading-indicator">
+            <span class="uk-spinner uk-spinner-sm animate-spin" uk-spinner="ratio: 0.8"></span>
+            <span class="loading-text">Initializing...</span>
+        </div>
+        <div class="scraping-container flex flex-col gap-2 mt-3 hidden"></div>
+    `;
+    chatWindow.appendChild(aiNode);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    const loadingIndicator = aiWrapper.querySelector('.loading-indicator');
+    const loadingText = aiWrapper.querySelector('.loading-text');
+    const scrapingContainer = aiWrapper.querySelector('.scraping-container');
+    let markdownBuffer = "";
+    let isFirstToken = true;
+
+    try {
+        const response = await fetch('index.php', {
+            method: 'POST',
+            headers: { 'Accept': 'text/event-stream' },
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            let lines = buffer.split("\n\n");
+            buffer = lines.pop();
+
+            for (let line of lines) {
+                if (line.startsWith('data: ')) {
+                    const payloadStr = line.substring(6);
+                    try {
+                        const payload = JSON.parse(payloadStr);
+                        const event = payload.event;
+                        const data = payload.data;
+
+                        if (event === 'title_updated') {
+                            const headerTitle = document.querySelector('header h2');
+                            if (headerTitle) headerTitle.innerHTML = `<uk-icon icon="message-square" class="w-5 h-5 text-cyan-500"></uk-icon> ${data.title}`;
+                            const activeItemTitle = document.querySelector('.group.bg-slate-800\\/80 .session-title');
+                            if (activeItemTitle) activeItemTitle.textContent = data.title;
+                        }
+
+                        if (event === 'search_decided') {
+                            loadingText.textContent = `Searching web for: "${data.query}"...`;
+                            const badge = document.createElement('span');
+                            badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
+                            badge.innerHTML = '<uk-icon icon="globe" class="w-3 h-3"></uk-icon> Web Search';
+                            aiLabelContainer.appendChild(badge);
+                        }
+
+                        if (event === 'cache_used') {
+                            const badge = document.createElement('span');
+                            badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
+                            badge.innerHTML = '<uk-icon icon="zap" class="w-3 h-3"></uk-icon> Memory Cached';
+                            aiLabelContainer.appendChild(badge);
+                        }
+
+                        if (event === 'ask_user') {
+                            aiWrapper.remove();
+                            
+                            const tplAsk = document.getElementById('tpl-ask-user');
+                            const askNode = tplAsk.content.cloneNode(true);
+                            const askWrapper = askNode.querySelector('.cache-prompt-bubble');
+                            
+                            askNode.querySelector('.ask-topic').textContent = `"${data.query_text}"`;
+                            
+                            const btnUse = askNode.querySelector('.btn-use-cache');
+                            const btnForce = askNode.querySelector('.btn-force-live');
+                            
+                            btnUse.onclick = function() {
+                                askWrapper.remove();
+                                const newForm = new FormData();
+                                newForm.append('session_id', data.session_id);
+                                newForm.append('q', originalMessage);
+                                newForm.append('cache_action', 'use_cache');
+                                newForm.append('cache_key', data.cache_key);
+                                streamResponse(newForm, originalMessage);
+                            };
+                            
+                            btnForce.onclick = function() {
+                                askWrapper.remove();
+                                const newForm = new FormData();
+                                newForm.append('session_id', data.session_id);
+                                newForm.append('q', originalMessage);
+                                newForm.append('cache_action', 'force_live');
+                                newForm.append('cache_key', data.cache_key);
+                                streamResponse(newForm, originalMessage);
+                            };
+                            
+                            chatWindow.appendChild(askNode);
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            return;
+                        }
+
+                        if (event === 'scraping_start') {
+                            loadingText.textContent = "Extracting knowledge...";
+                            scrapingContainer.classList.remove('hidden');
+                            
+                            const linkRow = document.createElement('div');
+                            linkRow.className = "flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50";
+                            linkRow.setAttribute('data-url', data.url);
+                            linkRow.innerHTML = `
+                                <span class="uk-spinner uk-spinner-xs animate-spin text-cyan-500" uk-spinner="ratio: 0.5"></span>
+                                <span class="truncate max-w-[200px]">${data.url}</span>
+                            `;
+                            scrapingContainer.appendChild(linkRow);
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        }
+
+                        if (event === 'scraping_done') {
+                            const row = scrapingContainer.querySelector(`[data-url="${data.url}"]`);
+                            if (row) {
+                                row.classList.remove('text-slate-400');
+                                row.classList.add('text-emerald-400');
+                                const existingSpinner = row.querySelector('.uk-spinner');
+                                if (existingSpinner) existingSpinner.remove();
+                                row.insertAdjacentHTML('afterbegin', '<uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>');
+                            }
+                        }
+
+                        if (event === 'condensing') {
+                            loadingText.textContent = "Condensing information...";
+                        }
+
+                        if (event === 'generating') {
+                            loadingText.textContent = "Thinking...";
+                            if (scrapingContainer.children.length > 0) {
+                                scrapingContainer.classList.add('mb-4', 'pb-4', 'border-b', 'border-slate-700/50');
+                            }
+                            aiBubble.classList.add('shadow-[0_0_15px_rgba(6,182,212,0.15)]', 'border-cyan-500/30');
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        }
+
+                        if (event === 'token') {
+                            if (isFirstToken) {
+                                isFirstToken = false;
+                                if (loadingIndicator && loadingIndicator.parentNode) {
+                                    loadingIndicator.remove();
+                                }
+                            }
+
+                            markdownBuffer += data.chunk;
+                            let htmlContent = marked.parse(markdownBuffer);
+                            const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
+                            
+                            let existingScraping = aiBubble.querySelector('.scraping-container');
+                            if (existingScraping) {
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = htmlContent + cursorHtml;
+                                
+                                Array.from(aiBubble.childNodes).forEach(child => {
+                                    if (child !== existingScraping) child.remove();
+                                });
+                                
+                                Array.from(tempDiv.childNodes).forEach(child => {
+                                    aiBubble.appendChild(child);
+                                });
+                            } else {
+                                aiBubble.innerHTML = htmlContent + cursorHtml;
+                            }
+                            
+                            aiBubble.setAttribute('data-raw', markdownBuffer);
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        }
+
+                        if (event === 'done') {
+                            const cursor = aiBubble.querySelector('.animate-pulse');
+                            if (cursor) {
+                                cursor.remove();
+                            }
+                            if (loadingIndicator && loadingIndicator.parentNode) {
+                                loadingIndicator.remove();
+                            }
+                            if (scrapingContainer && scrapingContainer.children.length === 0) {
+                                scrapingContainer.remove();
+                            }
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        }
+
+                    } catch (e) {}
+                }
+            }
+        }
+        
+        aiBubble.classList.add('parsed');
+
+    } catch (error) {
+        console.error("Stream Error:", error);
+        if (loadingText) loadingText.textContent = "Connection failed.";
+        const spinner = loadingIndicator ? loadingIndicator.querySelector('.uk-spinner') : null;
+        if (spinner) spinner.remove();
+        if (loadingIndicator) loadingIndicator.classList.replace('text-cyan-400', 'text-rose-400');
+    }
+}
+
 async function handleChatSubmit(e) {
     e.preventDefault();
     
@@ -142,7 +341,7 @@ async function handleChatSubmit(e) {
     
     if (!message && !file) return;
 
-    const emptyState = document.querySelector('.flex.flex-col.items-center.opacity-80');
+    const emptyState = document.getElementById('empty-state');
     if (emptyState) emptyState.remove();
 
     const formData = new FormData(form);
@@ -156,117 +355,23 @@ async function handleChatSubmit(e) {
         fileDataUrl = document.getElementById('image-preview').src;
     }
 
-    // Construct User Bubble DOM programmatically to maintain raw attributes safely
-    const userWrapper = document.createElement('div');
-    userWrapper.className = "flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-end mb-4";
-
-    const userLabelRow = document.createElement('div');
-    userLabelRow.className = "flex items-center gap-2 flex-row-reverse mr-1";
-
-    const userLabel = document.createElement('span');
-    userLabel.className = "text-xs text-slate-500 font-semibold uppercase tracking-wider";
-    userLabel.textContent = "You";
-
-    const userCopyBtn = document.createElement('button');
-    userCopyBtn.className = "text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center";
-    userCopyBtn.setAttribute('title', 'Copy message');
-    userCopyBtn.setAttribute('onclick', 'copyToClipboard(this)');
-    userCopyBtn.innerHTML = '<uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>';
-
-    userLabelRow.appendChild(userLabel);
-    userLabelRow.appendChild(userCopyBtn);
-
-    const userBubble = document.createElement('div');
-    userBubble.className = "chat-user rounded-2xl rounded-tr-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]";
+    const tplUser = document.getElementById('tpl-user-message');
+    const userNode = tplUser.content.cloneNode(true);
+    
+    const userBubble = userNode.querySelector('.bubble-content');
+    const msgText = userNode.querySelector('.msg-text');
+    const imgElement = userNode.querySelector('.upload-img');
+    
     userBubble.setAttribute('data-raw', message);
-
+    msgText.innerHTML = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
+    
     if (fileDataUrl) {
-        const img = document.createElement('img');
-        img.src = fileDataUrl;
-        img.className = "max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block";
-        img.alt = "Upload";
-        userBubble.appendChild(img);
-    }
-
-    const textSpan = document.createElement('span');
-    textSpan.innerHTML = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
-    userBubble.appendChild(textSpan);
-
-    userWrapper.appendChild(userLabelRow);
-    userWrapper.appendChild(userBubble);
-    chatWindow.appendChild(userWrapper);
-    
-    let typingHtml = `
-        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-start mb-4" id="typingIndicator">
-            <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider ml-1">Assistant</span>
-            <div class="chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-sm leading-relaxed max-w-[85%] border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-                <div class="flex items-center gap-3 text-cyan-400 font-medium">
-                    <span class="uk-spinner uk-spinner-sm animate-spin" uk-spinner="ratio: 0.8"></span>
-                    Analyzing data...
-                </div>
-            </div>
-        </div>
-    `;
-    chatWindow.insertAdjacentHTML('beforeend', typingHtml);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-
-    try {
-        const response = await fetch('index.php', {
-            method: 'POST',
-            headers: { 'Accept': 'application/json' },
-            body: formData
-        });
-        
-        const data = await response.json();
-        const indicator = document.getElementById('typingIndicator');
-        if (indicator) indicator.remove();
-        
-        if (data.status === 'success') {
-            const aiWrapper = document.createElement('div');
-            aiWrapper.className = "flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-start mb-4";
-            
-            const aiLabelRow = document.createElement('div');
-            aiLabelRow.className = "flex items-center gap-2 ml-1";
-            
-            const label = document.createElement('span');
-            label.className = "text-xs text-slate-500 font-semibold uppercase tracking-wider";
-            label.textContent = "Assistant";
-            
-            const aiCopyBtn = document.createElement('button');
-            aiCopyBtn.className = "text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center";
-            aiCopyBtn.setAttribute('title', 'Copy message');
-            aiCopyBtn.setAttribute('onclick', 'copyToClipboard(this)');
-            aiCopyBtn.innerHTML = '<uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>';
-            
-            aiLabelRow.appendChild(label);
-            aiLabelRow.appendChild(aiCopyBtn);
-            
-            const bubble = document.createElement('div');
-            bubble.className = "chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] markdown-content markdown-rendered";
-            bubble.setAttribute('data-markdown', data.message);
-            bubble.setAttribute('data-raw', data.message);
-            
-            aiWrapper.appendChild(aiLabelRow);
-            aiWrapper.appendChild(bubble);
-            chatWindow.appendChild(aiWrapper);
-            
-            parseMarkdownElements();
-
-            if (data.title) {
-                const headerTitle = document.querySelector('header h2');
-                if (headerTitle) headerTitle.innerHTML = `<uk-icon icon="message-square" class="w-5 h-5 text-cyan-500"></uk-icon> ${data.title}`;
-                
-                const activeItemTitle = document.querySelector('.group.bg-slate-800\\/80 .session-title');
-                if (activeItemTitle) activeItemTitle.textContent = data.title;
-            }
-        } else {
-            alert('Error: ' + data.message);
-        }
-    } catch (error) {
-        const indicator = document.getElementById('typingIndicator');
-        if (indicator) indicator.remove();
-        alert('Connection failed.');
+        imgElement.src = fileDataUrl;
+        imgElement.classList.remove('hidden');
     }
     
+    chatWindow.appendChild(userNode);
     chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    await streamResponse(formData, message);
 }

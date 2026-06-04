@@ -31,15 +31,18 @@ class LlmClient
             'Content-Type: application/json',
             'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
         ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
 
         $fullResponse = '';
 
         if ($stream) {
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse) {
-                $lines = explode("\n", $data);
+            $buffer = '';
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$buffer) {
+                $buffer .= $data;
                 
-                foreach ($lines as $line) {
-                    $line = trim($line);
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
                     
                     if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
                         $json = json_decode(substr($line, 6), true);

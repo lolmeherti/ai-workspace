@@ -44,8 +44,14 @@ class ChatManager
         $this->uploadDir = __DIR__ . '/../uploads/';
     }
 
-    public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null): array
+    public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?callable $streamCallback = null): array
     {
+        $emit = function(string $event, array $data = []) use ($streamCallback) {
+            if ($streamCallback !== null) {
+                $streamCallback($event, $data);
+            }
+        };
+
         $imagePath = null;
         $updatedTitle = null;
         
@@ -94,6 +100,7 @@ class ChatManager
             if (!empty($newTitle) && strlen($newTitle) < 50) {
                 $this->db->update('chat_sessions', ['title' => $newTitle], ['id' => $sessionId]);
                 $updatedTitle = $newTitle;
+                $emit('title_updated', ['title' => $newTitle]);
             }
         }
 
@@ -105,26 +112,34 @@ class ChatManager
             $searchQuery = $this->searchDecider->requiresSearch($query);
             
             if ($searchQuery) {
+                $emit('search_decided', ['query' => $searchQuery]);
+
                 if ($cacheAction === 'use_cache' && !empty($cacheKeyToUse)) {
                     $condensedContext = Cache::get($cacheKeyToUse) ?? '';
                     $usedCache = !empty($condensedContext);
+                    if ($usedCache) {
+                        $emit('cache_used', []);
+                    }
                 } elseif ($cacheAction !== 'force_live') {
                     $ledger = Cache::getSearchLedger();
                     $evaluation = $this->cacheEvaluator->evaluate($searchQuery, $ledger);
                     
                     if ($evaluation) {
                         if ($evaluation['decision'] === 'ASK_USER') {
-                            return [
-                                'status' => 'ask_user',
+                            $emit('ask_user', [
                                 'cache_key' => $evaluation['cache_key'],
                                 'query_text' => $evaluation['query'],
                                 'session_id' => $sessionId
-                            ];
+                            ]);
+                            return [];
                         }
                         
                         if ($evaluation['decision'] === 'AUTO_USE') {
                             $condensedContext = Cache::get($evaluation['cache_key']) ?? '';
                             $usedCache = !empty($condensedContext);
+                            if ($usedCache) {
+                                $emit('cache_used', []);
+                            }
                         }
                     }
                 }
@@ -135,10 +150,13 @@ class ChatManager
                     
                     $scrapedPages = [];
                     foreach ($results as $url) {
+                        $emit('scraping_start', ['url' => $url]);
                         $scrapedPages[] = Scraper::fetchAndClean($url);
+                        $emit('scraping_done', ['url' => $url]);
                     }
                     
                     if (!empty($scrapedPages)) {
+                        $emit('condensing', []);
                         $condensedContext = $this->contextCondenser->condense($scrapedPages, $query);
                         
                         $newCacheKey = 'ctx_' . md5($searchQuery . time());
@@ -199,7 +217,24 @@ class ChatManager
             }
         }
 
-        $aiResponse = $this->agent->chat($messages, false);
+        $emit('generating', []);
+
+        $aiResponse = '';
+        $utf8_buffer = '';
+        
+        $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiResponse, &$utf8_buffer) {
+            $aiResponse .= $chunk;
+            $utf8_buffer .= $chunk;
+            
+            if (mb_check_encoding($utf8_buffer, 'UTF-8')) {
+                $emit('token', ['chunk' => $utf8_buffer]);
+                $utf8_buffer = '';
+            }
+        });
+
+        if (!empty($utf8_buffer)) {
+            $emit('token', ['chunk' => mb_convert_encoding($utf8_buffer, 'UTF-8', 'UTF-8')]);
+        }
 
         $this->db->insert('chat_history', [
             'session_id' => $sessionId,
@@ -207,6 +242,11 @@ class ChatManager
             'message' => $aiResponse,
             'image_path' => null,
             'token_estimate' => (int)(mb_strlen($aiResponse) / 4)
+        ]);
+
+        $emit('done', [
+            'message' => $aiResponse,
+            'title' => $updatedTitle
         ]);
 
         return [
