@@ -4,6 +4,7 @@ namespace App\Agents;
 
 use App\AgentManager;
 use App\Config;
+use App\Cache;
 
 class SemanticCacheEvaluator
 {
@@ -24,7 +25,10 @@ class SemanticCacheEvaluator
         
         $ledgerText = "";
         foreach ($ledger as $index => $item) {
-            $ledgerText .= "ID: {$index} | Query: \"{$item['query']}\" | Time Executed: {$item['human_time']}\n";
+            $rawContent = Cache::get($item['cache_key']) ?? '';
+
+            $ledgerText .= "ID: {$index}\nQuery: \"{$item['query']}\"\nCache:\n\"{$rawContent}\"\n";
+            $ledgerText .= "--------------------------------------------------\n";
         }
 
         $systemPrompt = <<<TEXT
@@ -36,13 +40,13 @@ Return ONLY JSON matching this schema:
   "matched_id": integer or null
 }
 
-Determine if the new search query can be satisfied by a recent past search from the ledger. 
-- Set decision to "AUTO_USE" if an identical or highly similar query was run very recently.
-- Set decision to "ASK_USER" if a similar query exists but is borderline (e.g., a few days old).
-- Set decision to "NONE" if no past queries match or are fresh enough.
+Rules:
+- "AUTO_USE": This is when a cache entry contains the exact, specific answer to the New Query, and it is reasonably recent.
+- "ASK_USER": This is when a cache entry contains the exact, specific answer to the New Query, but it might be outdated (e.g., several hours or days old).
+- "NONE": This is when the cache content doesn't contain the answer to the New Query, or details are missing. If a cache entry is on the same topic but lacks the specific detail asked for, you MUST choose "NONE".
 TEXT;
 
-        $userMessage = "New Search Query: {$newSearchQuery}\n\nPast Queries Ledger:\n{$ledgerText}";
+        $userMessage = "New Query: {$newSearchQuery}\n\nLedger:\n{$ledgerText}";
 
         $messages = [
             ['role' => 'system', 'content' => $systemPrompt],
@@ -50,7 +54,6 @@ TEXT;
         ];
 
         $temperature = (float) Config::get('AGENT_CACHE_EVAL_TEMP', 0.2);
-        
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
         if (strpos($response, '```') !== false) {

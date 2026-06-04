@@ -52,7 +52,6 @@ class ChatManager
             }
         };
 
-        // --- INTERACTIVE CONDENSATION CHECK ---
         $bypassWarning = (int)($_POST['bypass_warning'] ?? 0);
         if (empty($cacheAction) && !$bypassWarning) {
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
@@ -64,7 +63,7 @@ class ChatManager
                 }
 
                 $threshold = (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000);
-                $triggerThreshold = $threshold * 0.8; // Trigger warning when getting close (80% of limit)
+                $triggerThreshold = $threshold * 0.8;
 
                 if ($totalTokens >= $triggerThreshold) {
                     $emit('limit_warning', [
@@ -79,7 +78,6 @@ class ChatManager
                 }
             }
         }
-        // --------------------------------------
 
         $imagePath = null;
         $updatedTitle = null;
@@ -135,7 +133,7 @@ class ChatManager
         $scrapedUrls = [];
         
         if ($this->searchDecider && $this->cacheEvaluator && $this->contextCondenser) {
-            $searchQuery = $this->searchDecider->requiresSearch($query);
+            $searchQuery = $this->searchDecider->requiresSearch($query, $history);
             
             if ($searchQuery) {
                 $emit('search_decided', ['query' => $searchQuery]);
@@ -263,16 +261,14 @@ class ChatManager
             $emit('token', ['chunk' => mb_convert_encoding($utf8_buffer, 'UTF-8', 'UTF-8')]);
         }
 
-        // --- EXTRACT EXACT TOKENS ---
         $usage = $this->agent->lastUsage;
-        $userTokens = (int)(mb_strlen($query) / 4); // fallback
-        $assistantTokens = (int)(mb_strlen($aiResponse) / 4); // fallback
+        $userTokens = (int)(mb_strlen($query) / 4);
+        $assistantTokens = (int)(mb_strlen($aiResponse) / 4);
 
         if ($usage) {
             if (isset($usage['prompt_tokens'])) {
                 $userTokens = (int)$usage['prompt_tokens'];
                 
-                // Update the last user message to use the 100% exact prompt token count
                 $userHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId, 'role' => 'user']);
                 if (!empty($userHistory)) {
                     usort($userHistory, fn($a, $b) => $b['id'] - $a['id']);
@@ -297,7 +293,6 @@ class ChatManager
             'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null
         ]);
 
-        // Calculate final total context size of the entire session database
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $totalSessionTokens = 0;
         foreach ($finalHistory as $row) {

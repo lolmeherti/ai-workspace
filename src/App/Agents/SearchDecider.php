@@ -14,20 +14,38 @@ class SearchDecider
         $this->agent = $agent;
     }
 
-    public function requiresSearch(string $userPrompt): ?string
+    /**
+     * Decides if search is needed, using recent chat history to contextualize the query.
+     */
+    public function requiresSearch(string $userPrompt, array $history = []): ?string
     {
         $currentDate = date('l, F j, Y g:i A');
         
+        $historyText = "";
+        $slicedHistory = array_slice($history, -8); 
+        foreach ($slicedHistory as $msg) {
+            if ($msg['message'] !== $userPrompt) {
+                $historyText .= ucfirst($msg['role']) . ": " . $msg['message'] . "\n";
+            }
+        }
+
         $systemPrompt = <<<TEXT
 Today is {$currentDate}.
 
-Return ONLY JSON matching this schema:
+You are a Search Decision Agent. Your job is to analyze the recent conversation history and the user's latest message to determine if a live web search is necessary to answer the user's request.
+
+A live web search is necessary if the user's request requires up-to-date facts, news, weather, or real-time information.
+
+Format your output STRICTLY as a JSON object matching this schema:
 {
   "requires_search": boolean,
   "search_query": string or null
 }
 
-Set requires_search to true only if the user query requires up-to-date live facts, current weather, or news.
+If requires_search is true, the "search_query" MUST be a standalone, fully rephrased search query. 
+
+CONVERSATION HISTORY:
+{$historyText}
 TEXT;
 
         $messages = [
