@@ -1,0 +1,25 @@
+use_default_settings:
+  engines:
+    remove:
+      # - google
+      - torch
+      - radio browser
+
+general:
+  debug: false
+  instance_name: "AI-Workspace"
+
+search:
+  safe_search: 0
+  autocomplete: 'duckduckgo'
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "make_up_any_random_string_here_like_this_one"
+  limiter: false
+  image_proxy: true
+
+redis:
+  url: redis://redis:6379/0
