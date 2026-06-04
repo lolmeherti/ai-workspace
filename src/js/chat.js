@@ -1,7 +1,6 @@
 let activeTab = currentActiveTab || 'chats';
 let isGenerating = false;
 let pastedImageFile = null;
-
 let pendingFormData = null;
 let pendingMessage = null;
 
@@ -72,7 +71,7 @@ window.addEventListener('paste', function (e) {
     for (let i = 0; i < items.length; i++) {
         if (items[i].type.indexOf('image') !== -1) {
             const blob = items[i].getAsFile();
-            if (blob)
+            if (blob) {
                 pastedImageFile = blob;
                 
                 const reader = new FileReader();
@@ -85,7 +84,7 @@ window.addEventListener('paste', function (e) {
             }
         }
     }
-);
+});
 
 function parseMarkdownElements() {
     document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(function(el) {
@@ -159,7 +158,6 @@ if (textareaInput) {
     });
 }
 
-// Interactive Condensation dialog controllers
 function showCondensationModal(formData, originalMessage) {
     pendingFormData = formData;
     pendingMessage = originalMessage;
@@ -324,7 +322,7 @@ async function streamResponse(formData, originalMessage) {
 
                         if (event === 'limit_warning') {
                             isGenerating = false;
-                            aiWrapper.remove(); // Remove initial block from DOM cleanly
+                            aiWrapper.remove();
                             showCondensationModal(formData, originalMessage);
                             return;
                         }

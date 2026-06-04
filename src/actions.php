@@ -17,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        // --- INTERACTIVE CONDENSATION ROUTE ---
         if (($_POST['action'] ?? '') === 'condense') {
             header('Content-Type: application/json');
             $sessionId = (int)($_POST['session_id'] ?? 0);
@@ -36,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             exit;
         }
-        // --------------------------------------
 
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
@@ -119,6 +117,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $memoryId = $_POST['memory_id'] ?? '';
         $stmt = $db->getConnection()->prepare("DELETE FROM memories WHERE id = :id");
         $stmt->execute([':id' => $memoryId]);
+        header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
+        exit;
+    }
+
+    if ($db && isset($_POST['delete_multiple_memories'])) {
+        $selectedIds = $_POST['selected_memories'] ?? [];
+        if (!empty($selectedIds) && is_array($selectedIds)) {
+            $selectedIds = array_map('intval', $selectedIds);
+            $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+            $stmt = $db->getConnection()->prepare("DELETE FROM memories WHERE id IN ($placeholders)");
+            $stmt->execute($selectedIds);
+        }
         header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
         exit;
     }
