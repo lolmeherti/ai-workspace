@@ -4,6 +4,7 @@ namespace App;
 
 use PDO;
 use PDOException;
+use InvalidArgumentException;
 
 class Database
 {
@@ -15,7 +16,7 @@ class Database
         $db   = getenv('DB_NAME') ?: 'ai_memories';
         $user = getenv('DB_USER') ?: 'ai_user';
         $pass = getenv('DB_PASS') ?: 'secret123';
-        
+
         $dsn = "mysql:host=$host;dbname=$db;charset=utf8mb4";
 
         $options = [
@@ -27,7 +28,7 @@ class Database
         try {
             $this->pdo = new PDO($dsn, $user, $pass, $options);
         } catch (PDOException $e) {
-            die("Database Connection Failed: " . $e->getMessage());
+            throw new PDOException("Database Connection Failed: " . $e->getMessage(), (int)$e->getCode());
         }
     }
 
@@ -51,12 +52,14 @@ class Database
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 session_id INT NOT NULL,
                 role ENUM('user', 'assistant', 'system') NOT NULL,
-                message TEXT NOT NULL,
+                message LONGTEXT NOT NULL,
                 image_path VARCHAR(255) NULL,
                 token_estimate INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT fk_chat_history_session_id FOREIGN KEY (session_id) 
-                    REFERENCES chat_sessions(id) ON DELETE CASCADE
+                CONSTRAINT fk_chat_history_session_id
+                    FOREIGN KEY (session_id)
+                    REFERENCES chat_sessions(id)
+                    ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 
@@ -81,76 +84,108 @@ class Database
         $this->initTables();
     }
 
+    private function assertIdentifier(string $name, string $type): void
+    {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $name)) {
+            throw new InvalidArgumentException("Invalid $type name: $name");
+        }
+    }
+
     public function insert(string $table, array $data): bool
     {
-        $keys = array_keys($data);
-        $backtickedKeys = array_map(fn($key) => "`" . preg_replace('/[^a-zA-Z0-9_]/', '', $key) . "`", $keys);
+        $this->assertIdentifier($table, 'table');
 
-        $columns      = implode(',', $backtickedKeys);
-        $placeholders = ':' . implode(', :', $keys);
+        if (empty($data)) {
+            throw new InvalidArgumentException("Insert data cannot be empty");
+        }
 
-        $stmt = $this->pdo->prepare("INSERT INTO `{$table}` ({$columns}) VALUES ({$placeholders})");
+        $columns = [];
+        $placeholders = [];
 
         foreach ($data as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
+            $this->assertIdentifier($key, 'column');
+
+            $columns[] = "`$key`";
+            $placeholders[] = ":$key";
         }
-        return $stmt->execute();
+
+        $sql = "INSERT INTO `$table` (" . implode(',', $columns) . ")
+                VALUES (" . implode(',', $placeholders) . ")";
+
+        $stmt = $this->pdo->prepare($sql);
+
+        foreach ($data as $key => $value) {
+            $stmt->bindValue(":$key", $value);
+        }
+        
+        try {
+            return $stmt->execute();
+        } catch (\PDOException $e) {
+            error_log("PDO EXECUTE FAILED: " . $e->getMessage());
+            error_log("SQLSTATE: " . $e->getCode());
+            throw $e;
+        }
     }
 
     public function selectSafe(string $table, array $conditions = []): array
     {
-        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $this->assertIdentifier($table, 'table');
+
         $sql = "SELECT * FROM `$table`";
         $binds = [];
 
         if (!empty($conditions)) {
-            $whereClauses = [];
+            $where = [];
+
             foreach ($conditions as $key => $value) {
-                $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', $key);
-                $whereClauses[] = "`$cleanKey` = :$cleanKey";
-                $binds[":$cleanKey"] = $value;
+                $this->assertIdentifier($key, 'column');
+
+                $where[] = "`$key` = :$key";
+                $binds[":$key"] = $value;
             }
-            $sql .= " WHERE " . implode(" AND ", $whereClauses);
+
+            $sql .= " WHERE " . implode(" AND ", $where);
         }
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($binds);
-        
+
         return $stmt->fetchAll();
     }
 
     public function update(string $table, array $data, array $conditions): bool
     {
-        $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-        
+        $this->assertIdentifier($table, 'table');
+
         if (empty($data) || empty($conditions)) {
-            return false;
+            throw new InvalidArgumentException("Update requires data and conditions");
         }
 
-        $setClauses = [];
-        $whereClauses = [];
+        $set = [];
+        $where = [];
         $binds = [];
 
         foreach ($data as $key => $value) {
-            $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', $key);
-            $setClauses[] = "`$cleanKey` = :set_$cleanKey";
-            $binds[":set_$cleanKey"] = $value;
+            $this->assertIdentifier($key, 'column');
+
+            $set[] = "`$key` = :set_$key";
+            $binds[":set_$key"] = $value;
         }
 
         foreach ($conditions as $key => $value) {
-            $cleanKey = preg_replace('/[^a-zA-Z0-9_]/', '', $key);
-            $whereClauses[] = "`$cleanKey` = :where_$cleanKey";
-            $binds[":where_$cleanKey"] = $value;
+            $this->assertIdentifier($key, 'column');
+
+            $where[] = "`$key` = :where_$key";
+            $binds[":where_$key"] = $value;
         }
 
-        $sets = implode(', ', $setClauses);
-        $where = implode(' AND ', $whereClauses);
+        $sql = "UPDATE `$table` SET " . implode(', ', $set)
+             . " WHERE " . implode(' AND ', $where);
 
-        $sql = "UPDATE `$table` SET $sets WHERE $where";
         $stmt = $this->pdo->prepare($sql);
 
-        foreach ($binds as $placeholder => $value) {
-            $stmt->bindValue($placeholder, $value);
+        foreach ($binds as $k => $v) {
+            $stmt->bindValue($k, $v);
         }
 
         return $stmt->execute();

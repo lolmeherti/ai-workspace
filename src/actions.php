@@ -1,6 +1,10 @@
 <?php
 use App\ChatManager;
 use App\Cache;
+use App\Agents\SearchDecider;
+use App\Agents\SemanticCacheEvaluator;
+use App\Agents\ContextCondenser;
+use App\Agents\MemorySelector;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
@@ -16,14 +20,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
         $imageFile = $_FILES['image'] ?? null;
+        $cacheAction = $_POST['cache_action'] ?? null;
+        $cacheKey = $_POST['cache_key'] ?? null;
 
-        if (empty($query) && empty($imageFile)) {
+        if (empty($query) && empty($imageFile) && empty($cacheAction)) {
             echo json_encode(['status' => 'error', 'message' => 'Empty prompt.']);
             exit;
         }
 
-        $chatManager = new ChatManager($db, $agentManager, $memoryExtractor);
-        $response = $chatManager->process($sessionId, $query, $imageFile);
+        $searchDecider = new SearchDecider($agentManager);
+        $cacheEvaluator = new SemanticCacheEvaluator($agentManager);
+        $contextCondenser = new ContextCondenser($agentManager);
+        $memorySelectorInstance = clone $db ? new MemorySelector($db, $agentManager) : null;
+
+        $chatManager = new ChatManager(
+            $db, 
+            $agentManager, 
+            $memoryExtractor, 
+            $memorySelectorInstance,
+            $searchDecider,
+            $cacheEvaluator,
+            $contextCondenser
+        );
+
+        $response = $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey);
         
         echo json_encode($response);
         exit;

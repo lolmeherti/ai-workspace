@@ -34,9 +34,6 @@ class MemoryExtractor
 
         if ($totalChars >= $charThreshold) {
             $this->extractAndSave($chatText);
-            
-            $stmt = $this->db->getConnection()->prepare("DELETE FROM chat_history WHERE session_id = :session_id");
-            $stmt->execute([':session_id' => $sessionId]);
         }
     }
 
