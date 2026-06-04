@@ -37,6 +37,13 @@ foreach ($sessions as $s) {
 }
 $history = $db ? $db->selectSafe('chat_history', ['session_id' => $sessionId]) : [];
 
+// --- CALCULATE INITIAL SESSION CONTEXT TOKENS ---
+$totalSessionTokens = 0;
+foreach ($history as $msg) {
+    $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
+}
+// -------------------------------------------------
+
 $memories = [];
 $memoryCount = 0;
 if ($db) {
@@ -79,8 +86,11 @@ if ($status->redis) {
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
 
+    <!-- PASS VALUES TO JAVASCRIPT SAFELY -->
     <script>
         const currentActiveTab = '<?php echo $activeTab; ?>';
+        const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
+        const maxTokensLimit = <?php echo (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000); ?>;
     </script>
     <script src="js/chat.js"></script>
 </body>

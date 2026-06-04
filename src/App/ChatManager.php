@@ -52,6 +52,35 @@ class ChatManager
             }
         };
 
+        // --- INTERACTIVE CONDENSATION CHECK ---
+        $bypassWarning = (int)($_POST['bypass_warning'] ?? 0);
+        if (empty($cacheAction) && !$bypassWarning) {
+            $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+            
+            if (count($history) > 6) {
+                $totalTokens = 0;
+                foreach ($history as $row) {
+                    $totalTokens += (int)($row['token_estimate'] ?? 0);
+                }
+
+                $threshold = (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000);
+                $triggerThreshold = $threshold * 0.8; // Trigger warning when getting close (80% of limit)
+
+                if ($totalTokens >= $triggerThreshold) {
+                    $emit('limit_warning', [
+                        'session_id' => $sessionId,
+                        'total_tokens' => $totalTokens,
+                        'threshold' => $threshold
+                    ]);
+                    return [
+                        'status' => 'warning',
+                        'message' => 'Token limit warning triggered'
+                    ];
+                }
+            }
+        }
+        // --------------------------------------
+
         $imagePath = null;
         $updatedTitle = null;
         
@@ -73,10 +102,6 @@ class ChatManager
                 if (move_uploaded_file($imageFile['tmp_name'], $dest)) {
                     $imagePath = 'uploads/' . $filename;
                 }
-            }
-
-            if ($this->memoryExtractor) {
-                $this->memoryExtractor->runIfThresholdMet($sessionId);
             }
 
             $this->db->insert('chat_history', [
@@ -238,20 +263,51 @@ class ChatManager
             $emit('token', ['chunk' => mb_convert_encoding($utf8_buffer, 'UTF-8', 'UTF-8')]);
         }
 
+        // --- EXTRACT EXACT TOKENS ---
+        $usage = $this->agent->lastUsage;
+        $userTokens = (int)(mb_strlen($query) / 4); // fallback
+        $assistantTokens = (int)(mb_strlen($aiResponse) / 4); // fallback
+
+        if ($usage) {
+            if (isset($usage['prompt_tokens'])) {
+                $userTokens = (int)$usage['prompt_tokens'];
+                
+                // Update the last user message to use the 100% exact prompt token count
+                $userHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId, 'role' => 'user']);
+                if (!empty($userHistory)) {
+                    usort($userHistory, fn($a, $b) => $b['id'] - $a['id']);
+                    $this->db->update('chat_history', [
+                        'token_estimate' => $userTokens
+                    ], ['id' => $userHistory[0]['id']]);
+                }
+            }
+            if (isset($usage['completion_tokens'])) {
+                $assistantTokens = (int)$usage['completion_tokens'];
+            }
+        }
+
         $this->db->insert('chat_history', [
             'session_id' => $sessionId,
             'role' => 'assistant',
             'message' => $aiResponse,
             'image_path' => null,
-            'token_estimate' => (int)(mb_strlen($aiResponse) / 4),
+            'token_estimate' => $assistantTokens,
             'search_query' => $searchQuery,
             'cache_used' => $usedCache ? 1 : 0,
             'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null
         ]);
 
+        // Calculate final total context size of the entire session database
+        $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+        $totalSessionTokens = 0;
+        foreach ($finalHistory as $row) {
+            $totalSessionTokens += (int)($row['token_estimate'] ?? 0);
+        }
+
         $emit('done', [
             'message' => $aiResponse,
-            'title' => $updatedTitle
+            'title' => $updatedTitle,
+            'total_session_tokens' => $totalSessionTokens
         ]);
 
         return [

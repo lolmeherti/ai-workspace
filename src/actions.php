@@ -17,6 +17,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        // --- INTERACTIVE CONDENSATION ROUTE ---
+        if (($_POST['action'] ?? '') === 'condense') {
+            header('Content-Type: application/json');
+            $sessionId = (int)($_POST['session_id'] ?? 0);
+            
+            if ($sessionId <= 0) {
+                echo json_encode(['status' => 'error', 'message' => 'Invalid session ID.']);
+                exit;
+            }
+
+            try {
+                $condenser = new ContextCondenser($agentManager);
+                $result = $condenser->condenseChatHistory($db, $sessionId);
+                echo json_encode($result);
+            } catch (\Exception $e) {
+                echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            }
+            exit;
+        }
+        // --------------------------------------
+
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
         $imageFile = $_FILES['image'] ?? null;

@@ -8,6 +8,7 @@ class AgentManager
 {
     private string $apiUrl;
     private string $modelName;
+    public ?array $lastUsage = null;
 
     public function __construct()
     {
@@ -27,6 +28,10 @@ class AgentManager
             'temperature' => $finalTemperature
         ];
 
+        if ($stream) {
+            $payload['stream_options'] = ['include_usage' => true];
+        }
+
         $ch = curl_init($endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -36,12 +41,13 @@ class AgentManager
             'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
         ]);
 
-        curl_setopt($ch, CURLOPT_TIMEOUT, 600); //10 minutes
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600); // 10 minutes
 
         $fullResponse = '';
+        $lastUsage = null;
 
         if ($stream) {
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage) {
                 $lines = explode("\n", $data);
                 
                 foreach ($lines as $line) {
@@ -49,6 +55,10 @@ class AgentManager
                     
                     if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
                         $json = json_decode(substr($line, 6), true);
+                        
+                        if (isset($json['usage'])) {
+                            $lastUsage = $json['usage'];
+                        }
                         
                         if (isset($json['choices'][0]['delta']['content'])) {
                             $chunk = $json['choices'][0]['delta']['content'];
@@ -73,6 +83,9 @@ class AgentManager
                     throw new Exception("LLM API Error: " . json_encode($json['error']));
                 }
                 $fullResponse = $json['choices'][0]['message']['content'] ?? '';
+                if (isset($json['usage'])) {
+                    $lastUsage = $json['usage'];
+                }
             }
         }
 
@@ -84,6 +97,7 @@ class AgentManager
 
         curl_close($ch);
         
+        $this->lastUsage = $lastUsage;
         return $fullResponse;
     }
 }

@@ -2,6 +2,9 @@ let activeTab = currentActiveTab || 'chats';
 let isGenerating = false;
 let pastedImageFile = null;
 
+let pendingFormData = null;
+let pendingMessage = null;
+
 window.addEventListener('beforeunload', function (e) {
     if (isGenerating) {
         e.preventDefault();
@@ -156,6 +159,98 @@ if (textareaInput) {
     });
 }
 
+// Interactive Condensation dialog controllers
+function showCondensationModal(formData, originalMessage) {
+    pendingFormData = formData;
+    pendingMessage = originalMessage;
+    
+    document.getElementById('condensation-modal').classList.remove('hidden');
+    document.getElementById('q').disabled = true;
+    const submitBtn = document.querySelector('#chatForm button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+}
+
+function closeCondensationModal() {
+    document.getElementById('condensation-modal').classList.add('hidden');
+    document.getElementById('q').disabled = false;
+    const submitBtn = document.querySelector('#chatForm button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = false;
+}
+
+async function bypassCondensation() {
+    closeCondensationModal();
+    if (pendingFormData) {
+        pendingFormData.set('bypass_warning', '1');
+        await streamResponse(pendingFormData, pendingMessage);
+    }
+}
+
+async function confirmCondensation() {
+    const modalContent = document.getElementById('condensation-modal-content');
+    const modalLoading = document.getElementById('condensation-modal-loading');
+    
+    modalContent.classList.add('hidden');
+    modalLoading.classList.remove('hidden');
+    
+    try {
+        const formData = new FormData();
+        formData.append('action', 'condense');
+        formData.append('session_id', pendingFormData.get('session_id'));
+        
+        const response = await fetch('index.php', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            closeCondensationModal();
+            modalContent.classList.remove('hidden');
+            modalLoading.classList.add('hidden');
+            
+            sessionStorage.setItem('pending_chat_prompt', pendingMessage);
+            window.location.reload();
+        } else {
+            throw new Error(result.message || 'Failed to condense');
+        }
+    } catch (e) {
+        alert("Something went wrong during condensation: " + e.message);
+        modalContent.classList.remove('hidden');
+        modalLoading.classList.add('hidden');
+    }
+}
+
+function updateTokenCounter(current, max) {
+    const counterContainer = document.getElementById('token-counter-container');
+    const counterText = document.getElementById('token-counter-text');
+    const counterBar = document.getElementById('token-counter-bar');
+    
+    if (!counterContainer || !counterText || !counterBar) return;
+    
+    counterContainer.classList.remove('hidden');
+    
+    const formattedCurrent = current.toLocaleString();
+    const formattedMax = max.toLocaleString();
+    
+    counterText.textContent = `${formattedCurrent} / ${formattedMax}`;
+    
+    const percentage = Math.min((current / max) * 100, 100);
+    counterBar.style.width = `${percentage}%`;
+    
+    if (percentage >= 80) {
+        counterBar.className = "h-full bg-rose-500 transition-all duration-300";
+        counterText.className = "text-rose-400 font-bold";
+    } else if (percentage >= 50) {
+        counterBar.className = "h-full bg-amber-500 transition-all duration-300";
+        counterText.className = "text-amber-400 font-bold";
+    } else {
+        counterBar.className = "h-full bg-cyan-500 transition-all duration-300";
+        counterText.className = "text-slate-200 font-bold";
+    }
+}
+
 async function streamResponse(formData, originalMessage) {
     isGenerating = true;
 
@@ -226,6 +321,13 @@ async function streamResponse(formData, originalMessage) {
                         const payload = JSON.parse(payloadStr);
                         const event = payload.event;
                         const data = payload.data;
+
+                        if (event === 'limit_warning') {
+                            isGenerating = false;
+                            aiWrapper.remove(); // Remove initial block from DOM cleanly
+                            showCondensationModal(formData, originalMessage);
+                            return;
+                        }
 
                         if (event === 'title_updated') {
                             const headerTitle = document.querySelector('header h2');
@@ -374,6 +476,11 @@ async function streamResponse(formData, originalMessage) {
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
+                            
+                            if (data.total_session_tokens && typeof maxTokensLimit !== 'undefined') {
+                                updateTokenCounter(data.total_session_tokens, maxTokensLimit);
+                            }
+                            
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
@@ -444,3 +551,21 @@ async function handleChatSubmit(e) {
 
     await streamResponse(formData, message);
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+    if (typeof initialSessionTokens !== 'undefined' && typeof maxTokensLimit !== 'undefined') {
+        updateTokenCounter(initialSessionTokens, maxTokensLimit);
+    }
+    
+    const pendingPrompt = sessionStorage.getItem('pending_chat_prompt');
+    if (pendingPrompt) {
+        sessionStorage.removeItem('pending_chat_prompt');
+        const textarea = document.getElementById('q');
+        if (textarea) {
+            textarea.value = pendingPrompt;
+            textarea.style.height = '';
+            textarea.style.height = textarea.scrollHeight + 'px';
+            document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+        }
+    }
+});

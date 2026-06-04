@@ -6,6 +6,7 @@ class LlmClient
 {
     private string $apiUrl;
     private string $modelName;
+    public ?array $lastUsage = null;
 
     public function __construct()
     {
@@ -23,6 +24,10 @@ class LlmClient
             'stream' => $stream
         ];
 
+        if ($stream) {
+            $payload['stream_options'] = ['include_usage' => true];
+        }
+
         $ch = curl_init($endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -34,10 +39,11 @@ class LlmClient
         curl_setopt($ch, CURLOPT_TIMEOUT, 600); // 10 minutes
 
         $fullResponse = '';
+        $lastUsage = null;
 
         if ($stream) {
             $buffer = '';
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$buffer) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$buffer, &$lastUsage) {
                 $buffer .= $data;
                 
                 while (($pos = strpos($buffer, "\n")) !== false) {
@@ -46,6 +52,10 @@ class LlmClient
                     
                     if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
                         $json = json_decode(substr($line, 6), true);
+                        
+                        if (isset($json['usage'])) {
+                            $lastUsage = $json['usage'];
+                        }
                         
                         if (isset($json['choices'][0]['delta']['content'])) {
                             $chunk = $json['choices'][0]['delta']['content'];
@@ -67,11 +77,15 @@ class LlmClient
             if ($response) {
                 $json = json_decode($response, true);
                 $fullResponse = $json['choices'][0]['message']['content'] ?? '';
+                if (isset($json['usage'])) {
+                    $lastUsage = $json['usage'];
+                }
             }
         }
 
         curl_close($ch);
         
+        $this->lastUsage = $lastUsage;
         return $fullResponse;
     }
 }
