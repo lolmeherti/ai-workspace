@@ -31,7 +31,7 @@ class LlmClient
             'Content-Type: application/json',
             'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
         ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600); // 10 minutes
 
         $fullResponse = '';
 

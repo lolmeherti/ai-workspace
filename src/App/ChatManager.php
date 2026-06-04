@@ -107,6 +107,7 @@ class ChatManager
         $searchQuery = null;
         $condensedContext = '';
         $usedCache = false;
+        $scrapedUrls = [];
         
         if ($this->searchDecider && $this->cacheEvaluator && $this->contextCondenser) {
             $searchQuery = $this->searchDecider->requiresSearch($query);
@@ -147,6 +148,7 @@ class ChatManager
                 if (!$usedCache && empty($condensedContext)) {
                     $limit = (int) Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
                     $results = Search::query($searchQuery, $limit);
+                    $scrapedUrls = $results;
                     
                     $scrapedPages = [];
                     foreach ($results as $url) {
@@ -241,7 +243,10 @@ class ChatManager
             'role' => 'assistant',
             'message' => $aiResponse,
             'image_path' => null,
-            'token_estimate' => (int)(mb_strlen($aiResponse) / 4)
+            'token_estimate' => (int)(mb_strlen($aiResponse) / 4),
+            'search_query' => $searchQuery,
+            'cache_used' => $usedCache ? 1 : 0,
+            'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null
         ]);
 
         $emit('done', [

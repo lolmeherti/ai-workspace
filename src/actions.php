@@ -34,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Connection: keep-alive');
         header('X-Accel-Buffering: no');
 
+        @set_time_limit(600);
+
         while (ob_get_level() > 0) {
             ob_end_flush();
         }

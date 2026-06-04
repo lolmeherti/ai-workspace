@@ -1,6 +1,22 @@
 let activeTab = currentActiveTab || 'chats';
+let isGenerating = false;
+let pastedImageFile = null;
+
+window.addEventListener('beforeunload', function (e) {
+    if (isGenerating) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 
 function switchSidebarTab(tabName) {
+    if (isGenerating) {
+        const proceed = confirm("A prompt is currently in progress. Switching tabs now will void the computation. Do you want to proceed?");
+        if (!proceed) {
+            return;
+        }
+    }
+
     activeTab = tabName;
     
     document.getElementById('panel-chats').classList.add('hidden');
@@ -47,10 +63,34 @@ function disableMemoryEdit(id) {
     document.getElementById(`memory-edit-${id}`).classList.add('hidden');
 }
 
+window.addEventListener('paste', function (e) {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            const blob = items[i].getAsFile();
+            if (blob)
+                pastedImageFile = blob;
+                
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    document.getElementById('image-preview').src = event.target.result;
+                    document.getElementById('image-preview-container').style.display = 'flex';
+                    document.getElementById('q').removeAttribute('required');
+                };
+                reader.readAsDataURL(blob);
+            }
+        }
+    }
+);
+
 function parseMarkdownElements() {
     document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(function(el) {
         el.innerHTML = marked.parse(el.getAttribute('data-markdown'));
         el.classList.add('parsed');
+        el.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
     });
 }
 
@@ -103,6 +143,7 @@ function removeImage() {
     document.getElementById('imageInput').value = '';
     document.getElementById('image-preview-container').style.display = 'none';
     document.getElementById('q').setAttribute('required', 'required');
+    pastedImageFile = null;
 }
 
 const textareaInput = document.getElementById('q');
@@ -116,6 +157,8 @@ if (textareaInput) {
 }
 
 async function streamResponse(formData, originalMessage) {
+    isGenerating = true;
+
     const tplAi = document.getElementById('tpl-ai-message');
     const aiNode = tplAi.content.cloneNode(true);
     const aiWrapper = aiNode.querySelector('.ai-wrapper');
@@ -123,18 +166,33 @@ async function streamResponse(formData, originalMessage) {
     const aiLabelContainer = aiNode.querySelector('.ai-label-container');
     
     aiBubble.innerHTML = `
-        <div class="flex items-center gap-3 text-cyan-400 font-medium loading-indicator">
-            <span class="uk-spinner uk-spinner-sm animate-spin" uk-spinner="ratio: 0.8"></span>
-            <span class="loading-text">Initializing...</span>
+        <div class="flex items-center gap-3 text-cyan-400 font-medium loading-indicator mb-3 w-full">
+            <span class="uk-spinner uk-spinner-sm animate-spin shrink-0" uk-spinner="ratio: 0.8"></span>
+            <span class="loading-text truncate">Initializing...</span>
         </div>
-        <div class="scraping-container flex flex-col gap-2 mt-3 hidden"></div>
+        <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group trace-accordion hidden">
+            <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
+                <span class="flex items-center gap-2">
+                    <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
+                    Agent Execution Trace
+                </span>
+                <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
+            </summary>
+            <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2 trace-content flex flex-col items-stretch w-full">
+                <div class="scraping-container flex flex-col gap-2 mt-2 hidden w-full"></div>
+            </div>
+        </details>
+        <div class="streaming-text-container w-full"></div>
     `;
     chatWindow.appendChild(aiNode);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
+    const traceAccordion = aiWrapper.querySelector('.trace-accordion');
+    const traceContent = aiWrapper.querySelector('.trace-content');
     const loadingIndicator = aiWrapper.querySelector('.loading-indicator');
     const loadingText = aiWrapper.querySelector('.loading-text');
     const scrapingContainer = aiWrapper.querySelector('.scraping-container');
+    const textContainer = aiWrapper.querySelector('.streaming-text-container');
     let markdownBuffer = "";
     let isFirstToken = true;
 
@@ -177,21 +235,40 @@ async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'search_decided') {
-                            loadingText.textContent = `Searching web for: "${data.query}"...`;
+                            traceAccordion.classList.remove('hidden');
+                            traceAccordion.open = true;
+                            
+                            const truncatedQuery = data.query.length > 50 ? data.query.substring(0, 50) + '...' : data.query;
+                            loadingText.textContent = `Searching web for: "${truncatedQuery}"...`;
+                            
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
                             badge.innerHTML = '<uk-icon icon="globe" class="w-3 h-3"></uk-icon> Web Search';
                             aiLabelContainer.appendChild(badge);
+
+                            const triggerRow = document.createElement('div');
+                            triggerRow.className = "text-xs text-blue-400 flex items-center gap-1.5 font-medium w-full";
+                            triggerRow.innerHTML = `<uk-icon icon="globe" class="w-3.5 h-3.5 shrink-0"></uk-icon> <span class="truncate">Web Search Triggered: "${truncatedQuery}"</span>`;
+                            traceContent.insertBefore(triggerRow, traceContent.firstChild);
                         }
 
                         if (event === 'cache_used') {
+                            traceAccordion.classList.remove('hidden');
+                            traceAccordion.open = true;
+                            
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
                             badge.innerHTML = '<uk-icon icon="zap" class="w-3 h-3"></uk-icon> Memory Cached';
                             aiLabelContainer.appendChild(badge);
+
+                            const cacheRow = document.createElement('div');
+                            cacheRow.className = "text-xs text-amber-400 flex items-center gap-1.5 font-medium w-full";
+                            cacheRow.innerHTML = '<uk-icon icon="zap" class="w-3.5 h-3.5 shrink-0"></uk-icon> <span>Memory Cache matched successfully</span>';
+                            traceContent.insertBefore(cacheRow, traceContent.firstChild);
                         }
 
                         if (event === 'ask_user') {
+                            isGenerating = false;
                             aiWrapper.remove();
                             
                             const tplAsk = document.getElementById('tpl-ask-user');
@@ -232,12 +309,14 @@ async function streamResponse(formData, originalMessage) {
                             loadingText.textContent = "Extracting knowledge...";
                             scrapingContainer.classList.remove('hidden');
                             
-                            const linkRow = document.createElement('div');
-                            linkRow.className = "flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50";
+                            const linkRow = document.createElement('a');
+                            linkRow.href = data.url;
+                            linkRow.target = "_blank";
+                            linkRow.className = "flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50 hover:bg-slate-800/50 hover:text-emerald-400 transition-colors block w-full";
                             linkRow.setAttribute('data-url', data.url);
                             linkRow.innerHTML = `
-                                <span class="uk-spinner uk-spinner-xs animate-spin text-cyan-500" uk-spinner="ratio: 0.5"></span>
-                                <span class="truncate max-w-[200px]">${data.url}</span>
+                                <span class="uk-spinner uk-spinner-xs animate-spin text-cyan-500 shrink-0" uk-spinner="ratio: 0.5"></span>
+                                <span class="truncate max-w-full">${data.url}</span>
                             `;
                             scrapingContainer.appendChild(linkRow);
                             chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -250,7 +329,7 @@ async function streamResponse(formData, originalMessage) {
                                 row.classList.add('text-emerald-400');
                                 const existingSpinner = row.querySelector('.uk-spinner');
                                 if (existingSpinner) existingSpinner.remove();
-                                row.insertAdjacentHTML('afterbegin', '<uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>');
+                                row.insertAdjacentHTML('afterbegin', '<uk-icon icon="check-circle" class="w-3.5 h-3.5 shrink-0"></uk-icon>');
                             }
                         }
 
@@ -260,9 +339,6 @@ async function streamResponse(formData, originalMessage) {
 
                         if (event === 'generating') {
                             loadingText.textContent = "Thinking...";
-                            if (scrapingContainer.children.length > 0) {
-                                scrapingContainer.classList.add('mb-4', 'pb-4', 'border-b', 'border-slate-700/50');
-                            }
                             aiBubble.classList.add('shadow-[0_0_15px_rgba(6,182,212,0.15)]', 'border-cyan-500/30');
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
@@ -270,6 +346,7 @@ async function streamResponse(formData, originalMessage) {
                         if (event === 'token') {
                             if (isFirstToken) {
                                 isFirstToken = false;
+                                traceAccordion.open = false;
                                 if (loadingIndicator && loadingIndicator.parentNode) {
                                     loadingIndicator.remove();
                                 }
@@ -279,36 +356,23 @@ async function streamResponse(formData, originalMessage) {
                             let htmlContent = marked.parse(markdownBuffer);
                             const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
                             
-                            let existingScraping = aiBubble.querySelector('.scraping-container');
-                            if (existingScraping) {
-                                const tempDiv = document.createElement('div');
-                                tempDiv.innerHTML = htmlContent + cursorHtml;
-                                
-                                Array.from(aiBubble.childNodes).forEach(child => {
-                                    if (child !== existingScraping) child.remove();
-                                });
-                                
-                                Array.from(tempDiv.childNodes).forEach(child => {
-                                    aiBubble.appendChild(child);
-                                });
-                            } else {
-                                aiBubble.innerHTML = htmlContent + cursorHtml;
-                            }
+                            textContainer.innerHTML = htmlContent + cursorHtml;
+                            textContainer.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightElement(block);
+                            });
                             
                             aiBubble.setAttribute('data-raw', markdownBuffer);
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
                         if (event === 'done') {
-                            const cursor = aiBubble.querySelector('.animate-pulse');
+                            isGenerating = false;
+                            const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) {
                                 cursor.remove();
                             }
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
-                            }
-                            if (scrapingContainer && scrapingContainer.children.length === 0) {
-                                scrapingContainer.remove();
                             }
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
@@ -317,10 +381,12 @@ async function streamResponse(formData, originalMessage) {
                 }
             }
         }
-        
+
+        isGenerating = false;
         aiBubble.classList.add('parsed');
 
     } catch (error) {
+        isGenerating = false;
         console.error("Stream Error:", error);
         if (loadingText) loadingText.textContent = "Connection failed.";
         const spinner = loadingIndicator ? loadingIndicator.querySelector('.uk-spinner') : null;
@@ -339,21 +405,24 @@ async function handleChatSubmit(e) {
     const message = inputField.value.trim();
     const file = fileInput.files[0];
     
-    if (!message && !file) return;
+    if (!message && !file && !pastedImageFile) return;
 
     const emptyState = document.getElementById('empty-state');
     if (emptyState) emptyState.remove();
 
+    let fileDataUrl = null;
+    if (file || pastedImageFile) {
+        fileDataUrl = document.getElementById('image-preview').src;
+    }
+
     const formData = new FormData(form);
+    if (pastedImageFile) {
+        formData.append('image', pastedImageFile, 'pasted_image.png');
+    }
 
     inputField.value = '';
     inputField.style.height = '';
     removeImage();
-
-    let fileDataUrl = null;
-    if (file) {
-        fileDataUrl = document.getElementById('image-preview').src;
-    }
 
     const tplUser = document.getElementById('tpl-user-message');
     const userNode = tplUser.content.cloneNode(true);

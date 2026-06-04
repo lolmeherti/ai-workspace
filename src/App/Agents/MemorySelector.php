@@ -54,7 +54,14 @@ class MemorySelector
             $memoryContext .= "ID: {$memory['id']} | Memory: {$memory['memory_text']}\n";
         }
 
-        $systemPrompt = "You are a memory selection agent. You will be provided with a list of user memories and a current user prompt. Your ONLY job is to return a comma-separated list of numeric IDs of the memories that are highly relevant to answering the user's prompt. If no memories are highly relevant, reply exactly with the word: NONE. Do not include any other words, punctuation, or explanations.";
+        $systemPrompt = <<<TEXT
+Return ONLY JSON matching this schema:
+{
+  "relevant_memory_ids": [integer]
+}
+
+You will be provided with a list of past user memories and the current user prompt. Identify the IDs of the memories that are highly relevant to answering the prompt. Return an empty array if no memories are relevant.
+TEXT;
 
         $userMessage = "Memories:\n" . $memoryContext . "\n\nCurrent User Prompt:\n" . $userPrompt;
 
@@ -66,11 +73,17 @@ class MemorySelector
         $temperature = (float) Config::get('AGENT_MEMORY_SELECTOR_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        if (strtoupper($response) === 'NONE') {
-            return null;
+        if (strpos($response, '```') !== false) {
+            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
+            $response = trim($response);
         }
 
-        $selectedIds = array_map('intval', array_filter(explode(',', $response), 'is_numeric'));
+        $data = json_decode($response, true);
+        $selectedIds = [];
+
+        if (is_array($data) && isset($data['relevant_memory_ids']) && is_array($data['relevant_memory_ids'])) {
+            $selectedIds = array_map('intval', $data['relevant_memory_ids']);
+        }
 
         if (empty($selectedIds)) {
             return null;

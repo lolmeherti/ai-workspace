@@ -17,20 +17,38 @@ class SearchDecider
     public function requiresSearch(string $userPrompt): ?string
     {
         $currentDate = date('l, F j, Y g:i A');
-        $systemPrompt = "You are a decision agent for an AI assistant. The current date and time is {$currentDate}. Evaluate the user's prompt to determine if it requires searching the live internet for up-to-date facts, news, weather, or specific information that might be outside your standard training data. If a web search is needed, reply ONLY with the highly optimized search query string. If no search is needed, reply EXACTLY with the word: NONE.";
+        
+        $systemPrompt = <<<TEXT
+Today is {$currentDate}.
+
+Return ONLY JSON matching this schema:
+{
+  "requires_search": boolean,
+  "search_query": string or null
+}
+
+Set requires_search to true only if the user query requires up-to-date live facts, current weather, or news.
+TEXT;
 
         $messages = [
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userPrompt]
         ];
 
-        $temperature = (float) Config::get('AGENT_DECIDER_TEMP', 0.3);
+        $temperature = (float) Config::get('AGENT_DECIDER_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        if (strtoupper($response) === 'NONE') {
-            return null;
+        if (strpos($response, '```') !== false) {
+            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
+            $response = trim($response);
         }
 
-        return $response;
+        $data = json_decode($response, true);
+
+        if (is_array($data) && isset($data['requires_search']) && $data['requires_search'] === true) {
+            return !empty($data['search_query']) ? trim($data['search_query']) : null;
+        }
+
+        return null;
     }
 }

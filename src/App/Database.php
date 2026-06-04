@@ -55,6 +55,9 @@ class Database
                 message LONGTEXT NOT NULL,
                 image_path VARCHAR(255) NULL,
                 token_estimate INT DEFAULT 0,
+                search_query VARCHAR(255) NULL,
+                cache_used TINYINT(1) DEFAULT 0,
+                scraped_urls TEXT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
                     FOREIGN KEY (session_id)

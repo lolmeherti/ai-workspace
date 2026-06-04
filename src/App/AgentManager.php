@@ -35,8 +35,8 @@ class AgentManager
             'Content-Type: application/json',
             'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
         ]);
-        // Short timeout for testing so it doesn't hang forever if the port is wrong
-        curl_setopt($ch, CURLOPT_TIMEOUT, 120); 
+
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600); //10 minutes
 
         $fullResponse = '';
 
