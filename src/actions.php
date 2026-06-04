@@ -30,13 +30,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (isset($_POST['save_settings'])) {
-        $envEditor->write([
-            'MAX_SCRAPE_TOKENS' => $_POST['max_scrape_tokens'] ?? '2500',
-            'MEMORY_EXTRACTION_THRESHOLD_TOKENS' => $_POST['memory_threshold'] ?? '15000',
-            'LLM_API_URL' => $_POST['llm_api_url'] ?? 'http://host.docker.internal:1234/v1',
-            'LLM_MODEL_NAME' => $_POST['llm_model_name'] ?? 'local-model',
-            'MAX_SEARCH_RESULTS_TO_SCRAPE' => $_POST['max_search_results'] ?? '3'
-        ]);
+        $currentEnv = $envEditor->read();
+        $newEnv = [];
+        
+        foreach (array_keys($currentEnv) as $key) {
+            if (isset($_POST[$key])) {
+                $newEnv[$key] = $_POST[$key];
+            }
+        }
+        
+        $envEditor->write($newEnv);
         header("Location: index.php?session_id=" . $sessionId . "&tab=" . $activeTab);
         exit;
     }

@@ -64,7 +64,8 @@ class Database
             CREATE TABLE IF NOT EXISTS memories (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 memory_text TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FULLTEXT INDEX ft_memory_text (memory_text)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
     }
@@ -82,8 +83,11 @@ class Database
 
     public function insert(string $table, array $data): bool
     {
-        $columns      = implode(',', array_keys($data));
-        $placeholders = ':' . implode(', :', array_keys($data));
+        $keys = array_keys($data);
+        $backtickedKeys = array_map(fn($key) => "`" . preg_replace('/[^a-zA-Z0-9_]/', '', $key) . "`", $keys);
+
+        $columns      = implode(',', $backtickedKeys);
+        $placeholders = ':' . implode(', :', $keys);
 
         $stmt = $this->pdo->prepare("INSERT INTO `{$table}` ({$columns}) VALUES ({$placeholders})");
 

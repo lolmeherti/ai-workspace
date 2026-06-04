@@ -19,8 +19,31 @@ class MemorySelector
 
     public function selectRelevantMemory(string $userPrompt): ?string
     {
-        $limit    = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
-        $memories = $this->db->getConnection()->query("SELECT id, memory_text FROM memories ORDER BY id DESC LIMIT {$limit}")->fetchAll();
+        $limit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
+
+        $stmt = $this->db->getConnection()->prepare("
+            SELECT id, memory_text 
+            FROM memories 
+            WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
+            LIMIT :limit
+        ");
+        
+        $stmt->bindValue(':prompt', $userPrompt, \PDO::PARAM_STR);
+        $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        $memories = $stmt->fetchAll();
+
+        if (empty($memories)) {
+            $stmtFallback = $this->db->getConnection()->prepare("
+                SELECT id, memory_text 
+                FROM memories 
+                ORDER BY id DESC 
+                LIMIT :limit
+            ");
+            $stmtFallback->bindValue(':limit', $limit, \PDO::PARAM_INT);
+            $stmtFallback->execute();
+            $memories = $stmtFallback->fetchAll();
+        }
 
         if (empty($memories)) {
             return null;
@@ -31,7 +54,7 @@ class MemorySelector
             $memoryContext .= "ID: {$memory['id']} | Memory: {$memory['memory_text']}\n";
         }
 
-        $systemPrompt = "You are a memory selection agent. You will be provided with a list of user memories and a current user prompt. Your ONLY job is to return the numeric ID of the memory that is highly relevant to answering the user's prompt. If no memory is highly relevant, reply exactly with the word: NONE. Do not include any other words, punctuation, or explanations.";
+        $systemPrompt = "You are a memory selection agent. You will be provided with a list of user memories and a current user prompt. Your ONLY job is to return a comma-separated list of numeric IDs of the memories that are highly relevant to answering the user's prompt. If no memories are highly relevant, reply exactly with the word: NONE. Do not include any other words, punctuation, or explanations.";
 
         $userMessage = "Memories:\n" . $memoryContext . "\n\nCurrent User Prompt:\n" . $userPrompt;
 
@@ -40,21 +63,26 @@ class MemorySelector
             ['role' => 'user', 'content' => $userMessage]
         ];
 
-        $temperature = (float) Config::get('AGENT_MEMORY_SELECTOR_TEMP', 0.3);
+        $temperature = (float) Config::get('AGENT_MEMORY_SELECTOR_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        if (strtoupper($response) === 'NONE' || !is_numeric($response)) {
+        if (strtoupper($response) === 'NONE') {
             return null;
         }
 
-        $selectedMemoryId = (int) $response;
+        $selectedIds = array_map('intval', array_filter(explode(',', $response), 'is_numeric'));
 
+        if (empty($selectedIds)) {
+            return null;
+        }
+
+        $selectedMemories = [];
         foreach ($memories as $memory) {
-            if ((int) $memory['id'] === $selectedMemoryId) {
-                return $memory['memory_text'];
+            if (in_array((int)$memory['id'], $selectedIds, true)) {
+                $selectedMemories[] = "- " . $memory['memory_text'];
             }
         }
 
-        return null;
+        return !empty($selectedMemories) ? implode("\n", $selectedMemories) : null;
     }
 }

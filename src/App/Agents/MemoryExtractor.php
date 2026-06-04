@@ -40,7 +40,7 @@ class MemoryExtractor
         }
     }
 
-    private function extractAndSave(string $chatText): void
+     private function extractAndSave(string $chatText): void
     {
         $prompt = "You are a data extraction agent. Read the following conversation and extract important facts about the user. Return strictly bullet points. Do not include introductory text.\n\n" . $chatText;
 
@@ -53,9 +53,23 @@ class MemoryExtractor
         $extractedMemories = $this->agent->chat($messages, false, null, $temperature);
 
         if (trim($extractedMemories) !== '') {
-            $this->db->insert('memories', [
-                'memory_text' => trim($extractedMemories)
-            ]);
+            $lines = explode("\n", trim($extractedMemories));
+            
+            foreach ($lines as $line) {
+                $cleanLine = trim($line, " \t\n\r\0\x0B-*•");
+                
+                if ($cleanLine !== '') {
+                    $maxLimit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
+                    $count = $this->db->getConnection()->query("SELECT COUNT(*) FROM memories")->fetchColumn();
+                    if ($count >= $maxLimit) {
+                        $this->db->getConnection()->exec("DELETE FROM memories ORDER BY id ASC LIMIT 1");
+                    }
+                    
+                    $this->db->insert('memories', [
+                        'memory_text' => $cleanLine
+                    ]);
+                }
+            }
         }
     }
 }
