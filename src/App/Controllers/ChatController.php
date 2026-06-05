@@ -57,10 +57,11 @@ class ChatController extends BaseController
         $newChat = $_GET['new_chat'] ?? '';
         $deleteSessionId = (int)($_GET['delete_session'] ?? 0);
         $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
+        $sessionId = (int)($_GET['session_id'] ?? 0);
 
         if ($this->db && $deleteSessionId > 0) {
             $this->chatSessionRepository->delete($deleteSessionId);
-            $this->redirect("index.php");
+            $this->redirect("index.php?new_chat=1");
             return;
         }
 
@@ -73,6 +74,18 @@ class ChatController extends BaseController
         if ($this->db && isset($_GET['toggle_star'])) {
             $this->handleToggleStar();
             return;
+        }
+
+        if ($this->db && $sessionId === 0) {
+            $sessions = $this->chatSessionRepository->getAllDesc();
+            if (!empty($sessions)) {
+                $mostRecentId = (int)$sessions[0]['id'];
+                $this->redirect($this->buildUrl($mostRecentId, $activeTab));
+                return;
+            } else {
+                $this->redirect("index.php?new_chat=1");
+                return;
+            }
         }
     }
 
@@ -196,7 +209,7 @@ class ChatController extends BaseController
     private function deleteMultipleSessions(): void
     {
         if (!$this->db) {
-            $this->redirect("index.php");
+            $this->redirect("index.php?new_chat=1");
             return;
         }
 
@@ -205,6 +218,6 @@ class ChatController extends BaseController
             $selectedIds = array_values(array_map('intval', $selectedIds));
             $this->chatSessionRepository->deleteMultiple($selectedIds);
         }
-        $this->redirect("index.php");
+        $this->redirect("index.php?new_chat=1");
     }
 }

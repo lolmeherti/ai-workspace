@@ -72,7 +72,7 @@ class AISettingsController extends BaseController
         if ($this->db) {
             $this->chatSessionRepository->truncateAll();
         }
-        $this->redirect("index.php");
+        $this->redirect("index.php?new_chat=1");
     }
 
     private function handleTokenLimit(): void
