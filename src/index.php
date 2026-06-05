@@ -11,12 +11,14 @@ use App\AgentManager;
 use App\Agents\MemoryExtractor;
 use App\EnvEditor;
 use App\Cache;
+use App\Repositories\MemoryRepository;
+use App\Repositories\ChatSessionRepository;
 
 Config::load(__DIR__);
 
 $envEditor = new EnvEditor(__DIR__ . '/.env');
-$sessionId = $_GET['session_id'] ?? '';
-$activeTab = $_GET['tab'] ?? 'chats';
+$sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : 0;
+$activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'chats';
 
 $envVars = $envEditor->read();
 $status = (new HealthCheck())->check();
@@ -27,33 +29,34 @@ $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
 require_once __DIR__ . '/actions.php';
 
-$sessions = $db ? $db->query("SELECT * FROM chat_sessions ORDER BY id DESC") : [];
+$sessions = [];
 $activeSessionTitle = 'New Conversation';
-
-foreach ($sessions as $s) {
-    if ((int)$s['id'] === (int)$sessionId) {
-        $activeSessionTitle = $s['title'];
-        break;
-    }
-}
-
-$history = $db ? $db->selectSafe('chat_history', ['session_id' => $sessionId]) : [];
-
+$history = [];
 $totalSessionTokens = 0;
-foreach ($history as $msg) {
-    $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
-}
-
 $memories = [];
 $memoryCount = 0;
+$queries = [];
+
 if ($db) {
+    $sessions = $chatSessionRepository->getAllDesc();
+    foreach ($sessions as $s) {
+        if ((int)$s['id'] === $sessionId) {
+            $activeSessionTitle = $s['title'];
+            break;
+        }
+    }
+
+    $history = $chatSessionRepository->getHistory($sessionId);
+    foreach ($history as $msg) {
+        $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
+    }
+
     try {
-        $memories = $db->query("SELECT * FROM memories ORDER BY id DESC LIMIT 500");
+        $memories = $memoryRepository->getAllLimit500();
         $memoryCount = count($memories);
     } catch (\Exception $e) {}
 }
 
-$queries = [];
 if ($status->redis) {
     try {
         $queries = Cache::getSearchLedger();
@@ -71,6 +74,9 @@ if ($status->redis) {
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/icon.iife.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.2/lib/index.umd.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="stylesheet" href="css/styles.css">

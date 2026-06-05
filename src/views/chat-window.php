@@ -1,3 +1,14 @@
+<script>
+    (function() {
+        if (typeof marked !== 'undefined' && typeof markedKatex !== 'undefined') {
+            marked.use(markedKatex({
+                throwOnError: false,
+                nonStandard: true
+            }));
+        }
+    })();
+</script>
+
 <section class="flex-1 flex flex-col h-full relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1526] via-[#070b14] to-[#070b14]">
     
     <header class="h-16 border-b border-slate-800/80 flex items-center justify-between px-6 glass-panel backdrop-blur-md z-10">
