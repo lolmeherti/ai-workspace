@@ -56,13 +56,14 @@ class ChatManager
         if (empty($cacheAction) && !$bypassWarning) {
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
             
-            if (count($history) > 6) {
+            $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
+            if (count($history) > ($keepLimit * 2)) {
                 $totalTokens = 0;
                 foreach ($history as $row) {
                     $totalTokens += (int)($row['token_estimate'] ?? 0);
                 }
 
-                $threshold = (int) Config::get('MEMORY_EXTRA_THRESHOLD_TOKENS', 15000);
+                $threshold = (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000);
                 $triggerThreshold = $threshold * 0.8;
 
                 if ($totalTokens >= $triggerThreshold) {
@@ -595,7 +596,8 @@ TEXT;
         $emit('done', [
             'message' => $aiResponse,
             'title' => $updatedTitle,
-            'total_session_tokens' => $totalSessionTokens
+            'total_session_tokens' => $totalSessionTokens,
+            'session_id' => $sessionId
         ]);
 
         return [

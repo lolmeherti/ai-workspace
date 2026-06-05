@@ -312,9 +312,20 @@ class ChatController
             return;
         }
 
+        $commit = ($_POST['commit'] ?? '0') === '1';
+
         try {
             $condenser = new ContextCondenser($this->agentManager);
-            $result = $condenser->condenseChatHistory($this->db, $sessionId);
+            if ($commit) {
+                $summary = $_POST['summary'] ?? '';
+                $selectedMemories = $_POST['selected_memories'] ?? [];
+                if (!is_array($selectedMemories)) {
+                    $selectedMemories = [];
+                }
+                $result = $condenser->commitCondensation($this->db, $sessionId, $summary, $selectedMemories);
+            } else {
+                $result = $condenser->generateCondensationPreview($this->db, $sessionId);
+            }
             $this->jsonResponse($result);
         } catch (\Exception $e) {
             $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
@@ -487,7 +498,7 @@ class ChatController
             }
         }
 
-        $this->memoryExtractor->extractAndSave($chatText);
+        $this->memoryExtractor->extractAndSave($chatText, true);
         $this->redirect($this->buildUrl($sessionId, Tab::MEMORIES));
     }
 

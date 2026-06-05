@@ -8,7 +8,7 @@ import { initTabs, switchSidebarTab } from './tabs.js';
 import { initFilePaste, previewFile, removeFile } from './fileHandler.js';
 import { parseMarkdownElements, copyToClipboard } from './markdown.js';
 import { handleChatSubmit, toggleChatEditMode, handleChatSelection, submitMultiDelete } from './chatManager.js';
-import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation } from './ui.js';
+import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation } from './ui.js';
 
 window.switchSidebarTab = switchSidebarTab;
 window.enableMemoryEdit = enableMemoryEdit;
@@ -16,9 +16,10 @@ window.disableMemoryEdit = disableMemoryEdit;
 window.copyToClipboard = copyToClipboard;
 window.previewFile = previewFile;
 window.removeFile = removeFile;
-window.removeImage = removeFile; // Alias
+window.removeImage = removeFile;
 window.bypassCondensation = bypassCondensation;
 window.confirmCondensation = confirmCondensation;
+window.applyCondensation = applyCondensation;
 window.toggleChatEditMode = toggleChatEditMode;
 window.submitMultiDelete = submitMultiDelete;
 

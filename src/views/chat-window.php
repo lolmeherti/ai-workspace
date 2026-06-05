@@ -559,7 +559,9 @@
     </div>
 
     <div id="condensation-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[#070b14]/90 backdrop-blur-sm">
-        <div class="bg-[#0f172a] border border-cyan-500/30 p-8 rounded-2xl max-w-md w-full shadow-[0_0_50px_rgba(6,182,212,0.2)] text-center">
+        <div id="condensation-modal-card" class="bg-[#0f172a] border border-cyan-500/30 p-8 rounded-2xl max-w-md w-full shadow-[0_0_50px_rgba(6,182,212,0.2)] text-center transition-all duration-300">
+            
+            <!-- Panel 1: Ask Confirmation -->
             <div id="condensation-modal-content">
                 <uk-icon icon="archive" class="w-12 h-12 text-cyan-400 mb-4 animate-pulse"></uk-icon>
                 <h3 class="text-xl font-bold text-white mb-2">Context Limit Approaching</h3>
@@ -569,9 +571,36 @@
                     <button type="button" onclick="confirmCondensation()" class="btn-futuristic px-5 py-2 rounded-lg bg-cyan-600 text-white font-bold cursor-pointer text-sm">Yes, Optimize Memory</button>
                 </div>
             </div>
+
+            <!-- Panel 2: Memory Approval (Human in the Loop) -->
+            <div id="condensation-modal-review" class="hidden text-left flex flex-col items-stretch max-h-[85vh]">
+                <div class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-3">
+                    <uk-icon icon="brain" class="w-6 h-6 text-cyan-400 animate-pulse"></uk-icon>
+                    <h3 class="text-lg font-bold text-white uppercase tracking-wider">Memory Approval Required</h3>
+                </div>
+                
+                <p class="text-xs text-slate-400 mb-4">
+                    The AI has extracted the following insights. Deselect any entries that are redundant, inaccurate, or that you do not wish to store permanently.
+                </p>
+
+                <!-- Glowing Futuristic Checkbox List Container -->
+                <div class="flex-1 overflow-y-auto pr-1 space-y-3 mb-6 max-h-[350px]" id="condensation-memories-list">
+                    <!-- Checkbox items will be rendered dynamically here -->
+                </div>
+
+                <div class="flex justify-between items-center border-t border-cyan-500/20 pt-4">
+                    <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs uppercase font-bold tracking-wider">Cancel</button>
+                    <button type="button" onclick="applyCondensation()" class="btn-futuristic px-5 py-2.5 rounded-lg text-white font-bold cursor-pointer text-xs uppercase tracking-wider flex items-center gap-2">
+                        <uk-icon icon="check" class="w-4 h-4 text-cyan-400"></uk-icon>
+                        Commit & Apply
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Loading Indicator -->
             <div id="condensation-modal-loading" class="hidden flex flex-col items-center gap-4 py-4">
                 <span class="uk-spinner uk-spinner-medium text-cyan-500 animate-spin" uk-spinner="ratio: 1.2"></span>
-                <p class="text-cyan-400 font-medium animate-pulse text-sm">Condensing history & extracting memories...</p>
+                <p class="text-cyan-400 font-medium animate-pulse text-sm" id="condensation-loading-text">Analyzing context...</p>
             </div>
         </div>
     </div>
