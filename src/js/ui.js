@@ -54,6 +54,31 @@ export async function bypassCondensation() {
     }
 }
 
+export function triggerManualCondensation() {
+    const sessionIdInput = document.querySelector('#chatForm input[name="session_id"]');
+    const sessionId = sessionIdInput ? parseInt(sessionIdInput.value, 10) : 0;
+    
+    if (sessionId <= 0) {
+        alert("Please start a conversation first before condensing history.");
+        return;
+    }
+
+    const dummyFormData = new FormData();
+    dummyFormData.append('session_id', sessionId);
+    dummyFormData.append('manual', '1');
+
+    state.pendingFormData = dummyFormData;
+    state.pendingMessage = ""; 
+
+    const modalContent = document.getElementById('condensation-modal-content');
+    if (modalContent) {
+        modalContent.querySelector('h3').textContent = "Manual Chat Condensation";
+        modalContent.querySelector('p').textContent = "Would you like to manually archive all older messages up to your last exchange? This will aggressively compress your history into a concise summary and let you extract new memories.";
+    }
+
+    document.getElementById('condensation-modal').classList.remove('hidden');
+}
+
 export async function confirmCondensation() {
     const modalContent = document.getElementById('condensation-modal-content');
     const modalLoading = document.getElementById('condensation-modal-loading');
@@ -71,7 +96,11 @@ export async function confirmCondensation() {
         const formData = new FormData();
         formData.append('action', 'condense');
         formData.append('session_id', state.pendingFormData.get('session_id'));
-        formData.append('commit', '0'); // Dry run
+        formData.append('commit', '0');
+        
+        if (state.pendingFormData.get('manual') === '1') {
+            formData.append('manual', '1');
+        }
         
         const response = await fetch('index.php', {
             method: 'POST',
@@ -150,8 +179,12 @@ export async function applyCondensation() {
         const formData = new FormData();
         formData.append('action', 'condense');
         formData.append('session_id', state.pendingFormData.get('session_id'));
-        formData.append('commit', '1'); // Commit execution
+        formData.append('commit', '1');
         formData.append('summary', state.condensationSummary || '');
+        
+        if (state.pendingFormData.get('manual') === '1') {
+            formData.append('manual', '1');
+        }
         
         selectedMemories.forEach(memory => {
             formData.append('selected_memories[]', memory);
@@ -168,7 +201,9 @@ export async function applyCondensation() {
         if (result.status === 'success') {
             closeCondensationModal();
             
-            sessionStorage.setItem('pending_chat_prompt', state.pendingMessage);
+            if (state.pendingMessage) {
+                sessionStorage.setItem('pending_chat_prompt', state.pendingMessage);
+            }
             window.location.reload();
         } else {
             throw new Error(result.message || 'Failed to write data');

@@ -313,6 +313,7 @@ class ChatController
         }
 
         $commit = ($_POST['commit'] ?? '0') === '1';
+        $manual = ($_POST['manual'] ?? '0') === '1';
 
         try {
             $condenser = new ContextCondenser($this->agentManager);
@@ -322,9 +323,9 @@ class ChatController
                 if (!is_array($selectedMemories)) {
                     $selectedMemories = [];
                 }
-                $result = $condenser->commitCondensation($this->db, $sessionId, $summary, $selectedMemories);
+                $result = $condenser->commitCondensation($this->db, $sessionId, $summary, $selectedMemories, $manual);
             } else {
-                $result = $condenser->generateCondensationPreview($this->db, $sessionId);
+                $result = $condenser->generateCondensationPreview($this->db, $sessionId, $manual);
             }
             $this->jsonResponse($result);
         } catch (\Exception $e) {

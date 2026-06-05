@@ -16,11 +16,11 @@ class ContextCondenser
         $this->agent = $agent;
     }
 
-    public function generateCondensationPreview(Database $db, int $sessionId): array
+    public function generateCondensationPreview(Database $db, int $sessionId, bool $manual = false): array
     {
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
-        $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
+        $keepLimit = $manual ? 2 : (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
         if (count($history) <= $keepLimit) {
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
@@ -66,16 +66,16 @@ class ContextCondenser
         ];
     }
 
-    public function commitCondensation(Database $db, int $sessionId, string $summary, array $selectedMemories): array
+    public function commitCondensation(Database $db, int $sessionId, string $summary, array $selectedMemories, bool $manual = false): array
     {
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
-        $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
+        $keepLimit = $manual ? 2 : (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
         if (count($history) <= $keepLimit) {
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
 
-        $archive = array_slice($history, 0, -6);
+        $archive = array_slice($history, 0, -$keepLimit);
         $archiveIds = array_column($archive, 'id');
         $oldestId = min($archiveIds);
         
@@ -132,6 +132,7 @@ class ContextCondenser
         ];
     }
 
+    
     public function condense(array $scrapedPages, string $userPrompt): string
     {
         if (empty($scrapedPages)) {
