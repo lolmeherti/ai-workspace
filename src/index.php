@@ -109,6 +109,6 @@ if ($status->redis) {
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
         const maxTokensLimit = <?php echo (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000); ?>;
     </script>
-    <script src="js/chat.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
