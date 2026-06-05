@@ -4,3 +4,5 @@ node_modules/
 __pycache__/
 .vscode/
 uploads/
+db_errors.log
+App/db_errors.log
