@@ -6,7 +6,6 @@
             <?php echo htmlspecialchars($activeSessionTitle); ?>
         </h2>
         <div class="flex items-center gap-4">
-            <!-- STYLISH CYBER-THEMED TOKEN TRACKER -->
             <div id="token-counter-container" class="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800/80 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide">
                 <uk-icon icon="cpu" class="w-3.5 h-3.5 text-cyan-400"></uk-icon>
                 <span class="text-slate-400">Context: <strong id="token-counter-text" class="text-slate-200">0 / 0</strong> tokens</span>
@@ -34,7 +33,7 @@
                     <uk-icon icon="bot" class="w-10 h-10 text-cyan-400"></uk-icon>
                 </div>
                 <h3 class="text-2xl font-bold tracking-tight text-white mb-2">How can I assist you today?</h3>
-                <p class="text-sm text-slate-400 max-w-sm">Enter a prompt, ask a question, or attach an image to start the conversation.</p>
+                <p class="text-sm text-slate-400 max-w-sm">Enter a prompt, ask a question, or attach a document/image to start the conversation.</p>
             </div>
         <?php else: ?>
             <?php foreach ($history as $msg): ?>
@@ -65,7 +64,17 @@
                     <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
                          data-raw="<?php echo htmlspecialchars($msg['message']); ?>">
                         <?php if (!empty($msg['image_path'])): ?>
-                            <img src="<?php echo htmlspecialchars($msg['image_path']); ?>" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block" alt="Uploaded image">
+                            <?php 
+                            $ext = strtolower(pathinfo($msg['image_path'], PATHINFO_EXTENSION));
+                            if (in_array($ext, ["png", "jpg", "jpeg", "gif", "webp"])): 
+                            ?>
+                                <img src="<?php echo htmlspecialchars($msg['image_path']); ?>" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block" alt="Uploaded image">
+                            <?php else: ?>
+                                <div class="flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3">
+                                    <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
+                                    <span class="text-xs text-slate-300 font-medium truncate"><?php echo htmlspecialchars(basename($msg['image_path'])); ?></span>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
                         
                         <?php if ($msg['role'] === 'assistant'): ?>
@@ -119,18 +128,24 @@
             
             <div id="image-preview-container" class="hidden absolute bottom-full left-0 mb-3 p-2 bg-[#0f172a] border border-slate-700 rounded-lg flex items-center gap-3 shadow-xl">
                 <div class="relative">
-                    <img id="image-preview" src="" class="h-16 w-16 object-cover rounded-md border border-slate-600" alt="Preview">
-                    <button type="button" class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-400 shadow-md" onclick="removeImage()">×</button>
+                    <div id="file-icon-preview" class="hidden h-16 w-16 bg-slate-800 rounded-md border border-slate-600 flex items-center justify-center">
+                        <uk-icon icon="file-text" class="w-8 h-8 text-cyan-400"></uk-icon>
+                    </div>
+                    <img id="image-preview" src="" class="hidden h-16 w-16 object-cover rounded-md border border-slate-600" alt="Preview">
+                    <button type="button" class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-400 shadow-md" onclick="removeFile()">×</button>
                 </div>
-                <span class="text-xs text-slate-300 font-medium pr-2">Image attached</span>
+                <div class="flex flex-col pr-2">
+                    <span id="file-preview-name" class="text-xs text-slate-300 font-medium truncate max-w-[150px]">File attached</span>
+                    <span id="file-preview-type" class="text-[10px] text-slate-500 uppercase font-bold">Document</span>
+                </div>
             </div>
             
             <form id="chatForm" onsubmit="handleChatSubmit(event)" class="relative">
                 <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
-                <input type="file" id="imageInput" name="image" accept="image/*" class="hidden" onchange="previewImage(this)">
+                <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                 
                 <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
-                    <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('imageInput').click()" title="Attach Image">
+                    <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
                         <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
                     </button>
                     
@@ -144,10 +159,8 @@
         </div>
     </div>
 
-    <!-- Condensation Warning Modal -->
     <div id="condensation-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[#070b14]/90 backdrop-blur-sm">
         <div class="bg-[#0f172a] border border-cyan-500/30 p-8 rounded-2xl max-w-md w-full shadow-[0_0_50px_rgba(6,182,212,0.2)] text-center">
-            <!-- Modal Content -->
             <div id="condensation-modal-content">
                 <uk-icon icon="archive" class="w-12 h-12 text-cyan-400 mb-4 animate-pulse"></uk-icon>
                 <h3 class="text-xl font-bold text-white mb-2">Context Limit Approaching</h3>
@@ -157,7 +170,6 @@
                     <button type="button" onclick="confirmCondensation()" class="btn-futuristic px-5 py-2 rounded-lg bg-cyan-600 text-white font-bold cursor-pointer text-sm">Yes, Optimize Memory</button>
                 </div>
             </div>
-            <!-- Loading State -->
             <div id="condensation-modal-loading" class="hidden flex flex-col items-center gap-4 py-4">
                 <span class="uk-spinner uk-spinner-medium text-cyan-500 animate-spin" uk-spinner="ratio: 1.2"></span>
                 <p class="text-cyan-400 font-medium animate-pulse text-sm">Condensing history & extracting memories...</p>

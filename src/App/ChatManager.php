@@ -91,14 +91,45 @@ class ChatManager
         }
 
         if (empty($cacheAction)) {
+            
             if ($imageFile && $imageFile['error'] === UPLOAD_ERR_OK) {
                 if (!is_dir($this->uploadDir)) {
                     mkdir($this->uploadDir, 0755, true);
                 }
+                
                 $filename = uniqid() . '_' . preg_replace('/[^a-zA-Z0-9.\-_]/', '', basename($imageFile['name']));
                 $dest = $this->uploadDir . $filename;
+                
                 if (move_uploaded_file($imageFile['tmp_name'], $dest)) {
                     $imagePath = 'uploads/' . $filename;
+                    $mimeType = @mime_content_type($dest) ?: 'application/octet-stream';
+                    
+                    if (!str_starts_with($mimeType, "image/")) {
+                        $extractedText = null;
+                        
+                        try {
+                            if (!class_exists('\App\FileExtractor') && file_exists(__DIR__ . '/FileExtractor.php')) {
+                                require_once __DIR__ . '/FileExtractor.php';
+                            }
+                            
+                            if (class_exists('\App\FileExtractor')) {
+                                $extractedText = \App\FileExtractor::extractText($dest, $imageFile['name']);
+                            } else {
+                                $extractedText = "[System Error: FileExtractor missing]";
+                            }
+                        } catch (\Throwable $e) {
+                            $extractedText = "[System Error parsing document: " . $e->getMessage() . "]";
+                        }
+
+                        if ($extractedText !== null && trim($extractedText) !== "") {
+                            if (mb_strlen($extractedText) > 40000) {
+                                $extractedText = mb_substr($extractedText, 0, 40000) . "\n\n... [Content truncated due to length limits]";
+                            }
+                            file_put_contents($dest . '.txt', $extractedText);
+                        } else {
+                            file_put_contents($dest . '.txt', "[Could not extract text content]");
+                        }
+                    }
                 }
             }
 
@@ -242,20 +273,40 @@ TEXT;
         $recentHistory = array_slice($history, -$rollingLimit);
 
         foreach ($recentHistory as $row) {
+            $hasImage = false;
+            $messageContent = $row['message'];
+
             if (!empty($row['image_path']) && file_exists(__DIR__ . '/../' . $row['image_path'])) {
-                $mimeType = mime_content_type(__DIR__ . '/../' . $row['image_path']);
-                $base64   = base64_encode(file_get_contents(__DIR__ . '/../' . $row['image_path']));
+                $fullFilePath = __DIR__ . '/../' . $row['image_path'];
+                $mimeType = @mime_content_type($fullFilePath) ?: 'application/octet-stream';
+                
+                if (str_starts_with($mimeType, "image/")) {
+                    $hasImage = true;
+                    $base64   = base64_encode(file_get_contents($fullFilePath));
+                    $messages[] = [
+                        'role' => $row['role'],
+                        'content' => [
+                            ['type' => 'text', 'text' => $messageContent],
+                            ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
+                        ]
+                    ];
+                } else {
+                    $txtPath = $fullFilePath . '.txt';
+                    if (file_exists($txtPath)) {
+                        $docText = file_get_contents($txtPath);
+                        $cleanFileName = preg_replace('/^[a-z0-9]+_/', '', basename($row['image_path']));
+
+                        $messageContent = <<<TEXT
+[Attached Document: {$cleanFileName}] {$docText} {$messageContent}
+TEXT;
+                    }
+                }
+            }
+
+            if (!$hasImage) {
                 $messages[] = [
                     'role' => $row['role'],
-                    'content' => [
-                        ['type' => 'text', 'text' => $row['message']],
-                        ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
-                    ]
-                ];
-            } else {
-                $messages[] = [
-                    'role' => $row['role'],
-                    'content' => $row['message']
+                    'content' => $messageContent
                 ];
             }
         }

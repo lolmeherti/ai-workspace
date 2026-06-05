@@ -3,6 +3,7 @@ let isGenerating = false;
 let pastedImageFile = null;
 let pendingFormData = null;
 let pendingMessage = null;
+let selectedFile = null;
 
 window.addEventListener('beforeunload', function (e) {
     if (isGenerating) {
@@ -65,27 +66,6 @@ function disableMemoryEdit(id) {
     document.getElementById(`memory-edit-${id}`).classList.add('hidden');
 }
 
-window.addEventListener('paste', function (e) {
-    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-    
-    for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-            const blob = items[i].getAsFile();
-            if (blob) {
-                pastedImageFile = blob;
-                
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    document.getElementById('image-preview').src = event.target.result;
-                    document.getElementById('image-preview-container').style.display = 'flex';
-                    document.getElementById('q').removeAttribute('required');
-                };
-                reader.readAsDataURL(blob);
-            }
-        }
-    }
-});
-
 function parseMarkdownElements() {
     document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(function(el) {
         el.innerHTML = marked.parse(el.getAttribute('data-markdown'));
@@ -129,24 +109,122 @@ if (chatWindow) {
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-function previewImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('image-preview').src = e.target.result;
-            document.getElementById('image-preview-container').style.display = 'flex';
-        }
-        reader.readAsDataURL(input.files[0]);
-        document.getElementById('q').removeAttribute('required');
-    }
+
+if (typeof window.pastedImageFile === "undefined") {
+    window.pastedImageFile = null;
 }
 
-function removeImage() {
-    document.getElementById('imageInput').value = '';
-    document.getElementById('image-preview-container').style.display = 'none';
-    document.getElementById('q').setAttribute('required', 'required');
-    pastedImageFile = null;
-}
+window.previewFile = function(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    selectedFile = file;
+    window.pastedImageFile = null;
+
+    const previewContainer = document.getElementById("image-preview-container");
+    const imgPreview = document.getElementById("image-preview");
+    const iconPreview = document.getElementById("file-icon-preview");
+    const previewName = document.getElementById("file-preview-name");
+    const previewType = document.getElementById("file-preview-type");
+
+    previewName.textContent = file.name;
+    previewType.textContent = file.type || "Document";
+
+    if (previewContainer) {
+        previewContainer.style.setProperty("display", "flex", "important");
+        previewContainer.classList.remove("hidden");
+    }
+
+    if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imgPreview.src = e.target.result;
+            imgPreview.classList.remove("hidden");
+            iconPreview.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+    } else {
+        imgPreview.classList.add("hidden");
+        iconPreview.classList.remove("hidden");
+    }
+};
+
+window.removeFile = function() {
+    selectedFile = null;
+    window.pastedImageFile = null;
+    
+    try {
+        if (typeof pastedImageFile !== "undefined") {
+            pastedImageFile = null;
+        }
+    } catch (e) {}
+
+    const fileInput = document.getElementById("fileInput");
+    if (fileInput) {
+        fileInput.value = "";
+    }
+
+    const previewContainer = document.getElementById("image-preview-container");
+    if (previewContainer) {
+        previewContainer.style.setProperty("display", "none", "important");
+        previewContainer.classList.add("hidden");
+    }
+
+    const imgPreview = document.getElementById("image-preview");
+    if (imgPreview) {
+        imgPreview.src = "";
+        imgPreview.classList.add("hidden");
+    }
+
+    const iconPreview = document.getElementById("file-icon-preview");
+    if (iconPreview) {
+        iconPreview.classList.add("hidden");
+    }
+};
+
+window.removeImage = function() {
+    window.removeFile();
+};
+
+document.addEventListener("paste", function(e) {
+    const items = (e.clipboardData || window.clipboardData).items;
+    for (let item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            
+            selectedFile = null;
+            window.pastedImageFile = file;
+            try {
+                if (typeof pastedImageFile !== "undefined") {
+                    pastedImageFile = file;
+                }
+            } catch (e) {}
+
+            const previewContainer = document.getElementById("image-preview-container");
+            const imgPreview = document.getElementById("image-preview");
+            const iconPreview = document.getElementById("file-icon-preview");
+            const previewName = document.getElementById("file-preview-name");
+            const previewType = document.getElementById("file-preview-type");
+
+            previewName.textContent = "Pasted Image";
+            previewType.textContent = "IMAGE";
+
+            if (previewContainer) {
+                previewContainer.style.setProperty("display", "flex", "important");
+                previewContainer.classList.remove("hidden");
+            }
+            
+            iconPreview.classList.add("hidden");
+            imgPreview.classList.remove("hidden");
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                imgPreview.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+});
 
 const textareaInput = document.getElementById('q');
 if (textareaInput) {
@@ -503,45 +581,56 @@ async function streamResponse(formData, originalMessage) {
 async function handleChatSubmit(e) {
     e.preventDefault();
     
-    const form = document.getElementById('chatForm');
-    const inputField = document.getElementById('q');
-    const fileInput = document.getElementById('imageInput');
+    const form = document.getElementById("chatForm");
+    const inputField = document.getElementById("q");
+    const fileInput = document.getElementById("fileInput");
     
     const message = inputField.value.trim();
-    const file = fileInput.files[0];
+    const file = selectedFile || (fileInput ? fileInput.files[0] : null) || pastedImageFile;
     
     if (!message && !file && !pastedImageFile) return;
 
-    const emptyState = document.getElementById('empty-state');
+    const emptyState = document.getElementById("empty-state");
     if (emptyState) emptyState.remove();
 
+    const isImage = pastedImageFile || (file && file.type.startsWith("image/"));
+    
     let fileDataUrl = null;
-    if (file || pastedImageFile) {
-        fileDataUrl = document.getElementById('image-preview').src;
+    if (isImage) {
+        fileDataUrl = document.getElementById("image-preview").src;
     }
 
     const formData = new FormData(form);
     if (pastedImageFile) {
-        formData.append('image', pastedImageFile, 'pasted_image.png');
+        formData.append("file", pastedImageFile, "pasted_image.png");
     }
 
-    inputField.value = '';
-    inputField.style.height = '';
-    removeImage();
+    inputField.value = "";
+    inputField.style.height = "";
+    removeFile();
 
-    const tplUser = document.getElementById('tpl-user-message');
+    const tplUser = document.getElementById("tpl-user-message");
     const userNode = tplUser.content.cloneNode(true);
     
-    const userBubble = userNode.querySelector('.bubble-content');
-    const msgText = userNode.querySelector('.msg-text');
-    const imgElement = userNode.querySelector('.upload-img');
+    const userBubble = userNode.querySelector(".bubble-content");
+    const msgText = userNode.querySelector(".msg-text");
+    const imgElement = userNode.querySelector(".upload-img");
     
-    userBubble.setAttribute('data-raw', message);
-    msgText.innerHTML = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
+    userBubble.setAttribute("data-raw", message);
+    msgText.innerHTML = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
     
-    if (fileDataUrl) {
+    if (isImage && fileDataUrl) {
         imgElement.src = fileDataUrl;
-        imgElement.classList.remove('hidden');
+        imgElement.classList.remove("hidden");
+    } else if (file && !isImage) {
+        imgElement.classList.add("hidden");
+        const docWrapper = document.createElement("div");
+        docWrapper.className = "flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3";
+        docWrapper.innerHTML = `
+            <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
+            <span class="text-xs text-slate-300 font-medium truncate">${file.name}</span>
+        `;
+        userBubble.prepend(docWrapper);
     }
     
     chatWindow.appendChild(userNode);
@@ -565,5 +654,121 @@ window.addEventListener('DOMContentLoaded', () => {
             textarea.style.height = textarea.scrollHeight + 'px';
             document.getElementById('chatForm').dispatchEvent(new Event('submit'));
         }
+    }
+});
+
+/* --- MULTI-SELECT CHAT DELETE LOGIC ADDITIONS --- */
+
+let isChatEditMode = false;
+let selectedChatIds = [];
+
+function toggleChatEditMode() {
+    isChatEditMode = !isChatEditMode;
+    const chatsList = document.getElementById('chats-list-container');
+    const manageBtn = document.getElementById('btn-manage-chats');
+    const deleteBar = document.getElementById('multi-delete-bar');
+    
+    if (!chatsList || !manageBtn || !deleteBar) return;
+
+    if (isChatEditMode) {
+        chatsList.classList.add('in-edit-mode');
+        manageBtn.innerHTML = '<uk-icon icon="close" class="w-3.5 h-3.5"></uk-icon> Cancel';
+        manageBtn.className = "text-xs text-rose-400 hover:text-rose-300 font-medium transition-colors cursor-pointer flex items-center gap-1";
+        deleteBar.classList.remove('translate-y-full');
+        selectedChatIds = [];
+        updateSelectedChatsUI();
+    } else {
+        chatsList.classList.remove('in-edit-mode');
+        manageBtn.innerHTML = '<uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage';
+        manageBtn.className = "text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1";
+        deleteBar.classList.add('translate-y-full');
+        
+        // Remove selections
+        document.querySelectorAll('.chat-session-item').forEach(item => {
+            item.classList.remove('border-rose-500/40', 'bg-rose-950/20', 'shadow-[0_0_10px_rgba(244,63,94,0.1)]');
+            const checkIcon = item.querySelector('.select-check-icon');
+            if (checkIcon) checkIcon.classList.add('hidden');
+        });
+        selectedChatIds = [];
+    }
+}
+
+function updateSelectedChatsUI() {
+    const counter = document.getElementById('selected-chats-count');
+    if (counter) {
+        counter.textContent = selectedChatIds.length;
+    }
+    
+    const deleteBtn = document.getElementById('btn-submit-multi-delete');
+    if (deleteBtn) {
+        if (selectedChatIds.length === 0) {
+            deleteBtn.disabled = true;
+            deleteBtn.className = "px-3 py-1 text-xs font-semibold bg-rose-500/10 text-rose-400/50 border border-rose-500/10 rounded transition-colors flex items-center gap-1 opacity-50 cursor-not-allowed";
+        } else {
+            deleteBtn.disabled = false;
+            deleteBtn.className = "px-3 py-1 text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 rounded transition-colors flex items-center gap-1 cursor-pointer";
+        }
+    }
+}
+
+function submitMultiDelete() {
+    if (selectedChatIds.length === 0) return;
+    
+    const confirmMsg = `Are you sure you want to permanently delete these ${selectedChatIds.length} conversations?`;
+    if (!confirm(confirmMsg)) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'index.php';
+
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'delete_multiple_sessions';
+    actionInput.value = '1';
+    form.appendChild(actionInput);
+
+    selectedChatIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_sessions[]';
+        input.value = id;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Event delegation for picking conversations
+document.addEventListener('DOMContentLoaded', () => {
+    const chatsContainer = document.getElementById('chats-list-container');
+    if (chatsContainer) {
+        chatsContainer.addEventListener('click', function(e) {
+            if (!isChatEditMode) return;
+            
+            const item = e.target.closest('.chat-session-item');
+            if (!item) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const id = parseInt(item.getAttribute('data-session-id'), 10);
+            if (isNaN(id)) return;
+
+            const index = selectedChatIds.indexOf(id);
+            const checkIcon = item.querySelector('.select-check-icon');
+            
+            if (index > -1) {
+                selectedChatIds.splice(index, 1);
+                item.classList.remove('border-rose-500/40', 'bg-rose-950/20', 'shadow-[0_0_10px_rgba(244,63,94,0.1)]');
+                if (checkIcon) checkIcon.classList.add('hidden');
+            } else {
+                selectedChatIds.push(id);
+                item.classList.add('border-rose-500/40', 'bg-rose-950/20', 'shadow-[0_0_10px_rgba(244,63,94,0.1)]');
+                if (checkIcon) checkIcon.classList.remove('hidden');
+            }
+
+            updateSelectedChatsUI();
+        });
     }
 });

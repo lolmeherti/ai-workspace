@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
-        $imageFile = $_FILES['image'] ?? null;
+        $imageFile = $_FILES['file'] ?? $_FILES['image'] ?? null;
         $cacheAction = $_POST['cache_action'] ?? null;
         $cacheKey = $_POST['cache_key'] ?? null;
 
@@ -59,7 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ob_end_flush();
         }
         
-        echo ":" . str_repeat(" ", 4096) . "\n\n";
+        $pad = str_repeat(" ", 4096);
+        echo <<<TEXT
+:{$pad}
+
+
+TEXT;
         @flush();
 
         $searchDecider = clone new SearchDecider($agentManager);
@@ -78,7 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, function($event, $data) {
-            echo "data: " . json_encode(['event' => $event, 'data' => $data]) . "\n\n";
+            $payload = json_encode(['event' => $event, 'data' => $data]);
+            echo "data: {$payload}\n\n";
             @ob_flush();
             @flush();
         });
@@ -106,7 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($sessionId > 0) {
             $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
             foreach ($history as $row) {
-                $chatText .= ucfirst($row['role']) . ": " . $row['message'] . "\n";
+                $r = ucfirst($row['role']);
+                $m = $row['message'];
+                $chatText .= <<<TEXT
+{$r}: {$m}
+
+TEXT;
             }
         }
         $memoryExtractor->extractAndSave($chatText);
@@ -143,6 +154,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->query("DELETE FROM memories WHERE id IN ($placeholders)", $selectedIds);
         }
         header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
+        exit;
+    }
+
+    if ($db && isset($_POST['delete_multiple_sessions'])) {
+        $selectedIds = $_POST['selected_sessions'] ?? [];
+        if (!empty($selectedIds) && is_array($selectedIds)) {
+            $selectedIds = array_values(array_map('intval', $selectedIds));
+            $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+            $db->query("DELETE FROM chat_sessions WHERE id IN ($placeholders)", $selectedIds);
+        }
+        header("Location: index.php");
         exit;
     }
 
