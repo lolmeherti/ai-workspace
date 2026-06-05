@@ -109,6 +109,7 @@ class ChatController
 
     private function handleGet(): void
     {
+
         $newChat = $_GET['new_chat'] ?? '';
         $deleteSessionId = (int)($_GET['delete_session'] ?? 0);
         $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
@@ -123,6 +124,41 @@ class ChatController
             $newId = $this->chatSessionRepository->create('New Conversation');
             $this->redirect($this->buildUrl($newId, $activeTab));
             return;
+        }
+
+        if ($this->isCacheViewerCall()) {
+            $this->handleGetCache();
+            return;
+        }
+    }
+
+    private function handleGetCache(): void
+    {
+        if (!$this->status->redis) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Redis is offline.'], 503);
+            return;
+        }
+
+        $key = $_GET['key'] ?? '';
+        if (empty($key)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Missing cache key.'], 400);
+            return;
+        }
+
+        try {
+            $value = Cache::get($key);
+            $decoded = json_decode($value, true);
+            $isJson = (json_last_error() === JSON_ERROR_NONE);
+
+            $this->jsonResponse([
+                'status' => 'success',
+                'key' => $key,
+                'value' => $value,
+                'is_json' => $isJson,
+                'decoded' => $decoded
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -171,6 +207,13 @@ class ChatController
             $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    
+    private function isCacheViewerCall(): bool
+    {
+        return isset($_GET['api_action']) && $_GET['api_action'] === 'get_cache';
+    }
+
 
     private function streamChatResponse(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey): void
     {
