@@ -26,8 +26,7 @@ You are a helpful, friendly, and highly intelligent AI conversational assistant.
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
 
 If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
-{"tool": "search_files", "query": "<search keyword>"}
-Keep your query brief and natural (e.g., 'resume' or 'invoice').
+{"tool": "search_files", "query": "search words here"}
 TEXT;
 
         if (!empty($condensedContext)) {

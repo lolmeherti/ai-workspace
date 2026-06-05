@@ -6,6 +6,13 @@ use App\Enums\ApiAction;
 
 class FileController extends BaseController
 {
+    private $db = null;
+
+    public function setDatabase($db): void
+    {
+        $this->db = $db;
+    }
+
     public function handle(): void
     {
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
@@ -18,6 +25,53 @@ class FileController extends BaseController
             $this->handleExplorerRequest();
         } elseif ($apiAction === ApiAction::GET_FILE_CONTENT) {
             $this->handleFileContentRequest();
+        } elseif ($apiAction === ApiAction::SEARCH_FILES) {
+            $this->handleSearchFilesRequest();
+        }
+    }
+
+    private function handleSearchFilesRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+        
+        if (!$this->db) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'No database connection available.'], 400);
+            return;
+        }
+
+        $toolQuery = $_GET['query'] ?? '';
+        $keywords = array_filter(explode(' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $toolQuery)));
+        
+        $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
+        $conditions = [];
+        $params = [];
+        
+        if (!empty($keywords)) {
+            $idx = 0;
+            foreach ($keywords as $word) {
+                if (mb_strlen($word) < 2) continue;
+                $conditions[] = "(generated_title LIKE :w{$idx} OR original_name LIKE :o{$idx})";
+                $params[":w{$idx}"] = "%{$word}%";
+                $params[":o{$idx}"] = "%{$word}%";
+                $idx++;
+            }
+        }
+
+        if (!empty($conditions)) {
+            $sql .= " WHERE " . implode(" OR ", $conditions);
+        }
+        
+        $sql .= " ORDER BY uploaded_at DESC LIMIT 5";
+        
+        try {
+            $matchingFiles = $this->db->query($sql, $params);
+            $this->jsonResponse([
+                'status' => 'success',
+                'query' => $toolQuery,
+                'files' => $matchingFiles
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 400);
         }
     }
 
