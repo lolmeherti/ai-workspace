@@ -126,3 +126,18 @@ body {
     background-color: rgba(6, 182, 212, 0.3) !important;
     color: #ffffff !important;
 }
+
+.file-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
+}
+.file-accordion-content.expanded {
+    max-height: 480px;
+}
+.accordion-arrow {
+    transition: transform 0.2s ease;
+}
+.accordion-arrow.rotated {
+    transform: rotate(90deg);
+}
