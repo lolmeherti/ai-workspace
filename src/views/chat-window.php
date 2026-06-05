@@ -399,6 +399,14 @@
                     </svg>
                     <span>SYNC LIMIT</span>
                 </button>
+                <button type="button" id="btn-manual-condense" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Manually Condense Chat History" onclick="triggerManualCondensation()">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 transition-transform duration-300 group-hover:scale-110">
+                        <polyline points="21 8 21 21 3 21 3 8"/>
+                        <rect x="1" y="3" width="22" height="5"/>
+                        <line x1="10" y1="12" x2="14" y2="12"/>
+                    </svg>
+                    <span>CONDENSE CHAT</span>
+                </button>
             </div>
 
             <?php if (!$status->all_operational): ?>
