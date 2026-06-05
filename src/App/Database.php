@@ -5,6 +5,7 @@ namespace App;
 use PDO;
 use PDOException;
 use InvalidArgumentException;
+use App\Config;
 
 class Database
 {
@@ -32,6 +33,59 @@ class Database
         }
     }
 
+    private function executeStatement(string $sql, array $params = []): \PDOStatement
+    {
+        try {
+            $stmt = $this->pdo->prepare($sql);
+
+            foreach ($params as $key => $value) {
+                $type = PDO::PARAM_STR;
+                if (is_int($value)) {
+                    $type = PDO::PARAM_INT;
+                } elseif (is_bool($value)) {
+                    $type = PDO::PARAM_BOOL;
+                } elseif (is_null($value)) {
+                    $type = PDO::PARAM_NULL;
+                }
+
+                $bindKey = is_int($key) ? $key + 1 : $key;
+                
+                $stmt->bindValue($bindKey, $value, $type);
+            }
+
+            $stmt->execute();
+            return $stmt;
+
+        } catch (PDOException $e) {
+            $logFile = Config::getProjectRoot() . '/db_errors.log'; 
+            $date = date('Y-m-d H:i:s');
+            $errorMessage = $e->getMessage();
+            $paramsString = print_r($params, true);
+            $traceString = $e->getTraceAsString();
+
+            $logEntry = <<<TEXT
+================ DB ERROR ================
+Date: {$date}
+Message: {$errorMessage}
+SQL: {$sql}
+Params: {$paramsString}
+Trace: {$traceString}
+==========================================
+
+TEXT;
+
+            file_put_contents($logFile, $logEntry, FILE_APPEND);
+            
+            throw $e;
+        }
+    }
+
+    public function query(string $sql, array $params = []): array
+    {
+        $stmt = $this->executeStatement($sql, $params);
+        return $stmt->fetchAll() ?: [];
+    }
+
     public function getConnection(): PDO
     {
         return $this->pdo;
@@ -39,7 +93,7 @@ class Database
 
     public function initTables(): void
     {
-        $this->pdo->exec("
+        $this->executeStatement("
             CREATE TABLE IF NOT EXISTS chat_sessions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
@@ -47,7 +101,7 @@ class Database
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 
-        $this->pdo->exec("
+        $this->executeStatement("
             CREATE TABLE IF NOT EXISTS chat_history (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 session_id INT NOT NULL,
@@ -66,7 +120,7 @@ class Database
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 
-        $this->pdo->exec("
+        $this->executeStatement("
             CREATE TABLE IF NOT EXISTS memories (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 memory_text TEXT NOT NULL,
@@ -78,11 +132,11 @@ class Database
 
     public function nukeAndRebuildTables(): void
     {
-        $this->pdo->exec("SET FOREIGN_KEY_CHECKS = 0;");
-        $this->pdo->exec("DROP TABLE IF EXISTS chat_history;");
-        $this->pdo->exec("DROP TABLE IF EXISTS chat_sessions;");
-        $this->pdo->exec("DROP TABLE IF EXISTS memories;");
-        $this->pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
+        $this->executeStatement("SET FOREIGN_KEY_CHECKS = 0;");
+        $this->executeStatement("DROP TABLE IF EXISTS chat_history;");
+        $this->executeStatement("DROP TABLE IF EXISTS chat_sessions;");
+        $this->executeStatement("DROP TABLE IF EXISTS memories;");
+        $this->executeStatement("SET FOREIGN_KEY_CHECKS = 1;");
 
         $this->initTables();
     }
@@ -97,37 +151,26 @@ class Database
     public function insert(string $table, array $data): bool
     {
         $this->assertIdentifier($table, 'table');
-
+        
         if (empty($data)) {
             throw new InvalidArgumentException("Insert data cannot be empty");
         }
 
         $columns = [];
         $placeholders = [];
+        $params = [];
 
         foreach ($data as $key => $value) {
             $this->assertIdentifier($key, 'column');
-
             $columns[] = "`$key`";
             $placeholders[] = ":$key";
+            $params[":$key"] = $value;
         }
 
-        $sql = "INSERT INTO `$table` (" . implode(',', $columns) . ")
-                VALUES (" . implode(',', $placeholders) . ")";
-
-        $stmt = $this->pdo->prepare($sql);
-
-        foreach ($data as $key => $value) {
-            $stmt->bindValue(":$key", $value);
-        }
+        $sql = "INSERT INTO `$table` (" . implode(',', $columns) . ") VALUES (" . implode(',', $placeholders) . ")";
         
-        try {
-            return $stmt->execute();
-        } catch (\PDOException $e) {
-            error_log("PDO EXECUTE FAILED: " . $e->getMessage());
-            error_log("SQLSTATE: " . $e->getCode());
-            throw $e;
-        }
+        $this->executeStatement($sql, $params);
+        return true;
     }
 
     public function selectSafe(string $table, array $conditions = []): array
@@ -135,62 +178,48 @@ class Database
         $this->assertIdentifier($table, 'table');
 
         $sql = "SELECT * FROM `$table`";
-        $binds = [];
+        $params = [];
 
         if (!empty($conditions)) {
             $where = [];
-
             foreach ($conditions as $key => $value) {
                 $this->assertIdentifier($key, 'column');
-
                 $where[] = "`$key` = :$key";
-                $binds[":$key"] = $value;
+                $params[":$key"] = $value;
             }
-
             $sql .= " WHERE " . implode(" AND ", $where);
         }
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($binds);
-
-        return $stmt->fetchAll();
+        return $this->query($sql, $params);
     }
 
     public function update(string $table, array $data, array $conditions): bool
     {
         $this->assertIdentifier($table, 'table');
-
+        
         if (empty($data) || empty($conditions)) {
             throw new InvalidArgumentException("Update requires data and conditions");
         }
 
         $set = [];
         $where = [];
-        $binds = [];
+        $params = [];
 
         foreach ($data as $key => $value) {
             $this->assertIdentifier($key, 'column');
-
             $set[] = "`$key` = :set_$key";
-            $binds[":set_$key"] = $value;
+            $params[":set_$key"] = $value;
         }
 
         foreach ($conditions as $key => $value) {
             $this->assertIdentifier($key, 'column');
-
             $where[] = "`$key` = :where_$key";
-            $binds[":where_$key"] = $value;
+            $params[":where_$key"] = $value;
         }
 
-        $sql = "UPDATE `$table` SET " . implode(', ', $set)
-             . " WHERE " . implode(' AND ', $where);
+        $sql = "UPDATE `$table` SET " . implode(', ', $set) . " WHERE " . implode(' AND ', $where);
 
-        $stmt = $this->pdo->prepare($sql);
-
-        foreach ($binds as $k => $v) {
-            $stmt->bindValue($k, $v);
-        }
-
-        return $stmt->execute();
+        $this->executeStatement($sql, $params);
+        return true;
     }
 }

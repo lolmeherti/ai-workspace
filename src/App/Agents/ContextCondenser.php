@@ -4,6 +4,8 @@ namespace App\Agents;
 
 use App\AgentManager;
 use App\Config;
+use App\Database;
+use Exception;
 
 class ContextCondenser
 {
@@ -14,11 +16,7 @@ class ContextCondenser
         $this->agent = $agent;
     }
 
-    /**
-     * Condense the chat history of a session, leaving the last 3 rounds (6 messages) intact.
-     * The older messages are summarized and factual memories are extracted from them.
-     */
-    public function condenseChatHistory(\App\Database $db, int $sessionId): array
+    public function condenseChatHistory(Database $db, int $sessionId): array
     {
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
@@ -26,17 +24,14 @@ class ContextCondenser
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
 
-        // Split the history: keep the last 6 messages
         $archive = array_slice($history, 0, -6);
         $keep = array_slice($history, -6);
 
-        // Build the text representation of the archived messages to summarize
         $archiveText = "";
         foreach ($archive as $msg) {
             $archiveText .= ucfirst($msg['role']) . ": " . $msg['message'] . "\n";
         }
 
-        // System prompt to extract summary and memories as JSON
         $systemPrompt = "You are a highly efficient context management assistant. Your task is to analyze the conversation archive of an AI assistant and a user.\n" .
             "You must return ONLY a JSON object matching this schema:\n" .
             "{\n" .
@@ -53,7 +48,6 @@ class ContextCondenser
         $temperature = (float) Config::get('AGENT_CONDENSER_TEMP', 0.4);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        // Clean any potential markdown wrappers around JSON
         if (strpos($response, '```') !== false) {
             $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
             $response = trim($response);
@@ -62,21 +56,17 @@ class ContextCondenser
         $data = json_decode($response, true);
 
         if (!$data || !isset($data['summary'])) {
-            throw new \Exception("Condensation failed: Invalid or non-JSON response from LLM.");
+            throw new Exception("Condensation failed: Invalid or non-JSON response from LLM.");
         }
 
         $summaryText = trim($data['summary']);
         $memoriesExtracted = $data['memories'] ?? [];
 
-        // Start transaction
-        $pdo = $db->getConnection();
-        $pdo->beginTransaction();
+        $db->query("START TRANSACTION");
 
         try {
-            // Get all IDs of the archive messages
             $archiveIds = array_column($archive, 'id');
             
-            // Step 1: Update the very oldest message to act as the Summary message
             $oldestId = min($archiveIds);
             
             $formattedSummary = "SUMMARY OF PREVIOUS CONVERSATION:\n" . $summaryText;
@@ -91,15 +81,12 @@ class ContextCondenser
                 'scraped_urls' => null
             ], ['id' => $oldestId]);
 
-            // Step 2: Delete all other messages in the archive (except the oldest one we updated)
             $deleteIds = array_filter($archiveIds, fn($id) => $id !== $oldestId);
             if (!empty($deleteIds)) {
                 $placeholders = implode(',', array_fill(0, count($deleteIds), '?'));
-                $stmt = $pdo->prepare("DELETE FROM chat_history WHERE id IN ($placeholders)");
-                $stmt->execute(array_values($deleteIds));
+                $db->query("DELETE FROM chat_history WHERE id IN ($placeholders)", array_values($deleteIds));
             }
 
-            // Step 3: Insert the extracted memories
             $maxLimit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
             foreach ($memoriesExtracted as $memoryText) {
                 $memoryText = trim($memoryText, " \t\n\r\0\x0B-*•");
@@ -107,10 +94,11 @@ class ContextCondenser
                     continue;
                 }
 
-                // Clean-up memories limit if needed
-                $count = $pdo->query("SELECT COUNT(*) FROM memories")->fetchColumn();
+                $countResult = $db->query("SELECT COUNT(*) as count FROM memories");
+                $count = (int)($countResult[0]['count'] ?? 0);
+                
                 if ($count >= $maxLimit) {
-                    $pdo->exec("DELETE FROM memories ORDER BY id ASC LIMIT 1");
+                    $db->query("DELETE FROM memories ORDER BY id ASC LIMIT 1");
                 }
 
                 $db->insert('memories', [
@@ -118,9 +106,9 @@ class ContextCondenser
                 ]);
             }
 
-            $pdo->commit();
-        } catch (\Exception $e) {
-            $pdo->rollBack();
+            $db->query("COMMIT");
+        } catch (Exception $e) {
+            $db->query("ROLLBACK");
             throw $e;
         }
 

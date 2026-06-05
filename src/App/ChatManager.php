@@ -114,12 +114,18 @@ class ChatManager
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
         if (count($history) === 1 && empty($cacheAction)) {
+            $titlePromptText = <<<TEXT
+You are a title generator. Generate an extremely short 2-3 word title representing the user query. Do not use quotes, markdown, punctuation, or explanations. Keep it under 20 characters.
+TEXT;
+
             $titlePrompt = [
-                ['role' => 'system', 'content' => 'You are a title generator. Generate an extremely short 2-3 word title representing the user query. Do not use quotes, markdown, punctuation, or explanations. Keep it under 20 characters.'],
+                ['role' => 'system', 'content' => $titlePromptText],
                 ['role' => 'user', 'content' => $query]
             ];
+            
             $temperature = (float) Config::get('AGENT_TITLE_TEMP', 0.4);
             $newTitle = trim($this->agent->chat($titlePrompt, false, null, $temperature));
+            
             if (!empty($newTitle) && strlen($newTitle) < 50) {
                 $this->db->update('chat_sessions', ['title' => $newTitle], ['id' => $sessionId]);
                 $updatedTitle = $newTitle;
@@ -195,22 +201,34 @@ class ChatManager
         $currentDate = date('F j, Y');
         $cutoffDate = 'early 2024';
         
-        $systemPrompt = "You are a helpful, friendly, and highly intelligent AI conversational assistant. " .
-                        "Today's date is {$currentDate}. " .
-                        "Your internal knowledge cutoff is {$cutoffDate}. " .
-                        "Please be aware of this gap when answering questions about current events.";
+        $systemPrompt = <<<TEXT
+You are a helpful, friendly, and highly intelligent AI conversational assistant. Today's date is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}. Please be aware of this gap when answering questions about current events.
+TEXT;
 
         if (!empty($condensedContext)) {
-            $systemPrompt .= "\n\nLIVE WEB SEARCH CONTEXT:\n" . $condensedContext;
+            $systemPrompt .= <<<TEXT
+
+
+LIVE WEB SEARCH CONTEXT:
+{$condensedContext}
+TEXT;
             if ($usedCache) {
-                $systemPrompt .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
+                $systemPrompt .= <<<TEXT
+
+(Note: This context was retrieved from your recent semantic memory cache).
+TEXT;
             }
         }
 
         if ($this->memorySelector) {
             $relevantMemories = $this->memorySelector->selectRelevantMemory($query);
             if (!empty($relevantMemories)) {
-                $systemPrompt .= "\n\nRelevant details you recall about the user:\n" . $relevantMemories;
+                $systemPrompt .= <<<TEXT
+
+
+Relevant details you recall about the user:
+{$relevantMemories}
+TEXT;
             }
         }
 

@@ -6,6 +6,14 @@
         </span>
     </div>
 
+    <form id="consolidate-form" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories">
+        <input type="hidden" name="manual_consolidate" value="1">
+        <button id="consolidate-btn" type="submit" class="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+            <uk-icon id="consolidate-icon" icon="brain" class="w-4 h-4"></uk-icon>
+            <span id="consolidate-text">Consolidate & Clean Memories</span>
+        </button>
+    </form>
+
     <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="space-y-2">
         <input type="hidden" name="add_memory" value="1">
         <div class="flex gap-1.5">
@@ -89,6 +97,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const memoryCheckboxes = document.querySelectorAll('.memory-checkbox');
     const bulkDeleteForm = document.getElementById('bulk-delete-form');
     const selectedCountSpan = document.getElementById('selected-count');
+
+    const consolidateForm = document.getElementById('consolidate-form');
+    const consolidateBtn = document.getElementById('consolidate-btn');
+    const consolidateIcon = document.getElementById('consolidate-icon');
+    const consolidateText = document.getElementById('consolidate-text');
+
+    if (consolidateForm) {
+        consolidateForm.addEventListener('submit', function() {
+            consolidateBtn.disabled = true;
+            consolidateBtn.classList.add('opacity-70', 'cursor-not-allowed');
+            consolidateBtn.classList.remove('hover:bg-cyan-500/20');
+            consolidateText.textContent = 'Consolidating...';
+            if (consolidateIcon) {
+                consolidateIcon.setAttribute('icon', 'spinner');
+                consolidateIcon.classList.add('animate-spin');
+            }
+        });
+    }
 
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', function() {

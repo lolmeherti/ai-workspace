@@ -27,30 +27,28 @@ $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
 require_once __DIR__ . '/actions.php';
 
-$sessions = $db ? $db->getConnection()->query("SELECT * FROM chat_sessions ORDER BY id DESC")->fetchAll() : [];
+$sessions = $db ? $db->query("SELECT * FROM chat_sessions ORDER BY id DESC") : [];
 $activeSessionTitle = 'New Conversation';
+
 foreach ($sessions as $s) {
     if ((int)$s['id'] === (int)$sessionId) {
         $activeSessionTitle = $s['title'];
         break;
     }
 }
+
 $history = $db ? $db->selectSafe('chat_history', ['session_id' => $sessionId]) : [];
 
-// --- CALCULATE INITIAL SESSION CONTEXT TOKENS ---
 $totalSessionTokens = 0;
 foreach ($history as $msg) {
     $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
 }
-// -------------------------------------------------
 
 $memories = [];
 $memoryCount = 0;
 if ($db) {
     try {
-        $memories = $db->selectSafe('memories', []);
-        usort($memories, fn($a, $b) => $b['id'] - $a['id']);
-        $memories = array_slice($memories, 0, 500);
+        $memories = $db->query("SELECT * FROM memories ORDER BY id DESC LIMIT 500");
         $memoryCount = count($memories);
     } catch (\Exception $e) {}
 }
@@ -86,7 +84,6 @@ if ($status->redis) {
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
 
-    <!-- PASS VALUES TO JAVASCRIPT SAFELY -->
     <script>
         const currentActiveTab = '<?php echo $activeTab; ?>';
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;

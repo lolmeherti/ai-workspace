@@ -55,9 +55,6 @@ class HealthCheck
         return $this->testUrl($host);
     }
 
-    /**
-     * Verifies if the LLM server is online AND if the configured model is loaded.
-     */
     private function checkAi(): bool
     {
         $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/') . '/models';
@@ -73,7 +70,6 @@ class HealthCheck
             return false;
         }
 
-        // Loop through the active model list to find a match for the configured model name
         foreach ($data['data'] as $model) {
             if (isset($model['id']) && $model['id'] === $configuredModel) {
                 return true;
@@ -83,9 +79,6 @@ class HealthCheck
         return false;
     }
 
-    /**
-     * Checks if a server is reachable and responds with any HTTP status.
-     */
     private function testUrl(string $url): bool
     {
         $ch = curl_init($url);
@@ -98,9 +91,6 @@ class HealthCheck
         return $code > 0;
     }
 
-    /**
-     * Helper to retrieve the body response from a successful 200 OK request.
-     */
     private function fetchUrl(string $url): ?string
     {
         $ch = curl_init($url);

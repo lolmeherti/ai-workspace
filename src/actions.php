@@ -101,8 +101,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($db && isset($_POST['manual_consolidate'])) {
+        $chatText = "";
+        if ($sessionId > 0) {
+            $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
+            foreach ($history as $row) {
+                $chatText .= ucfirst($row['role']) . ": " . $row['message'] . "\n";
+            }
+        }
+        $memoryExtractor->extractAndSave($chatText);
+        header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
+        exit;
+    }
+
     if ($db && isset($_POST['add_memory'])) {
-        $count = $db->getConnection()->query("SELECT COUNT(*) FROM memories")->fetchColumn();
+        $result = $db->query("SELECT COUNT(*) as count FROM memories");
+        $count = (int)($result[0]['count'] ?? 0);
+        
         if ($count < 500) {
             $text = trim($_POST['memory_text'] ?? '');
             if (!empty($text)) {
@@ -114,9 +129,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($db && isset($_POST['delete_memory'])) {
-        $memoryId = $_POST['memory_id'] ?? '';
-        $stmt = $db->getConnection()->prepare("DELETE FROM memories WHERE id = :id");
-        $stmt->execute([':id' => $memoryId]);
+        $memoryId = (int)($_POST['memory_id'] ?? 0);
+        $db->query("DELETE FROM memories WHERE id = :id", [':id' => $memoryId]);
         header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
         exit;
     }
@@ -124,17 +138,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($db && isset($_POST['delete_multiple_memories'])) {
         $selectedIds = $_POST['selected_memories'] ?? [];
         if (!empty($selectedIds) && is_array($selectedIds)) {
-            $selectedIds = array_map('intval', $selectedIds);
+            $selectedIds = array_values(array_map('intval', $selectedIds));
             $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
-            $stmt = $db->getConnection()->prepare("DELETE FROM memories WHERE id IN ($placeholders)");
-            $stmt->execute($selectedIds);
+            $db->query("DELETE FROM memories WHERE id IN ($placeholders)", $selectedIds);
         }
         header("Location: index.php?session_id=" . $sessionId . "&tab=memories");
         exit;
     }
 
     if ($db && isset($_POST['update_memory'])) {
-        $memoryId = $_POST['memory_id'] ?? '';
+        $memoryId = (int)($_POST['memory_id'] ?? 0);
         $text = trim($_POST['memory_text'] ?? '');
         if (!empty($text)) {
             $db->update('memories', ['memory_text' => $text], ['id' => $memoryId]);
@@ -157,10 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $clearAll = $_POST['clear_all'] ?? '';
     if ($db && $clearAll === '1') {
-        $db->getConnection()->exec("SET FOREIGN_KEY_CHECKS = 0;");
-        $db->getConnection()->exec("TRUNCATE TABLE chat_history;");
-        $db->getConnection()->exec("TRUNCATE TABLE chat_sessions;");
-        $db->getConnection()->exec("SET FOREIGN_KEY_CHECKS = 1;");
+        $db->query("SET FOREIGN_KEY_CHECKS = 0");
+        $db->query("TRUNCATE TABLE chat_history");
+        $db->query("TRUNCATE TABLE chat_sessions");
+        $db->query("SET FOREIGN_KEY_CHECKS = 1");
         header("Location: index.php");
         exit;
     }
@@ -171,8 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $deleteSessionId = $_GET['delete_session'] ?? '';
 
     if ($db && !empty($deleteSessionId)) {
-        $stmt = $db->getConnection()->prepare("DELETE FROM chat_sessions WHERE id = :id");
-        $stmt->execute([':id' => $deleteSessionId]);
+        $db->query("DELETE FROM chat_sessions WHERE id = :id", [':id' => (int)$deleteSessionId]);
         header("Location: index.php");
         exit;
     }

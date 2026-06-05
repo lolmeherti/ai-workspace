@@ -21,28 +21,42 @@ class MemorySelector
     {
         $limit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
 
-        $stmt = $this->db->getConnection()->prepare("
-            SELECT id, memory_text 
-            FROM memories 
-            WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
-            LIMIT :limit
-        ");
+        $cleanPrompt = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $userPrompt);
+        $words = array_filter(preg_split('/\s+/', $cleanPrompt));
         
-        $stmt->bindValue(':prompt', $userPrompt, \PDO::PARAM_STR);
-        $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
-        $stmt->execute();
-        $memories = $stmt->fetchAll();
+        if (count($words) > 100) {
+            $searchString = implode(' ', array_merge(array_slice($words, 0, 50), array_slice($words, -50)));
+        } else {
+            $searchString = implode(' ', $words);
+        }
+
+        $memories = [];
+
+        if (!empty($searchString)) {
+            $sql = <<<TEXT
+SELECT id, memory_text 
+FROM memories 
+WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
+LIMIT :limit
+TEXT;
+
+            $memories = $this->db->query($sql, [
+                ':prompt' => $searchString,
+                ':limit'  => $limit
+            ]);
+        }
 
         if (empty($memories)) {
-            $stmtFallback = $this->db->getConnection()->prepare("
-                SELECT id, memory_text 
-                FROM memories 
-                ORDER BY id DESC 
-                LIMIT :limit
-            ");
-            $stmtFallback->bindValue(':limit', $limit, \PDO::PARAM_INT);
-            $stmtFallback->execute();
-            $memories = $stmtFallback->fetchAll();
+            $sqlFallback = <<<TEXT
+SELECT id, memory_text 
+FROM memories 
+ORDER BY id DESC 
+LIMIT :limit
+TEXT;
+            
+            $memories = $this->db->query($sqlFallback, [
+                ':limit' => $limit
+            ]);
         }
 
         if (empty($memories)) {
@@ -63,7 +77,13 @@ Return ONLY JSON matching this schema:
 You will be provided with a list of past user memories and the current user prompt. Identify the IDs of the memories that are highly relevant to answering the prompt. Return an empty array if no memories are relevant.
 TEXT;
 
-        $userMessage = "Memories:\n" . $memoryContext . "\n\nCurrent User Prompt:\n" . $userPrompt;
+        $userMessage = <<<TEXT
+Memories:
+{$memoryContext}
+
+Current User Prompt:
+{$userPrompt}
+TEXT;
 
         $messages = [
             ['role' => 'system', 'content' => $systemPrompt],

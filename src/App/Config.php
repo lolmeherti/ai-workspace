@@ -21,4 +21,9 @@ class Config
     {
         return $_ENV[$key] ?? $default;
     }
+
+    public static function getProjectRoot(): string
+    {
+        return dirname(__DIR__);
+    }
 }
