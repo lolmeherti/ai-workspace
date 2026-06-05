@@ -130,8 +130,18 @@ class ChatController
             return;
         }
 
-        if($this->isTokenLimitRequest()) {
+        if ($this->isTokenLimitRequest()) {
             $this->handleTokenLimit();
+            return;
+        }
+        
+        if ($this->isExplorerRequest()) {
+            $this->handleExplorerRequest();
+            return;
+        }
+
+        if ($this->isFileContentRequest()) {
+            $this->handleFileContentRequest();
             return;
         }
         
@@ -181,6 +191,69 @@ class ChatController
         return isset($_GET['toggle_star']);
     }
 
+    public function isExplorerRequest(): bool
+    {
+        return isset($_GET['api_action']) && $_GET['api_action'] === 'show_in_explorer';
+    }
+
+    public function isFileContentRequest(): bool
+    {
+        return isset($_GET['api_action']) && $_GET['api_action'] === 'get_file_content';
+    }
+
+    private function handleExplorerRequest(): void
+    {
+        $file = $_GET['file'] ?? '';
+        
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid file name.'], 400);
+            return;
+        }
+        
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $fullPath = realpath($uploadDir . '/' . $file);
+        
+        if ($fullPath && str_starts_with($fullPath, $uploadDir) && file_exists($fullPath)) {
+            if (stristr(PHP_OS, 'WIN')) {
+                pclose(popen("start /B explorer.exe /select,\"" . $fullPath . "\"", "r"));
+                $this->jsonResponse(['status' => 'success']);
+            } else {
+                $this->jsonResponse([
+                    'status' => 'fallback',
+                    'url' => 'uploads/' . $file,
+                    'physical_path' => 'uploads/' . $file
+                ]);
+            }
+        } else {
+            $this->jsonResponse(['status' => 'error', 'message' => 'File not found on disk.'], 404);
+        }
+    }
+
+    private function handleFileContentRequest(): void
+    {
+        $file = $_GET['file'] ?? '';
+        
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid file name.'], 400);
+            return;
+        }
+        
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $txtPath = realpath($uploadDir . '/' . $file . '.txt');
+        
+        if ($txtPath && str_starts_with($txtPath, $uploadDir) && file_exists($txtPath)) {
+            $content = file_get_contents($txtPath);
+            $this->jsonResponse(['status' => 'success', 'content' => $content]);
+        } else {
+            $origPath = realpath($uploadDir . '/' . $file);
+            if ($origPath && str_starts_with($origPath, $uploadDir) && file_exists($origPath)) {
+                $content = file_get_contents($origPath);
+                $this->jsonResponse(['status' => 'success', 'content' => $content]);
+            } else {
+                $this->jsonResponse(['status' => 'error', 'message' => 'Extracted text document not found.'], 404);
+            }
+        }
+    }
 
     private function handleApiPost(): void
     {
@@ -248,7 +321,8 @@ class ChatController
         }
     }
 
-    private function handleTokenLimit (): void {
+    private function handleTokenLimit(): void
+    {
         $env = $this->envEditor->read();
         $url = $env['LLM_API_URL'] ?? 'http://localhost:1234/v1';
 
@@ -336,12 +410,10 @@ class ChatController
         ]);
     }
 
-    
     private function isCacheViewerCall(): bool
     {
         return isset($_GET['api_action']) && $_GET['api_action'] === 'get_cache';
     }
-
 
     private function streamChatResponse(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey): void
     {

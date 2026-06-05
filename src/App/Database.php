@@ -129,6 +129,22 @@ TEXT;
                 FULLTEXT INDEX ft_memory_text (memory_text)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
+
+        $this->executeStatement("
+            CREATE TABLE IF NOT EXISTS uploaded_files (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                session_id INT NULL,
+                original_name VARCHAR(255) NOT NULL,
+                physical_name VARCHAR(255) NOT NULL,
+                generated_title TEXT NOT NULL, 
+                file_type VARCHAR(50) NOT NULL,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_uploaded_files_session_id
+                    FOREIGN KEY (session_id)
+                    REFERENCES chat_sessions(id)
+                    ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
     }
 
     public function nukeAndRebuildTables(): void

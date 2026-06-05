@@ -1,8 +1,3 @@
-/**
- * @file js/chatManager.js
- * @description Chat & Conversation Coordinator. Manages prompt submission flows and executes multi-select batch chat deletions.
- */
-
 import { state } from './state.js';
 import { streamResponse } from './streamer.js';
 import { removeFile } from './fileHandler.js';
@@ -17,8 +12,9 @@ export async function handleChatSubmit(e) {
     
     const message = inputField.value.trim();
     const file = state.selectedFile || (fileInput ? fileInput.files[0] : null) || state.pastedImageFile;
+    const hasReferences = window.selectedFileReferences && window.selectedFileReferences.length > 0;
     
-    if (!message && !file && !state.pastedImageFile) return;
+    if (!message && !file && !state.pastedImageFile && !hasReferences) return;
 
     const emptyState = document.getElementById("empty-state");
     if (emptyState) emptyState.remove();
@@ -36,6 +32,14 @@ export async function handleChatSubmit(e) {
         formData.append("file", state.pastedImageFile, "pasted_image.png");
     }
 
+    let finalQueryText = message;
+    if (hasReferences) {
+        window.selectedFileReferences.forEach(ref => {
+            finalQueryText += ` [File: ${ref.physical_name}]`;
+        });
+    }
+    formData.set("q", finalQueryText);
+
     inputField.value = "";
     inputField.style.height = "";
     removeFile();
@@ -48,11 +52,24 @@ export async function handleChatSubmit(e) {
     const imgElement = userNode.querySelector(".upload-img");
     
     userBubble.setAttribute("data-raw", message);
-    msgText.innerHTML = message
+    
+    let renderedUserMsg = message
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/\n/g, "<br>");
+
+    if (hasReferences) {
+        window.selectedFileReferences.forEach(ref => {
+            renderedUserMsg += ` [File: ${ref.physical_name}]`;
+        });
+    }
+
+    if (window.parseInlineFiles) {
+        renderedUserMsg = window.parseInlineFiles(renderedUserMsg);
+    }
+    
+    msgText.innerHTML = renderedUserMsg;
     
     if (isImage && fileDataUrl) {
         imgElement.src = fileDataUrl;
@@ -67,9 +84,12 @@ export async function handleChatSubmit(e) {
         `;
         userBubble.prepend(docWrapper);
     }
-    
+
     chatWindow.appendChild(userNode);
     chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    window.selectedFileReferences = [];
+    window.updateFileReferencesUI();
 
     await streamResponse(formData, message);
 }
@@ -177,3 +197,8 @@ export function submitMultiDelete() {
     document.body.appendChild(form);
     form.submit();
 }
+
+window.handleChatSubmit = handleChatSubmit;
+window.toggleChatEditMode = toggleChatEditMode;
+window.submitMultiDelete = submitMultiDelete;
+window.handleChatSelection = handleChatSelection;
