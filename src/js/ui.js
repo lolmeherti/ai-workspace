@@ -12,7 +12,7 @@ export function enableMemoryEdit(id) {
 }
 
 export function disableMemoryEdit(id) {
-    document.getElementById(`memory-view-${id}`).getBoundingClientRect(); // triggers reflow
+    document.getElementById(`memory-view-${id}`).getBoundingClientRect();
     document.getElementById(`memory-view-${id}`).classList.remove('hidden');
     document.getElementById(`memory-edit-${id}`).classList.add('hidden');
 }

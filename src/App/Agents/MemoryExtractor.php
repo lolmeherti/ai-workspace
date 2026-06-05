@@ -43,7 +43,6 @@ class MemoryExtractor
         $candidates = [];
 
         if ($isManual) {
-            // Retrieve a larger set of existing memories for thorough manual deduplication
             $candidates = $this->db->query("SELECT id, memory_text FROM memories ORDER BY id DESC LIMIT 200");
         } else {
             $keywordPrompt = <<<TEXT
