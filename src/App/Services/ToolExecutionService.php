@@ -43,18 +43,29 @@ class ToolExecutionService
         }
 
         try {
-            $searchPattern = '%' . $toolQuery . '%';
-            $matchingFiles = $this->db->query(
-                "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at 
-                 FROM uploaded_files 
-                 WHERE generated_title LIKE :q1 OR original_name LIKE :q2 
-                 ORDER BY uploaded_at DESC 
-                 LIMIT 5",
-                [
-                    ':q1' => $searchPattern,
-                    ':q2' => $searchPattern
-                ]
-            );
+            $keywords = array_filter(explode(' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $toolQuery)));
+            
+            $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
+            $conditions = [];
+            $params = [];
+            
+            if (!empty($keywords)) {
+                $idx = 0;
+                foreach ($keywords as $word) {
+                    if (mb_strlen($word) < 2) continue;
+                    $conditions[] = "(generated_title LIKE :w{$idx} OR original_name LIKE :o{$idx})";
+                    $params[":w{$idx}"] = "%{$word}%";
+                    $params[":o{$idx}"] = "%{$word}%";
+                    $idx++;
+                }
+            }
+
+            if (!empty($conditions)) {
+                $sql .= " WHERE " . implode(" OR ", $conditions);
+            }
+            
+            $sql .= " ORDER BY uploaded_at DESC LIMIT 5";
+            $matchingFiles = $this->db->query($sql, $params);
 
             $resultsTxt = "System search completed for '{$toolQuery}'. Matches found on disk:\n";
             $injectedContexts = [];

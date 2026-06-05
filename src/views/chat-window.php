@@ -169,7 +169,7 @@
 
             <div id="referenced-files-container" class="flex flex-wrap gap-2 mb-3"></div>
             
-            <form id="chatForm" onsubmit="handleChatSubmit(event)" class="relative">
+            <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
                 <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
                 <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                 
