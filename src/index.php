@@ -21,7 +21,21 @@ $sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : 0;
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'chats';
 
 $envVars = $envEditor->read();
-$status = (new HealthCheck())->check();
+
+$status = null;
+try {
+    $cached = Cache::get('system_health_status');
+    if ($cached) {
+        $status = json_decode($cached);
+    }
+} catch (\Exception $e) {}
+
+if ($status === null) {
+    $status = (new HealthCheck())->check();
+    try {
+        Cache::set('system_health_status', json_encode($status), 10);
+    } catch (\Exception $e) {}
+}
 
 $db = $status->database ? new Database() : null;
 $agentManager = new AgentManager();

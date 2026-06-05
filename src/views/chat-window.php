@@ -122,8 +122,13 @@
                 <div class="w-16 h-1.5 bg-slate-850 rounded-full overflow-hidden ml-1 border border-slate-800">
                     <div id="token-counter-bar" class="h-full bg-cyan-500 transition-all duration-300" style="width: 0%"></div>
                 </div>
-                <button type="button" id="btn-sync-lmstudio" class="flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-400 px-2 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-150 font-bold shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-105 active:scale-95 cursor-pointer ml-1.5 border-none" title="Sync Context Limit from LM Studio">
-                    <uk-icon icon="refresh" class="w-2.5 h-2.5"></uk-icon>
+                <button type="button" id="btn-sync-lmstudio" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Sync Context Limit from LM Studio">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 transform group-hover:rotate-180 transition-transform duration-500 ease-out">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                        <path d="M16 16h5v5"/>
+                    </svg>
                     <span>SYNC LIMIT</span>
                 </button>
             </div>
@@ -155,7 +160,7 @@
                     
                     <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
                         <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
-                            <?php echo $msg['role'] === 'user' ? 'You' : 'Assistant'; ?>
+                            <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
                             <?php if ($msg['role'] !== 'user'): ?>
                                 <?php if (!empty($msg['cache_used'])): ?>
                                     <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
@@ -327,7 +332,7 @@
         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-start mb-4 chat-message-container ai-wrapper">
             <div class="flex items-center gap-2 ml-1">
                 <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2 ai-label-container">
-                    Assistant
+                    <?php echo htmlspecialchars(\App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
                 </span>
                 <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
