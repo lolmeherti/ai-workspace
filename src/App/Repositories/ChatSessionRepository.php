@@ -45,4 +45,19 @@ class ChatSessionRepository
         $this->db->query("TRUNCATE TABLE chat_sessions");
         $this->db->query("SET FOREIGN_KEY_CHECKS = 1");
     }
+
+    public function toggleStar(int $id): bool
+    {
+        $this->db->query("UPDATE chat_sessions SET is_starred = NOT COALESCE(is_starred, 0) WHERE id = :id", [':id' => $id]);
+        return $this->isStarred($id);
+    }
+
+    public function isStarred(int $id): bool
+    {
+        $res = $this->db->query("SELECT is_starred FROM chat_sessions WHERE id = :id", [':id' => $id]);
+        if (!empty($res)) {
+            return (bool)$res[0]['is_starred'];
+        }
+        return false;
+    }
 }

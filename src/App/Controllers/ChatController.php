@@ -109,7 +109,6 @@ class ChatController
 
     private function handleGet(): void
     {
-
         $newChat = $_GET['new_chat'] ?? '';
         $deleteSessionId = (int)($_GET['delete_session'] ?? 0);
         $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
@@ -133,6 +132,11 @@ class ChatController
 
         if($this->isTokenLimitRequest()) {
             $this->handleTokenLimit();
+            return;
+        }
+        
+        if ($this->db && $this->isToggleStarRequest()) {
+            $this->handleToggleStar();
             return;
         }
     }
@@ -172,6 +176,12 @@ class ChatController
         return isset($_GET['api_action']) && $_GET['api_action'] === 'sync_lmstudio_limit';
     }
 
+    public function isToggleStarRequest(): bool
+    {
+        return isset($_GET['toggle_star']);
+    }
+
+
     private function handleApiPost(): void
     {
         if (!$this->status->all_operational || !$this->db) {
@@ -198,6 +208,26 @@ class ChatController
         }
 
         $this->streamChatResponse($sessionId, $query, $imageFile, $cacheAction, $cacheKey);
+    }
+
+    private function handleToggleStar(): void
+    {
+        $starSessionId = (int)($_GET['toggle_star'] ?? 0);
+        $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
+
+        if ($starSessionId > 0) {
+            $isStarred = $this->chatSessionRepository->toggleStar($starSessionId);
+            
+            $isAjax = (isset($_GET['ajax']) && $_GET['ajax'] == 1) || $this->isApiRequest();
+            if ($isAjax) {
+                $this->jsonResponse(['status' => 'success', 'is_starred' => $isStarred]);
+                return;
+            }
+            
+            $redirectSessionId = (int)($_GET['session_id'] ?? $starSessionId);
+            $this->redirect($this->buildUrl($redirectSessionId, $activeTab));
+            return;
+        }
     }
 
     private function handleCondenseAction(): void
