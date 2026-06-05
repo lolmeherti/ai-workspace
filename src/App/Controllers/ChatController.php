@@ -130,6 +130,11 @@ class ChatController
             $this->handleGetCache();
             return;
         }
+
+        if($this->isTokenLimitRequest()) {
+            $this->handleTokenLimit();
+            return;
+        }
     }
 
     private function handleGetCache(): void
@@ -160,6 +165,11 @@ class ChatController
         } catch (\Exception $e) {
             $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
+    }
+
+    public function isTokenLimitRequest(): bool
+    {
+        return isset($_GET['api_action']) && $_GET['api_action'] === 'sync_lmstudio_limit';
     }
 
     private function handleApiPost(): void
@@ -206,6 +216,94 @@ class ChatController
         } catch (\Exception $e) {
             $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
+    }
+
+    private function handleTokenLimit (): void {
+        $env = $this->envEditor->read();
+        $url = $env['LLM_API_URL'] ?? 'http://localhost:1234/v1';
+
+        $parts = parse_url($url);
+        $scheme = $parts['scheme'] ?? 'http';
+        $host = $parts['host'] ?? 'localhost';
+        $port = $parts['port'] ?? 1234;
+        $baseUrl = "{$scheme}://{$host}:{$port}";
+        
+        $response = null;
+        $endpoints = ["/api/v0/models", "/api/v1/models"];
+        
+        foreach ($endpoints as $endpoint) {
+            $ch = curl_init("{$baseUrl}{$endpoint}");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($httpCode === 200 && !empty($response)) {
+                break;
+            }
+        }
+
+        if (empty($response)) {
+            $this->jsonResponse([
+                'status' => 'error', 
+                'message' => "Could not connect to LM Studio at {$baseUrl}."
+            ], 502);
+            return;
+        }
+
+        $data = json_decode($response, true);
+        if (!isset($data['data']) || !is_array($data['data'])) {
+            $this->jsonResponse([
+                'status' => 'error', 
+                'message' => 'Invalid response format from LM Studio.'
+            ], 502);
+            return;
+        }
+
+        $detectedLimit = null;
+        $modelName = '';
+
+        foreach ($data['data'] as $model) {
+            if (isset($model['state']) && $model['state'] === 'loaded') {
+                $detectedLimit = $model['loaded_context_length'] ?? $model['max_context_length'] ?? null;
+                $modelName = $model['id'] ?? '';
+                if ($detectedLimit) {
+                    break;
+                }
+            }
+        }
+
+        if (!$detectedLimit && !empty($data['data'])) {
+            $firstModel = $data['data'][0];
+            $detectedLimit = $firstModel['max_context_length'] ?? $firstModel['loaded_context_length'] ?? null;
+            $modelName = $firstModel['id'] ?? '';
+        }
+
+        if (!$detectedLimit) {
+            $this->jsonResponse([
+                'status' => 'error', 
+                'message' => 'No active models found in LM Studio or context limit metadata is unavailable.'
+            ], 404);
+            return;
+        }
+
+        $newEnv = ['MEMORY_EXTRACTION_THRESHOLD_TOKENS' => (int)$detectedLimit];
+        $writeSuccess = $this->envEditor->write($newEnv);
+
+        if (!$writeSuccess) {
+            $this->jsonResponse([
+                'status' => 'error', 
+                'message' => 'Failed to write updated token limit to .env file.'
+            ], 500);
+            return;
+        }
+
+        $this->jsonResponse([
+            'status' => 'success',
+            'model' => $modelName,
+            'limit' => (int)$detectedLimit
+        ]);
     }
 
     

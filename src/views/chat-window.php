@@ -7,6 +7,105 @@
             }));
         }
     })();
+
+    window.copyToClipboard = function(button) {
+        const container = button.closest('.chat-message-container') || button.closest('.flex-col');
+        if (!container) return;
+
+        const bubble = container.querySelector('[data-raw]');
+        if (!bubble) return;
+
+        const textToCopy = bubble.getAttribute('data-raw') || bubble.dataset.raw || '';
+        if (!textToCopy) return;
+
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const icon = button.querySelector('uk-icon');
+            const labelSpan = button.querySelector('span');
+            const originalText = labelSpan ? labelSpan.textContent : '';
+
+            if (icon) {
+                icon.setAttribute('icon', 'check');
+                button.classList.add('text-emerald-400');
+                button.classList.remove('text-slate-500', 'hover:text-cyan-400');
+
+                if (labelSpan) {
+                    labelSpan.textContent = 'Copied!';
+                }
+
+                setTimeout(() => {
+                    icon.setAttribute('icon', 'copy');
+                    button.classList.remove('text-emerald-400');
+                    button.classList.add('text-slate-500', 'hover:text-cyan-400');
+                    if (labelSpan) {
+                        labelSpan.textContent = originalText;
+                    }
+                }, 1500);
+            }
+        }).catch(err => {
+            console.error(err);
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const syncBtn = document.getElementById('btn-sync-lmstudio');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', () => {
+                const originalHTML = syncBtn.innerHTML;
+                syncBtn.innerHTML = '<span class="animate-spin text-cyan-400 flex items-center justify-center"><uk-icon icon="refresh" class="w-2.5 h-2.5"></uk-icon></span> <span>SYNCING...</span>';
+                syncBtn.disabled = true;
+
+                fetch('index.php?api_action=sync_lmstudio_limit')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            window.location.reload();
+                        } else {
+                            alert(`Sync Failed: ${data.message}`);
+                        }
+                    })
+                    .catch(err => {
+                        alert(`Error connecting to server: ${err.message}`);
+                    })
+                    .finally(() => {
+                        syncBtn.innerHTML = originalHTML;
+                        syncBtn.disabled = false;
+                    });
+            });
+        }
+
+        const handleTextCheck = (bubble) => {
+            const textLength = bubble.textContent.trim().length;
+            if (textLength > 300) {
+                const bottomCopy = bubble.querySelector('.bottom-copy-container');
+                if (bottomCopy) {
+                    bottomCopy.classList.remove('hidden');
+                }
+            }
+        };
+
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1) {
+                            const bubbles = node.querySelectorAll('.chat-user, .chat-assistant');
+                            bubbles.forEach(handleTextCheck);
+                        }
+                    });
+                } else if (mutation.type === 'characterData') {
+                    const bubble = mutation.target.parentElement?.closest('.chat-user, .chat-assistant');
+                    if (bubble) {
+                        handleTextCheck(bubble);
+                    }
+                }
+            });
+        });
+
+        const chatWindow = document.getElementById('chatWindow');
+        if (chatWindow) {
+            observer.observe(chatWindow, { childList: true, subtree: true, characterData: true });
+        }
+    });
 </script>
 
 <section class="flex-1 flex flex-col h-full relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1526] via-[#070b14] to-[#070b14]">
@@ -23,6 +122,10 @@
                 <div class="w-16 h-1.5 bg-slate-850 rounded-full overflow-hidden ml-1 border border-slate-800">
                     <div id="token-counter-bar" class="h-full bg-cyan-500 transition-all duration-300" style="width: 0%"></div>
                 </div>
+                <button type="button" id="btn-sync-lmstudio" class="flex items-center gap-1 bg-cyan-500/10 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-400 px-2 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-150 font-bold shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-105 active:scale-95 cursor-pointer ml-1.5 border-none" title="Sync Context Limit from LM Studio">
+                    <uk-icon icon="refresh" class="w-2.5 h-2.5"></uk-icon>
+                    <span>SYNC LIMIT</span>
+                </button>
             </div>
 
             <?php if (!$status->all_operational): ?>
@@ -48,7 +151,7 @@
             </div>
         <?php else: ?>
             <?php foreach ($history as $msg): ?>
-                <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
+                <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
                     
                     <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
                         <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
@@ -65,7 +168,7 @@
                                 <?php endif; ?>
                             <?php endif; ?>
                         </span>
-                        <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center" 
+                        <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center animate-fade-in" 
                                 onclick="copyToClipboard(this)" 
                                 title="Copy message">
                             <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
@@ -105,7 +208,7 @@
                                             </div>
                                         <?php elseif (!empty($msg['search_query'])): ?>
                                             <div class="text-xs text-blue-400 flex items-center gap-1.5 font-medium">
-                                                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "${msg.search_query}"
+                                                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"
                                             </div>
                                         <?php endif; ?>
                                         <?php if (!empty($msg['scraped_urls'])): ?>
@@ -127,6 +230,16 @@
                             <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
                         <?php else: ?>
                             <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
+                        <?php endif; ?>
+
+                        <?php if (strlen($msg['message']) > 300): ?>
+                            <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 bottom-copy-container mt-auto">
+                                <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 animate-fade-in flex items-center gap-1" 
+                                        onclick="copyToClipboard(this)" 
+                                        title="Copy message">
+                                    <uk-icon icon="copy" class="w-3 h-3"></uk-icon>
+                                </button>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -192,13 +305,20 @@
         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-end mb-4 chat-message-container">
             <div class="flex items-center gap-2 flex-row-reverse mr-1">
                 <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider">You</span>
-                <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
+                <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                 </button>
             </div>
             <div class="chat-user rounded-2xl rounded-tr-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] bubble-content" data-raw="">
                 <img src="" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md hidden upload-img" alt="Upload">
                 <span class="msg-text"></span>
+                <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
+                    <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1" 
+                            onclick="copyToClipboard(this)" 
+                            title="Copy message">
+                        <uk-icon icon="copy" class="w-3 h-3"></uk-icon> <span>Copy Entire Message</span>
+                    </button>
+                </div>
             </div>
         </div>
     </template>
@@ -209,11 +329,18 @@
                 <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2 ai-label-container">
                     Assistant
                 </span>
-                <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
+                <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                 </button>
             </div>
             <div class="chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] bubble-content markdown-content border border-transparent ai-bubble w-full flex flex-col items-stretch" data-raw="">
+                <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
+                    <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1" 
+                            onclick="copyToClipboard(this)" 
+                            title="Copy message">
+                        <uk-icon icon="copy" class="w-3 h-3"></uk-icon> <span>Copy Entire Message</span>
+                    </button>
+                </div>
             </div>
         </div>
     </template>
