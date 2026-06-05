@@ -16,16 +16,16 @@ class ContextCondenser
         $this->agent = $agent;
     }
 
-    public function condenseChatHistory(Database $db, int $sessionId): array
+    public function generateCondensationPreview(Database $db, int $sessionId): array
     {
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
-        if (count($history) <= 6) {
+        $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
+        if (count($history) <= $keepLimit) {
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
 
-        $archive = array_slice($history, 0, -6);
-        $keep = array_slice($history, -6);
+        $archive = array_slice($history, 0, -$keepLimit);
 
         $archiveText = "";
         foreach ($archive as $msg) {
@@ -56,21 +56,34 @@ class ContextCondenser
         $data = json_decode($response, true);
 
         if (!$data || !isset($data['summary'])) {
-            throw new Exception("Condensation failed: Invalid or non-JSON response from LLM.");
+            throw new Exception("Condensation preview failed: Invalid or non-JSON response from LLM.");
         }
 
-        $summaryText = trim($data['summary']);
-        $memoriesExtracted = $data['memories'] ?? [];
+        return [
+            'status' => 'success',
+            'summary' => trim($data['summary']),
+            'memories' => $data['memories'] ?? []
+        ];
+    }
 
+    public function commitCondensation(Database $db, int $sessionId, string $summary, array $selectedMemories): array
+    {
+        $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
+        
+        $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
+        if (count($history) <= $keepLimit) {
+            return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
+        }
+
+        $archive = array_slice($history, 0, -6);
+        $archiveIds = array_column($archive, 'id');
+        $oldestId = min($archiveIds);
+        
+        $formattedSummary = "SUMMARY OF PREVIOUS CONVERSATION:\n" . $summary;
+        
         $db->query("START TRANSACTION");
 
         try {
-            $archiveIds = array_column($archive, 'id');
-            
-            $oldestId = min($archiveIds);
-            
-            $formattedSummary = "SUMMARY OF PREVIOUS CONVERSATION:\n" . $summaryText;
-            
             $db->update('chat_history', [
                 'role' => 'system',
                 'message' => $formattedSummary,
@@ -88,7 +101,7 @@ class ContextCondenser
             }
 
             $maxLimit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
-            foreach ($memoriesExtracted as $memoryText) {
+            foreach ($selectedMemories as $memoryText) {
                 $memoryText = trim($memoryText, " \t\n\r\0\x0B-*•");
                 if ($memoryText === '') {
                     continue;
@@ -114,8 +127,8 @@ class ContextCondenser
 
         return [
             'status' => 'success',
-            'summary' => $summaryText,
-            'memories_count' => count($memoriesExtracted)
+            'summary' => $summary,
+            'memories_count' => count($selectedMemories)
         ];
     }
 

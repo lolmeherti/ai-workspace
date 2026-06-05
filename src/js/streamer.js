@@ -254,6 +254,34 @@ export async function streamResponse(formData, originalMessage) {
                             if (data.total_session_tokens && typeof maxTokensLimit !== 'undefined') {
                                 updateTokenCounter(data.total_session_tokens, maxTokensLimit);
                             }
+
+                            if (data.session_id) {
+                                const chatSessionInput = document.querySelector('#chatForm input[name="session_id"]');
+                                let oldSessionId = 0;
+                                if (chatSessionInput && chatSessionInput.value) {
+                                    const parsed = parseInt(chatSessionInput.value, 10);
+                                    if (!isNaN(parsed)) {
+                                        oldSessionId = parsed;
+                                    }
+                                }
+
+                                if (oldSessionId === 0) {
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set('session_id', data.session_id);
+                                    window.location.replace(url.toString());
+                                    return;
+                                } else {
+                                    const sessionIdInputs = document.querySelectorAll('input[name="session_id"]');
+                                    sessionIdInputs.forEach(input => {
+                                        input.value = data.session_id;
+                                    });
+                                    const url = new URL(window.location.href);
+                                    if (url.searchParams.get('session_id') !== String(data.session_id)) {
+                                        url.searchParams.set('session_id', data.session_id);
+                                        window.history.pushState({ session_id: data.session_id }, '', url.toString());
+                                    }
+                                }
+                            }
                             
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
