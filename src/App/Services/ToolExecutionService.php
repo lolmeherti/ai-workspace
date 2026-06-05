@@ -23,17 +23,36 @@ class ToolExecutionService
         $isToolCall = false;
         $toolQuery = '';
 
-        if (preg_match('/\{\s*"[^"]+"\s*:/', $aiResponse, $matches, PREG_OFFSET_CAPTURE)) {
-            $startIndex = $matches[0][1];
-            $endIndex = strrpos($aiResponse, '}');
+        // 1. Find the first open curly brace '{'
+        $startIndex = strpos($aiResponse, '{');
+        if ($startIndex !== false) {
+            // 2. Find the first double quotes '"' after '{'
+            $firstQuote = strpos($aiResponse, '"', $startIndex);
+            if ($firstQuote !== false) {
+                // 3. Find the closing key quote '"'
+                $secondQuote = strpos($aiResponse, '"', $firstQuote + 1);
+                if ($secondQuote !== false) {
+                    // 4. Find the colon ':'
+                    $colon = strpos($aiResponse, ':', $secondQuote + 1);
+                    if ($colon !== false) {
+                        // 5. Find the space and opening mark (e.g., ", {, [, digit, or word)
+                        $remaining = substr($aiResponse, $colon + 1);
+                        if (preg_match('/^\s*([{"\[\d\w])/', $remaining)) {
+                            // Start verified!
+                            // 6. Start from the back and find the first closed curly brace '}'
+                            $endIndex = strrpos($aiResponse, '}');
+                            if ($endIndex !== false && $endIndex > $startIndex) {
+                                // 7. Extract the complete JSON block
+                                $jsonStr = substr($aiResponse, $startIndex, $endIndex - $startIndex + 1);
+                                $decoded = @json_decode($jsonStr, true);
 
-            if ($endIndex !== false && $endIndex > $startIndex) {
-                $jsonStr = substr($aiResponse, $startIndex, $endIndex - $startIndex + 1);
-                $decoded = @json_decode($jsonStr, true);
-
-                if (is_array($decoded) && isset($decoded['tool']) && $decoded['tool'] === 'search_files') {
-                    $isToolCall = true;
-                    $toolQuery = $decoded['query'] ?? '';
+                                if (is_array($decoded) && isset($decoded['tool']) && $decoded['tool'] === 'search_files') {
+                                    $isToolCall = true;
+                                    $toolQuery = $decoded['query'] ?? '';
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -115,6 +134,7 @@ TEXT;
 
 [SYSTEM NOTE]: The content of matching text documents has been extracted and supplied below:
 {$injectedContextsStr}
+[End Document Content]
 TEXT;
             }
 

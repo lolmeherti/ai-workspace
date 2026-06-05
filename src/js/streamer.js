@@ -378,3 +378,5 @@ function renderFileChoices(data, textContainer, chatWindow) {
     textContainer.appendChild(choiceContainer);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
+
+window.renderFileChoices = renderFileChoices;

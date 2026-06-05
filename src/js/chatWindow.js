@@ -288,10 +288,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const parseAllCurrentMessages = () => {
         document.querySelectorAll('.markdown-rendered').forEach(el => {
             const rawMarkdown = el.getAttribute('data-markdown') || el.textContent;
+            
+            let toolQuery = null;
+            const jsonRegex = /\{\s*"tool"\s*:\s*"search_files"\s*,\s*"query"\s*:\s*"([^"]+)"\s*\}/i;
+            const match = rawMarkdown.match(jsonRegex);
+            if (match) {
+                toolQuery = match[1];
+            }
+
             if (typeof marked !== 'undefined') {
                 el.innerHTML = window.parseInlineFiles(marked.parse(rawMarkdown));
             }
+            
+            if (toolQuery) {
+                el.innerHTML = el.innerHTML.replace(/<pre><code[^>]*>[\s\S]*?"tool"\s*:\s*"search_files"[\s\S]*?<\/code><\/pre>/gi, '');
+                el.innerHTML = el.innerHTML.replace(/<p>\s*\{[\s\S]*?"tool"\s*:\s*"search_files"[\s\S]*?\}\s*<\/p>/gi, '');
+                el.innerHTML = el.innerHTML.replace(/Checking files\.\.\./gi, '');
+                
+                el.insertAdjacentHTML('afterbegin', `
+                    <div class="text-[11px] text-cyan-400 bg-cyan-950/20 border border-cyan-500/20 px-3 py-2 rounded-lg italic mb-4 mt-1 flex items-center gap-2 max-w-sm shadow-sm select-none">
+                        <uk-icon icon="search" class="w-3.5 h-3.5"></uk-icon> 
+                        System automatically searched files for: "${toolQuery}"
+                    </div>
+                `);
+                
+                fetch(`index.php?api_action=search_files&query=${encodeURIComponent(toolQuery)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success' && data.files && data.files.length > 0) {
+                            if (typeof window.renderFileChoices === 'function') {
+                                window.renderFileChoices(data, el, document.getElementById('chatWindow'));
+                            }
+                        }
+                    })
+                    .catch(err => console.error("Error restoring file choices UI:", err));
+            }
         });
+        
         document.querySelectorAll('.chat-user').forEach(el => {
             el.innerHTML = window.parseInlineFiles(el.innerHTML);
         });
