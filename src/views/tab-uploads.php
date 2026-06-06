@@ -33,7 +33,7 @@ if ($db) {
         </div>
         
         <p class="text-xs text-slate-300 leading-relaxed font-normal">
-            You are currently browsing your files on disk. The central control pane has switched to display your **Uploads Grid**.
+            You are currently browsing your files on disk. The central control pane has switched to display your <b>Uploads Grid</b>.
         </p>
     </div>
 
