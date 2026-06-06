@@ -8,7 +8,7 @@ export function parseMarkdownElements() {
         if (typeof marked !== 'undefined') {
             el.innerHTML = marked.parse(el.getAttribute('data-markdown') || '');
         }
-        el.classList.add('parsed');
+        el.classList.add('parsed', 'markdown-content');
         
         if (typeof hljs !== 'undefined') {
             el.querySelectorAll('pre code').forEach((block) => {

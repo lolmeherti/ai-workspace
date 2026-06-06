@@ -14,42 +14,35 @@ export function initTabs() {
     });
 }
 
-export function switchSidebarTab(tabName) {
-    if (state.isGenerating) {
-        const proceed = confirm("A prompt is currently in progress. Switching tabs now will void the computation. Do you want to proceed?");
-        if (!proceed) {
-            return;
-        }
-    }
-
-    state.activeTab = tabName;
+export function switchSidebarTab(tabId) {
+    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads'];
+    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads'];
     
-    ['chats', 'memories', 'queries'].forEach(t => {
-        const panel = document.getElementById(`panel-${t}`);
-        if (panel) {
-            panel.classList.toggle('hidden', t !== tabName);
-        }
+    panels.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', id !== 'panel-' + tabId);
     });
 
-    ['chats', 'memories', 'queries'].forEach(t => {
-        const btn = document.getElementById(`tab-btn-${t}`);
-        if (btn) {
-            if (t === tabName) {
-                btn.className = "flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 bg-slate-800 text-white shadow-md font-semibold border border-slate-700/50 cursor-pointer";
+    buttons.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (id === 'tab-btn-' + tabId) {
+                el.classList.add('bg-slate-900', 'text-cyan-400');
             } else {
-                btn.className = "flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 text-slate-400 hover:text-slate-200 cursor-pointer";
+                el.classList.remove('bg-slate-900', 'text-cyan-400');
             }
         }
     });
 
-    const url = new URL(window.location);
-    url.searchParams.set('tab', tabName);
-    window.history.replaceState({}, '', url);
-
-    const settingsForm = document.querySelector('#settings-modal form');
-    if (settingsForm) {
-        const actionUrl = new URL(settingsForm.action, window.location.origin);
-        actionUrl.searchParams.set('tab', tabName);
-        settingsForm.action = actionUrl.pathname + actionUrl.search;
+    const chatWorkspace = document.getElementById('chat-workspace');
+    const galleryWorkspace = document.getElementById('gallery-workspace');
+    
+    if (tabId === 'uploads') {
+        if (chatWorkspace) chatWorkspace.classList.add('hidden');
+        if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
+        document.dispatchEvent(new CustomEvent('gallery-opened'));
+    } else {
+        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
     }
 }

@@ -300,6 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 el.innerHTML = window.parseInlineFiles(marked.parse(rawMarkdown));
             }
             
+            el.classList.add('markdown-content');
+
             if (toolQuery) {
                 el.innerHTML = el.innerHTML.replace(/<pre><code[^>]*>[\s\S]*?"tool"\s*:\s*"search_files"[\s\S]*?<\/code><\/pre>/gi, '');
                 el.innerHTML = el.innerHTML.replace(/<p>\s*\{[\s\S]*?"tool"\s*:\s*"search_files"[\s\S]*?\}\s*<\/p>/gi, '');

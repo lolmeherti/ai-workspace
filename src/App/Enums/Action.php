@@ -14,4 +14,5 @@ enum Action: string
     case UPDATE_MEMORY = 'update_memory';
     case DELETE_QUERY = 'delete_query';
     case CLEAR_ALL = 'clear_all';
+    case DELETE_FILES = 'delete_files';
 }
