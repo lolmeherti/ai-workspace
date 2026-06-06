@@ -97,10 +97,19 @@ if ($status->redis) {
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased selection:bg-cyan-500/30">
-
     <div class="h-full w-full flex">
+        <!-- Sidebar Navigation -->
         <?php include __DIR__ . '/views/sidebar.php'; ?>
-        <?php include __DIR__ . '/views/chat-window.php'; ?>
+        
+        <!-- Chat Panel Workspace -->
+        <div id="chat-workspace" class="flex-1 flex flex-col h-full min-w-0">
+            <?php include __DIR__ . '/views/chat-window.php'; ?>
+        </div>
+
+        <!-- NEW: Uploads Gallery Panel Workspace -->
+        <div id="gallery-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">
+            <?php include __DIR__ . '/views/gallery-workspace.php'; ?>
+        </div>
     </div>
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
@@ -111,5 +120,6 @@ if ($status->redis) {
         const maxTokensLimit = <?php echo (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000); ?>;
     </script>
     <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/gallery.js"></script>
 </body>
 </html>

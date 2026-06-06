@@ -51,6 +51,11 @@ if ($method === 'POST') {
                 $controller = new CacheController($status);
                 break;
 
+            case Action::DELETE_FILES:
+                $controller = new FileController();
+                $controller->setDatabase($db);
+                break;
+
             default:
                 $controller = new ChatController($db, $chatSessionRepository, $agentManager, $memoryExtractor, $status);
                 break;
