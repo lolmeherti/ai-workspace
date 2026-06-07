@@ -137,7 +137,7 @@ class FileController extends BaseController
     }
 
     /**
-     * Handles web UI dropped uploads (multipart form data).
+     * Handles web UI dropped or pasted uploads (multipart form data).
      */
     private function handleDirectUploadRequest(): void
     {
@@ -154,19 +154,24 @@ class FileController extends BaseController
         }
 
         $uploadedFile = $_FILES['file'];
-        $success = $this->processAndRegisterFile($uploadedFile['tmp_name'], $uploadedFile['name']);
+        $fileData = $this->processAndRegisterFile($uploadedFile['tmp_name'], $uploadedFile['name']);
 
-        if ($success) {
-            $this->jsonResponse(['status' => 'success', 'message' => 'File uploaded and indexed successfully.']);
+        if ($fileData) {
+            $this->jsonResponse([
+                'status' => 'success',
+                'message' => 'File uploaded and indexed successfully.',
+                'file' => $fileData
+            ]);
         } else {
             $this->jsonResponse(['status' => 'error', 'message' => 'An error occurred while indexing your file.'], 500);
         }
     }
 
-    /**
+/**
      * Reusable helper to process physical files, run extraction, generate AI titles, and save them.
+     * Returns the array of record details on success, or null on failure.
      */
-    private function processAndRegisterFile(string $sourcePath, string $originalName, ?string $targetFilename = null): bool
+    private function processAndRegisterFile(string $sourcePath, string $originalName, ?string $targetFilename = null): ?array
     {
         $uploadDir = realpath(__DIR__ . '/../../uploads/');
         if (!$uploadDir) {
@@ -180,7 +185,7 @@ class FileController extends BaseController
             $dest = $uploadDir . $filename;
             
             if (!move_uploaded_file($sourcePath, $dest)) {
-                return false;
+                return null;
             }
         } else {
             $filename = $targetFilename;
@@ -210,6 +215,7 @@ class FileController extends BaseController
             }
         }
 
+        // Generate clean AI title/summarization
         $generatedTitle = 'Untitled File';
         $agent = class_exists('\App\AgentManager') ? new \App\AgentManager() : null;
 
@@ -255,13 +261,23 @@ class FileController extends BaseController
             $generatedTitle = ($fileType === 'image' ? 'Image: ' : 'Document: ') . basename($originalName);
         }
 
-        return $this->db->insert('uploaded_files', [
-            'session_id' => null,
+        $fileData = [
             'original_name' => basename($originalName),
             'physical_name' => $filename,
             'generated_title' => $generatedTitle,
             'file_type' => $fileType
+        ];
+
+        // Insert database record
+        $success = $this->db->insert('uploaded_files', [
+            'session_id' => null,
+            'original_name' => $fileData['original_name'],
+            'physical_name' => $fileData['physical_name'],
+            'generated_title' => $fileData['generated_title'],
+            'file_type' => $fileData['file_type']
         ]);
+
+        return $success ? $fileData : null;
     }
 
     /**
