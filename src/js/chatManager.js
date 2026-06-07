@@ -29,10 +29,13 @@ export async function handleChatSubmit(e) {
 
     const formData = new FormData(form);
     if (state.pastedImageFile) {
-        formData.append("file", state.pastedImageFile, "pasted_image.png");
+        formData.set("file", state.pastedImageFile, "pasted_image.png");
+    } else if (state.selectedFile) {
+        formData.set("file", state.selectedFile, state.selectedFile.name);
     }
 
     let finalQueryText = message;
+    
     if (hasReferences) {
         window.selectedFileReferences.forEach(ref => {
             finalQueryText += ` [File: ${ref.physical_name}]`;

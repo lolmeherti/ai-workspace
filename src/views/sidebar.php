@@ -1,9 +1,10 @@
 <script>
 window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
+    localStorage.setItem('activeTab', tabId);
+
     const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads'];
     const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads'];
     
-    // Toggle sidebar content lists
     panels.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -15,7 +16,6 @@ window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
         }
     });
 
-    // Toggle active tab buttons
     buttons.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -27,14 +27,12 @@ window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
         }
     });
 
-    // Toggle Main Center Panels (Chat Workspace vs Gallery Grid)
     const chatWorkspace = document.getElementById('chat-workspace');
     const galleryWorkspace = document.getElementById('gallery-workspace');
     
     if (tabId === 'uploads') {
         if (chatWorkspace) chatWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
-        // Dispatch custom event to trigger gallery data load
         document.dispatchEvent(new CustomEvent('gallery-opened'));
     } else {
         if (chatWorkspace) chatWorkspace.classList.remove('hidden');

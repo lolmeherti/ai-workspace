@@ -7,13 +7,16 @@ import { state } from './state.js';
 
 export function initFilePaste() {
     document.addEventListener("paste", function(e) {
+        const galleryWorkspace = document.getElementById("gallery-workspace");
+        if (galleryWorkspace && !galleryWorkspace.classList.contains("hidden")) {
+            return;
+        }
+
         const items = (e.clipboardData || window.clipboardData).items;
         for (let item of items) {
-            if (item.kind === "file" && item.type.startsWith("image/")) {
+            if (item.kind === "file") {
                 const file = item.getAsFile();
-                
-                state.selectedFile = null;
-                state.pastedImageFile = file;
+                if (!file) continue;
 
                 const previewContainer = document.getElementById("image-preview-container");
                 const imgPreview = document.getElementById("image-preview");
@@ -21,22 +24,46 @@ export function initFilePaste() {
                 const previewName = document.getElementById("file-preview-name");
                 const previewType = document.getElementById("file-preview-type");
 
-                if (previewName) previewName.textContent = "Pasted Image";
-                if (previewType) previewType.textContent = "IMAGE";
+                if (file.type.startsWith("image/")) {
+                    state.selectedFile = null;
+                    state.pastedImageFile = file;
 
-                if (previewContainer) {
-                    previewContainer.style.setProperty("display", "flex", "important");
-                    previewContainer.classList.remove("hidden");
-                }
-                
-                if (iconPreview) iconPreview.classList.add("hidden");
-                if (imgPreview) {
-                    imgPreview.classList.remove("hidden");
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        imgPreview.src = event.target.result;
-                    };
-                    reader.readAsDataURL(file);
+                    if (previewName) previewName.textContent = file.name || "Pasted Image";
+                    if (previewType) previewType.textContent = "IMAGE";
+
+                    if (previewContainer) {
+                        previewContainer.style.setProperty("display", "flex", "important");
+                        previewContainer.classList.remove("hidden");
+                    }
+                    
+                    if (iconPreview) iconPreview.classList.add("hidden");
+                    if (imgPreview) {
+                        imgPreview.classList.remove("hidden");
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            imgPreview.src = event.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                } else {
+                    state.selectedFile = file;
+                    state.pastedImageFile = null;
+
+                    if (previewName) previewName.textContent = file.name || "Pasted Document";
+                    if (previewType) previewType.textContent = file.type || "DOCUMENT";
+
+                    if (previewContainer) {
+                        previewContainer.style.setProperty("display", "flex", "important");
+                        previewContainer.classList.remove("hidden");
+                    }
+
+                    if (imgPreview) {
+                        imgPreview.src = "";
+                        imgPreview.classList.add("hidden");
+                    }
+                    if (iconPreview) {
+                        iconPreview.classList.remove("hidden");
+                    }
                 }
             }
         }

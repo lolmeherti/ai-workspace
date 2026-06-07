@@ -2,10 +2,9 @@
  * Uploads Gallery & File Management Controller
  */
 document.addEventListener('DOMContentLoaded', () => {
-    // State Management
-    let allFiles = []; // Holds file records in the current page view
-    let selectedFileIds = new Set(); // Multi-selection state
-    let activePreviewFile = null; // Currently previewed file details
+    let allFiles = []; 
+    let selectedFileIds = new Set(); 
+    let activePreviewFile = null;
     
     let currentQuery = '';
     let currentFilter = 'all'; // 'all', 'images', 'docs'
@@ -14,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let limitPerPage = 12;
 
     let searchTimeout = null;
-    let idToDelete = []; // Queue for deletions (single or multiple)
+    let idToDelete = []; 
 
     const isImageFile = (file) => {
         const type = (file.file_type || '').toLowerCase();
@@ -404,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
     /**
      * Batch Append Selection to active chat session references
      */
@@ -414,11 +414,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        let appendedCount = 0;
         selectedFileIds.forEach(id => {
             const file = allFiles.find(f => f.id === id);
             if (file) {
-                // Ensure we construct the standard structure the accordion expects
                 const formattedFile = {
                     physical_name: file.physical_name,
                     file_type: isImageFile(file) ? 'image' : 'document',
@@ -427,28 +425,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     preview: file.snippet || ''
                 };
                 window.addFileReference(formattedFile);
-                appendedCount++;
             }
         });
 
-        // Visually animate/highlight the append feedback
-        batchActionAppend.textContent = `Appended ${appendedCount} Files!`;
-        batchActionAppend.classList.add('border-emerald-500/40', 'text-emerald-400');
-        
-        setTimeout(() => {
-            batchActionAppend.textContent = "Append Selected";
-            batchActionAppend.classList.remove('border-emerald-500/40', 'text-emerald-400');
-            
-            // Clear selections and hide bar
-            selectedFileIds.clear();
-            updateBatchBar();
-            renderGrid();
+        selectedFileIds.clear();
+        updateBatchBar();
+        renderGrid();
+        closePreviewDrawer();
 
-            // Seamless Switch back to standard conversation workspace tab
-            if (typeof window.switchSidebarTab === 'function') {
-                window.switchSidebarTab('chats');
-            }
-        }, 1200);
+        if (typeof window.switchSidebarTab === 'function') {
+            window.switchSidebarTab('chats');
+        }
     }
 
     // --- EVENT BINDINGS & LISTENERS ---
@@ -542,6 +529,12 @@ document.addEventListener('DOMContentLoaded', () => {
         drawerActionAppend.addEventListener('click', (e) => {
             if (activePreviewFile && typeof window.appendFileFromAccordion === 'function') {
                 window.appendFileFromAccordion(e.currentTarget, activePreviewFile);
+                
+                closePreviewDrawer();
+
+                if (typeof window.switchSidebarTab === 'function') {
+                    window.switchSidebarTab('chats');
+                }
             }
         });
     }
@@ -570,3 +563,174 @@ document.addEventListener('DOMContentLoaded', () => {
     if (batchActionAppend) batchActionAppend.addEventListener('click', batchAppendSelected);
     if (batchActionDelete) batchActionDelete.addEventListener('click', triggerBatchDelete);
 });
+
+// --- DIRECT DROP, COPY-PASTE, & DISK SYNCHRONIZATION INTEGRATIONS ---
+
+    const galleryDropContainer = document.getElementById('gallery-grid-scroll-container');
+    const galleryDropOverlay = document.getElementById('gallery-drop-overlay');
+    const gallerySyncBtn = document.getElementById('gallery-sync-btn');
+    const galleryWorkspace = document.getElementById('gallery-workspace');
+
+    if (galleryDropContainer && galleryDropOverlay) {
+        let dragCounter = 0;
+
+        galleryDropContainer.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            galleryDropOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            galleryDropOverlay.classList.add('opacity-100');
+        });
+
+        galleryDropContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        galleryDropContainer.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) {
+                galleryDropOverlay.classList.add('opacity-0', 'pointer-events-none');
+                galleryDropOverlay.classList.remove('opacity-100');
+            }
+        });
+
+        galleryDropContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            galleryDropOverlay.classList.add('opacity-0', 'pointer-events-none');
+            galleryDropOverlay.classList.remove('opacity-100');
+
+            const droppedFiles = e.dataTransfer.files;
+            if (droppedFiles.length > 0) {
+                uploadDroppedFilesToGallery(droppedFiles);
+            }
+        });
+    }
+
+    document.addEventListener('paste', (e) => {
+        if (galleryWorkspace && !galleryWorkspace.classList.contains('hidden')) {
+            const items = (e.clipboardData || window.clipboardData).items;
+            const filesToUpload = [];
+
+            for (let item of items) {
+                if (item.kind === 'file') {
+                    const file = item.getAsFile();
+                    if (file) {
+                        filesToUpload.push(file);
+                    }
+                }
+            }
+
+            if (filesToUpload.length > 0) {
+                e.preventDefault(); 
+                uploadDroppedFilesToGallery(filesToUpload);
+            }
+        }
+    });
+
+    /**
+     * Iterates over files and uploads them in parallel to the Direct Upload API action
+     */
+    function uploadDroppedFilesToGallery(files) {
+        const loader = document.getElementById('gallery-loader');
+        const grid = document.getElementById('gallery-grid');
+        if (!loader || !grid) return;
+
+        loader.classList.remove('opacity-0', 'pointer-events-none');
+        loader.style.display = 'flex';
+        
+        const loaderText = loader.querySelector('span');
+        const originalLoaderText = loaderText ? loaderText.textContent : 'Indexing Disk Files...';
+        
+        if (loaderText) {
+            loaderText.textContent = `Uploading and AI indexing ${files.length} file(s)...`;
+        }
+
+        const uploadPromises = Array.from(files).map(file => {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            return fetch('index.php?api_action=upload_file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error(`Upload error for file ${file.name}: ${data.message}`);
+                }
+            })
+            .catch(err => {
+                console.error(`Network communication error for file ${file.name}:`, err);
+            });
+        });
+
+        Promise.all(uploadPromises)
+            .finally(() => {
+                if (loaderText) {
+                    loaderText.textContent = originalLoaderText;
+                }
+                
+                if (typeof fetchGalleryFiles === 'function') {
+                    fetchGalleryFiles();
+                } else {
+                    location.reload();
+                }
+            });
+    }
+
+    // 3. Disk Synchronization click handler
+    if (gallerySyncBtn) {
+        gallerySyncBtn.addEventListener('click', () => {
+            const loader = document.getElementById('gallery-loader');
+            const originalBtnHTML = gallerySyncBtn.innerHTML;
+            gallerySyncBtn.disabled = true;
+            gallerySyncBtn.innerHTML = `
+                <svg class="animate-spin h-3 w-3 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                Syncing...
+            `;
+
+            if (loader) {
+                loader.classList.remove('opacity-0', 'pointer-events-none');
+                loader.style.display = 'flex';
+                const loaderText = loader.querySelector('span');
+                if (loaderText) {
+                    loaderText.textContent = 'Scanning local uploads folder for new files...';
+                }
+            }
+
+            fetch('index.php?api_action=sync_files')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const count = data.synced_count || 0;
+                        alert(`Sync complete. Identified and AI-indexed ${count} new file(s).`);
+                    } else {
+                        alert(`Sync failed: ${data.message}`);
+                    }
+                })
+                .catch(err => {
+                    alert(`Network error during sync: ${err.message}`);
+                })
+                .finally(() => {
+                    gallerySyncBtn.disabled = false;
+                    gallerySyncBtn.innerHTML = originalBtnHTML;
+                    
+                    if (loader) {
+                        const loaderText = loader.querySelector('span');
+                        if (loaderText) {
+                            loaderText.textContent = 'Indexing Disk Files...';
+                        }
+                    }
+                    
+                    if (typeof fetchGalleryFiles === 'function') {
+                        fetchGalleryFiles();
+                    } else {
+                        location.reload();
+                    }
+                });
+        });
+    }

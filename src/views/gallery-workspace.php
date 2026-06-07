@@ -1,7 +1,7 @@
 <!-- Main Workspace Container -->
 <div class="flex-1 flex flex-col h-full min-w-0 bg-[#070b13] relative overflow-hidden">
 
-    <!-- 1. Header Area: Title & Filtering -->
+    <!-- 1. Header Area: Title, Synchronization & Filtering -->
     <header class="p-6 border-b border-slate-800/60 bg-[#0d1321]/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none shrink-0">
         <div>
             <h1 class="text-lg font-bold text-slate-100 flex items-center gap-2 tracking-wide">
@@ -12,6 +12,17 @@
         </div>
 
         <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+           <!-- Sync Disk Folder Button -->
+            <button type="button" id="gallery-sync-btn" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-300 font-bold cursor-pointer outline-none" title="Sync Uploads Directory with Database">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 transform group-hover:rotate-180 transition-transform duration-500 ease-out">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
+                </svg>
+                <span>SYNC DISK</span>
+            </button>
+
             <!-- Glass Search Bar -->
             <div class="relative min-w-[240px]">
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
@@ -34,10 +45,20 @@
     <!-- 2. Grid & Drawer Split-Viewport -->
     <div class="flex-1 flex relative overflow-hidden">
         
-        <!-- Main Scrollable Grid Area -->
+        <!-- Main Scrollable Grid Area (Dropzone target) -->
         <div class="flex-1 h-full overflow-y-auto p-6 relative" id="gallery-grid-scroll-container">
+            
+            <!-- Drag and Drop Overlay visual indicator -->
+            <div id="gallery-drop-overlay" class="absolute inset-4 bg-[#070b13]/95 border-2 border-dashed border-cyan-500/50 rounded-xl z-40 flex flex-col items-center justify-center gap-3 transition-opacity duration-200 opacity-0 pointer-events-none select-none">
+                <div class="flex flex-col items-center gap-3 pointer-events-none">
+                    <uk-icon icon="cloud-upload" class="w-12 h-12 text-cyan-400 animate-pulse"></uk-icon>
+                    <span class="text-sm font-bold text-cyan-400 tracking-widest uppercase">Drop files to upload & AI index</span>
+                    <span class="text-[10px] text-slate-500">Supports images, PDFs, word documents, and text files</span>
+                </div>
+            </div>
+
             <!-- Active Filter Sub-Indicator -->
-            <div class="flex items-center justify-between text-slate-400 text-[11px] font-semibold uppercase tracking-wider mb-4 border-b border-slate-900 pb-2 select-none">
+            <div class="flex items-center justify-between text-slate-400 text-[11px] font-semibold uppercase tracking-wider mb-4 border-b border-slate-900 pb-2 select-none animate-fade-in">
                 <span id="gallery-count-label">Loading your files...</span>
                 <span class="text-cyan-500/70 cursor-pointer hover:underline hidden" id="gallery-clear-filters">Clear Filters</span>
             </div>
