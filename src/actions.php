@@ -31,7 +31,18 @@ if ($postActionVal !== null) {
 $apiActionVal = $_GET['api_action'] ?? '';
 $apiAction = ApiAction::tryFrom($apiActionVal);
 
-if ($method === 'POST') {
+$isFileAction = (
+    $apiAction === ApiAction::SHOW_IN_EXPLORER || 
+    $apiAction === ApiAction::GET_FILE_CONTENT || 
+    $apiAction === ApiAction::SEARCH_FILES ||
+    $apiActionVal === 'sync_files' ||
+    $apiActionVal === 'upload_file'
+);
+
+if ($isFileAction) {
+    $controller = new FileController();
+    $controller->setDatabase($db);
+} elseif ($method === 'POST') {
     if ($postAction !== null) {
         switch ($postAction) {
             case Action::MANUAL_CONSOLIDATE:
@@ -64,10 +75,7 @@ if ($method === 'POST') {
         $controller = new ChatController($db, $chatSessionRepository, $agentManager, $memoryExtractor, $status);
     }
 } else {
-    if ($apiAction === ApiAction::SHOW_IN_EXPLORER || $apiAction === ApiAction::GET_FILE_CONTENT || $apiAction === ApiAction::SEARCH_FILES) {
-        $controller = new FileController();
-        $controller->setDatabase($db);
-    } elseif ($apiAction === ApiAction::GET_CACHE) {
+    if ($apiAction === ApiAction::GET_CACHE) {
         $controller = new CacheController($status);
     } elseif ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
         $controller = new AISettingsController($db, $chatSessionRepository, $envEditor);

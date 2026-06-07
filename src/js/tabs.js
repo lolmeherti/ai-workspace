@@ -1,6 +1,6 @@
 /**
  * @file js/tabs.js
- * @description Tab Manager. Handles panel navigation, tracks the active tab state in URL search queries, and safeguards active runs.
+ * @description Tab Manager. Handles panel navigation, tracks the active tab state in local storage, and safeguards active runs.
  */
 
 import { state } from './state.js';
@@ -15,6 +15,8 @@ export function initTabs() {
 }
 
 export function switchSidebarTab(tabId) {
+    localStorage.setItem('activeTab', tabId);
+
     const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads'];
     const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads'];
     

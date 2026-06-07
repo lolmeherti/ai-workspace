@@ -26,13 +26,25 @@ window.toggleChatEditMode = toggleChatEditMode;
 window.submitMultiDelete = submitMultiDelete;
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof currentActiveTab !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const forcedUrlTab = urlParams.get('tab');
+    const savedLocalTab = localStorage.getItem('activeTab');
+
+    if (forcedUrlTab) {
+        state.activeTab = forcedUrlTab;
+        localStorage.setItem('activeTab', forcedUrlTab);
+    } else if (savedLocalTab) {
+        state.activeTab = savedLocalTab;
+    } else if (typeof currentActiveTab !== 'undefined') {
         state.activeTab = currentActiveTab;
+    } else {
+        state.activeTab = 'chats';
     }
     
     initTabs();
     initFilePaste();
     parseMarkdownElements();
+    
     switchSidebarTab(state.activeTab);
 
     const chatWindow = document.getElementById('chatWindow');
