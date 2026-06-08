@@ -194,7 +194,12 @@ func bootstrapLocalsy() {
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		logPrint("[+] GGUF Model file is missing. Initializing automated download...\n")
 		tmpPath := modelPath + ".tmp"
-		err := downloadFile(tmpPath, activeTier.URL)
+		
+		// Download with live tray status updates
+		err := downloadFile(tmpPath, activeTier.URL, func(pct float64) {
+			systray.SetTooltip(fmt.Sprintf("Localsy: Downloading AI Model (%.1f%%)...", pct))
+		})
+		
 		if err != nil {
 			logPrint("[-] Critical Error downloading model: %v\n", err)
 			_ = os.Remove(tmpPath)
@@ -218,7 +223,12 @@ func bootstrapLocalsy() {
 		if _, err := os.Stat(mmprojPath); os.IsNotExist(err) {
 			logPrint("[+] GGUF Multimodal Projector is missing. Initializing automated download...\n")
 			tmpMMPath := mmprojPath + ".tmp"
-			err := downloadFile(tmpMMPath, activeTier.MMProjURL)
+			
+			// Download with live tray status updates
+			err := downloadFile(tmpMMPath, activeTier.MMProjURL, func(pct float64) {
+				systray.SetTooltip(fmt.Sprintf("Localsy: Downloading Vision Module (%.1f%%)...", pct))
+			})
+			
 			if err != nil {
 				logPrint("[-] Critical Error downloading mmproj: %v\n", err)
 				_ = os.Remove(tmpMMPath)
@@ -235,6 +245,9 @@ func bootstrapLocalsy() {
 			logPrint("[+] Multimodal Projector downloaded successfully!\n")
 		}
 	}
+
+	// Reset tooltip back to standard running state once downloads complete
+	systray.SetTooltip("Localsy is running background services")
 
 	// Ensure Headless Docker Engine is Installed
 	ensureHeadlessDockerReady(binDir, workDir)
@@ -537,7 +550,7 @@ func updateLlamaServer(binDir string, vendor string) {
 	}
 
 	mainZipPath := filepath.Join(binDir, "update_main.zip")
-	if err := downloadFile(mainZipPath, mainDownloadURL); err != nil {
+	if err := downloadFile(mainZipPath, mainDownloadURL, nil); err != nil {
 		return
 	}
 	defer os.Remove(mainZipPath)
@@ -546,7 +559,7 @@ func updateLlamaServer(binDir string, vendor string) {
 
 	if vendor == "NVIDIA" && cudartDownloadURL != "" {
 		cudartZipPath := filepath.Join(binDir, "update_cudart.zip")
-		if err := downloadFile(cudartZipPath, cudartDownloadURL); err == nil {
+		if err := downloadFile(cudartZipPath, cudartDownloadURL, nil); err == nil {
 			_ = unzip(cudartZipPath, binDir)
 			os.Remove(cudartZipPath)
 		}
@@ -597,7 +610,7 @@ func ensureHeadlessDockerReady(binDir, workDir string) {
 	if !distroRegistered {
 		rootfsPath := filepath.Join(workDir, "alpine-rootfs.tar.gz")
 		if _, err := os.Stat(rootfsPath); os.IsNotExist(err) {
-			_ = downloadFile(rootfsPath, "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.0-x86_64.tar.gz")
+			_ = downloadFile(rootfsPath, "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/x86_64/alpine-minirootfs-3.21.0-x86_64.tar.gz", nil)
 		}
 
 		_ = os.MkdirAll(wslDir, 0755)
@@ -727,7 +740,7 @@ func mergeAndWriteEnvFile(workDir string, activeModel string, vram float64, mode
 		if ctxSize == 0 {
 			switch activeModel {
 			case "gemma-4-26B-A4B-it-qat":
-				if vram >= 32.0 {
+				if vram >= 28.0 {        // Match Tier 1 VRAM check
 					ctxSize = 160000 // Tier 1: 5090 (Extreme context MoE)
 				} else {
 					ctxSize = 60000  // Tier 2: 24GB (Deep context MoE)
@@ -851,7 +864,7 @@ func startLlamaServer(binDir string, modelPath string, mmprojPath string, modelN
 	return cmd
 }
 
-func downloadFile(filepath string, url string) error {
+func downloadFile(filepath string, url string, onProgress func(float64)) error {
 	out, err := os.Create(filepath)
 	if err != nil {
 		return err
@@ -864,7 +877,15 @@ func downloadFile(filepath string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	contentLength, _ := strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+
+	pw := &ProgressWriter{
+		Writer:     out,
+		Length:     contentLength,
+		OnProgress: onProgress,
+	}
+
+	_, err = io.Copy(pw, resp.Body)
 	return err
 }
 
@@ -920,4 +941,27 @@ func runSilentCommand(name string, arg ...string) *exec.Cmd {
 		CreationFlags: 0x08000000, 
 	}
 	return cmd
+}
+
+type ProgressWriter struct {
+	io.Writer
+	Total      int64
+	Length     int64
+	LastPct    float64 
+	OnProgress func(float64)
+}
+
+func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	n, err := pw.Writer.Write(p)
+	pw.Total += int64(n)
+	
+	if pw.Length > 0 && pw.OnProgress != nil {
+		pct := float64(pw.Total) / float64(pw.Length) * 100
+		
+		if pct-pw.LastPct >= 1.0 || pct == 100 {
+			pw.LastPct = pct
+			pw.OnProgress(pct)
+		}
+	}
+	return n, err
 }
