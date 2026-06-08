@@ -85,63 +85,65 @@ class AISettingsController extends BaseController
         $host = $parts['host'] ?? 'localhost';
         $port = $parts['port'] ?? 1234;
         $baseUrl = "{$scheme}://{$host}:{$port}";
-        
-        $response = null;
-        $endpoints = ["/api/v0/models", "/api/v1/models"];
-        
-        foreach ($endpoints as $endpoint) {
-            $ch = curl_init("{$baseUrl}{$endpoint}");
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 2);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode === 200 && !empty($response)) {
-                break;
-            }
-        }
-
-        if (empty($response)) {
-            $this->jsonResponse([
-                'status' => 'error', 
-                'message' => "Could not connect to LM Studio at {$baseUrl}."
-            ], 502);
-            return;
-        }
-
-        $data = json_decode($response, true);
-        if (!isset($data['data']) || !is_array($data['data'])) {
-            $this->jsonResponse([
-                'status' => 'error', 
-                'message' => 'Invalid response format from LM Studio.'
-            ], 502);
-            return;
-        }
 
         $detectedLimit = null;
         $modelName = '';
 
-        foreach ($data['data'] as $model) {
-            if (isset($model['state']) && $model['state'] === 'loaded') {
-                $detectedLimit = $model['loaded_context_length'] ?? $model['max_context_length'] ?? null;
-                $modelName = $model['id'] ?? '';
-                if ($detectedLimit) {
-                    break;
-                }
+        $ch = curl_init("{$baseUrl}/props");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && !empty($response)) {
+            $data = json_decode($response, true);
+            
+            if (isset($data['default_generation_settings']['n_ctx'])) {
+                $detectedLimit = $data['default_generation_settings']['n_ctx'];
+                
+                $modelName = $data['model_alias'] ?? $data['model_path'] ?? 'Llama.cpp Model';
             }
         }
 
-        if (!$detectedLimit && !empty($data['data'])) {
-            $firstModel = $data['data'][0];
-            $detectedLimit = $firstModel['max_context_length'] ?? $firstModel['loaded_context_length'] ?? null;
-            $modelName = $firstModel['id'] ?? '';
+        if (!$detectedLimit) {
+            $endpoints = ["/api/v0/models", "/api/v1/models"];
+            foreach ($endpoints as $endpoint) {
+                $ch = curl_init("{$baseUrl}{$endpoint}");
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 200 && !empty($response)) {
+                    $data = json_decode($response, true);
+                    if (isset($data['data']) && is_array($data['data'])) {
+                        foreach ($data['data'] as $model) {
+                            if (isset($model['state']) && $model['state'] === 'loaded') {
+                                $detectedLimit = $model['loaded_context_length'] ?? $model['max_context_length'] ?? null;
+                                $modelName = $model['id'] ?? '';
+                                if ($detectedLimit) {
+                                    break 2; 
+                                }
+                            }
+                        }
+
+                        if (!$detectedLimit && !empty($data['data'])) {
+                            $firstModel = $data['data'][0];
+                            $detectedLimit = $firstModel['max_context_length'] ?? $firstModel['loaded_context_length'] ?? null;
+                            $modelName = $firstModel['id'] ?? '';
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         if (!$detectedLimit) {
             $this->jsonResponse([
                 'status' => 'error', 
-                'message' => 'No active models found in LM Studio or context limit metadata is unavailable.'
+                'message' => "Could not retrieve context limit metadata from the loaded model {$baseUrl}."
             ], 404);
             return;
         }

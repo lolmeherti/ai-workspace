@@ -1,0 +1,42 @@
+{
+  "Tier1": {
+    "_comment": "Target: NVIDIA 5090 (>= 32 GB VRAM) | Context Window: 160,000 tokens",
+    "name": "gemma-4-26B-A4B-it-qat",
+    "file": "gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+    "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+    "mmproj_file": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
+  },
+  "Tier2": {
+    "_comment": "Target: RTX 4090 / 3090 (24 GB to 31.9 GB VRAM) | Context Window: 60,000 tokens",
+    "name": "gemma-4-26B-A4B-it-qat",
+    "file": "gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+    "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+    "mmproj_file": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
+  },
+  "Tier3": {
+    "_comment": "Target: RTX 4080 / 3060 16GB (16 GB to 23.9 GB VRAM) | Context Window: 65,000 tokens",
+    "name": "gemma-4-E4B-it-Q8",
+    "file": "gemma-4-E4B-it-Q8_0.gguf",
+    "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q8_0.gguf",
+    "mmproj_file": "mmproj-gemma-4-E4B-it-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
+  },
+  "Tier4": {
+    "_comment": "Target: RTX 4070 / 3080 (12 GB to 15.9 GB VRAM) | Context Window: 50,000 tokens",
+    "name": "gemma-4-E4B-it",
+    "file": "gemma-4-E4B-it-Q4_K_M.gguf",
+    "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
+    "mmproj_file": "mmproj-gemma-4-E4B-it-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
+  },
+  "Tier5": {
+    "_comment": "Target: RTX 4060 / Laptops / CPU Fallback (<= 11.9 GB VRAM) | Context Window: 45,000 tokens",
+    "name": "gemma-4-E2B-it",
+    "file": "gemma-4-E2B-it-Q4_K_M.gguf",
+    "url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
+    "mmproj_file": "mmproj-gemma-4-E2B-it-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-BF16.gguf"
+  }
+}
