@@ -466,8 +466,12 @@ window.openEditorDrawer = function(filename, button) {
                         window.activeToggledBlocks.add(id);
                         const card = document.getElementById(`block-card-${id}`);
                         if (card) {
-                            card.classList.remove('border-transparent', 'bg-transparent');
-                            card.classList.add('border-cyan-500/60', 'bg-cyan-950/20', 'shadow-[0_0_12px_rgba(6,182,212,0.15)]');
+                            card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.1)]";
+                            const gutter = card.querySelector('.line-num-gutter');
+                            if (gutter) {
+                                gutter.classList.remove('text-slate-600');
+                                gutter.classList.add('text-cyan-400', 'font-bold');
+                            }
                         }
                     });
                 }
@@ -552,7 +556,7 @@ window.saveEditorDraft = function() {
 
 /**
  * Generates and binds the interactive click-to-toggle block list.
- * Includes micro-edit and micro-delete controls inside the hover gutter.
+ * Styled to tightly pack lines with a continuous margin alignment, mimicking standard code panes.
  */
 window.renderEditorBlocks = function() {
     const container = document.getElementById('editor-blocks-container');
@@ -565,21 +569,37 @@ window.renderEditorBlocks = function() {
         blockNode.id = `block-card-${block.id}`;
         blockNode.setAttribute('data-block-id', block.id);
         
-        blockNode.className = "group relative p-2.5 border border-transparent bg-transparent rounded-lg cursor-pointer transition-all duration-150 select-none hover:bg-cyan-500/5 hover:border-cyan-500/20";
+        const isSelected = window.activeToggledBlocks.has(block.id);
+        const selectedClasses = isSelected 
+            ? "bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.1)]" 
+            : "border-transparent bg-transparent";
+
+        blockNode.className = `group relative flex items-start px-4 py-0.5 transition-colors duration-75 select-none hover:bg-[#0c152d]/60 ${selectedClasses}`;
+
+        const displayLineNum = block.id.replace('b-', '');
 
         blockNode.innerHTML = `
-            <!-- High-tech micro control bar, visible on block hover -->
-            <div class="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 block-action-bar">
+            <!-- Line Number Gutter (Continuously Aligned Left Sheet) -->
+            <div class="select-none text-[10px] font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
+                ${displayLineNum}
+            </div>
+
+            <!-- Content Pane -->
+            <div class="flex-1 min-w-0 pl-3">
+                <div class="block-text text-slate-300 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">${block.content || '&nbsp;'}</div>
+            </div>
+
+            <!-- High-tech micro control bar, scaled to look clean inside tightly stacked rows -->
+            <div class="absolute top-0.5 right-2 flex items-center gap-1 bg-[#0b1329]/95 border border-slate-800 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 block-action-bar shadow-md">
                 <!-- Edit Pen -->
-                <button type="button" class="p-1 bg-slate-900 border border-slate-800 rounded text-slate-500 hover:text-cyan-400 cursor-pointer outline-none block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${block.id}')" title="Edit Line">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-2.5 h-2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <button type="button" class="p-0.5 text-slate-400 hover:bg-cyan-950 hover:text-cyan-400 rounded transition-colors cursor-pointer outline-none block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${block.id}')" title="Edit Line">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
                 <!-- Delete Trash -->
-                <button type="button" class="p-1 bg-slate-900 border border-slate-800 rounded text-slate-500 hover:text-rose-400 cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${block.id}')" title="Delete Line">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-2.5 h-2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${block.id}')" title="Delete Line">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
-            <div class="block-text text-slate-300 text-xs leading-relaxed font-sans pr-16 whitespace-pre-wrap">${block.content || '&nbsp;'}</div>
         `;
 
         // Single-Click: Toggle Selection (Context targeting)
@@ -599,14 +619,22 @@ window.toggleBlockSelection = function(blockId) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (!card) return;
 
+    const gutter = card.querySelector('.line-num-gutter');
+
     if (window.activeToggledBlocks.has(blockId)) {
         window.activeToggledBlocks.delete(blockId);
-        card.classList.remove('border-cyan-500/60', 'bg-cyan-950/20', 'shadow-[0_0_12px_rgba(6,182,212,0.15)]');
-        card.classList.add('border-transparent', 'bg-transparent');
+        card.className = "group relative flex items-start px-4 py-0.5 transition-colors duration-75 select-none hover:bg-[#0c152d]/60";
+        if (gutter) {
+            gutter.classList.remove('text-cyan-400', 'font-bold');
+            gutter.classList.add('text-slate-600');
+        }
     } else {
         window.activeToggledBlocks.add(blockId);
-        card.classList.remove('border-transparent', 'bg-transparent');
-        card.classList.add('border-cyan-500/60', 'bg-cyan-950/20', 'shadow-[0_0_12px_rgba(6,182,212,0.15)]');
+        card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.15)]";
+        if (gutter) {
+            gutter.classList.remove('text-slate-600');
+            gutter.classList.add('text-cyan-400', 'font-bold');
+        }
     }
 
     // Persist active selections to survive reloads
@@ -627,10 +655,10 @@ window.enableManualBlockEdit = function(blockId) {
 
     const originalContent = textDiv.textContent === '\u00A0' ? '' : textDiv.textContent;
 
-    // Replace div with raw textarea
+    // Replace inner structure with structured block edit frame
     card.innerHTML = `
-        <span class="absolute top-2 right-2 text-[9px] text-slate-700 select-none font-bold">#${blockId}</span>
-        <textarea class="w-full bg-transparent text-slate-200 outline-none resize-none text-xs leading-relaxed font-sans border-none p-0 focus:ring-0" oninput="window.handleBlockInput('${blockId}', this)">${originalContent}</textarea>
+        <span class="absolute top-1 right-2 text-[9px] text-slate-500 select-none font-bold font-mono z-10">#${blockId.replace('b-', '')}</span>
+        <textarea class="w-full bg-slate-950/90 text-slate-200 outline-none resize-none text-[12px] font-mono leading-relaxed border border-cyan-500/30 rounded px-2 py-1 focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 animate-fade-in" oninput="window.handleBlockInput('${blockId}', this)">${originalContent}</textarea>
     `;
 
     const textarea = card.querySelector('textarea');
@@ -638,19 +666,40 @@ window.enableManualBlockEdit = function(blockId) {
     textarea.style.height = '';
     textarea.style.height = textarea.scrollHeight + 'px';
 
-    // Save and revert to div on blur
+    // Save and revert to line on blur, dynamically resetting continuous gutter lines
     textarea.addEventListener('blur', () => {
         const finalValue = textarea.value.trim();
+        const isSelected = window.activeToggledBlocks.has(blockId);
+
         card.innerHTML = `
-            <button type="button" class="absolute top-2 right-2 p-1 bg-slate-900 border border-slate-800 rounded text-slate-500 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer outline-none z-10 block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${blockId}')" title="Edit Line">
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-2.5 h-2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            </button>
-            <div class="block-text text-slate-300 text-xs leading-relaxed font-sans pr-12 whitespace-pre-wrap">${finalValue || '&nbsp;'}</div>
+            <!-- Line Number Gutter -->
+            <div class="select-none text-[10px] font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
+                ${blockId.replace('b-', '')}
+            </div>
+
+            <!-- Content Pane -->
+            <div class="flex-1 min-w-0 pl-3">
+                <div class="block-text text-slate-300 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">${finalValue || '&nbsp;'}</div>
+            </div>
+
+            <!-- High-tech micro control bar, visible on block hover -->
+            <div class="absolute top-0.5 right-2 flex items-center gap-1 bg-[#0b1329]/95 border border-slate-800 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 block-action-bar shadow-md">
+                <!-- Edit Pen -->
+                <button type="button" class="p-0.5 text-slate-400 hover:bg-cyan-950 hover:text-cyan-400 rounded transition-colors cursor-pointer outline-none block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${blockId}')" title="Edit Line">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <!-- Delete Trash -->
+                <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${blockId}')" title="Delete Line">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+            </div>
         `;
         
         // Re-apply selected styles if active
-        if (window.activeToggledBlocks.has(blockId)) {
-            card.classList.add('border-cyan-500/60', 'bg-cyan-950/20', 'shadow-[0_0_12px_rgba(6,182,212,0.15)]');
+        if (isSelected) {
+            card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.15)]";
+        } else {
+            card.className = "group relative flex items-start px-4 py-0.5 transition-colors duration-75 select-none hover:bg-[#0c152d]/60";
         }
     });
 };
@@ -732,8 +781,12 @@ window.clearActiveBlockToggles = function() {
     window.activeToggledBlocks.clear();
     sessionStorage.removeItem('activeToggledBlocks');
     document.querySelectorAll('[data-block-id]').forEach(card => {
-        card.classList.remove('border-cyan-500/60', 'bg-cyan-950/20', 'shadow-[0_0_12px_rgba(6,182,212,0.15)]');
-        card.classList.add('border-transparent', 'bg-transparent');
+        card.className = "group relative flex items-start px-4 py-0.5 transition-colors duration-75 select-none hover:bg-[#0c152d]/60";
+        const gutter = card.querySelector('.line-num-gutter');
+        if (gutter) {
+            gutter.classList.remove('text-cyan-400', 'font-bold');
+            gutter.classList.add('text-slate-600');
+        }
     });
     window.updateActiveTargetPill();
 };
@@ -783,7 +836,7 @@ window.streamUpdateBlockContent = function(blockId, partialText) {
 window.commitBlockEditDirectly = function(blockId, finalContent) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (card) {
-        card.classList.remove('border-cyan-500/60', 'bg-cyan-950/20');
+        card.classList.remove('border-slate-700/60', 'border-l-cyan-400', 'bg-cyan-950/25');
         const textDiv = card.querySelector('.block-text');
         if (textDiv) textDiv.textContent = finalContent || '\u00A0';
     }
@@ -1033,8 +1086,8 @@ window.enableFusedRangeEdit = function() {
 
     // Replace the first card's content with a single multi-line textarea
     targetCard.innerHTML = `
-        <span class="absolute top-2 right-2 text-[9px] text-slate-700 select-none font-bold">#${targetBlockId}</span>
-        <textarea class="w-full bg-transparent text-slate-200 outline-none resize-none text-xs leading-relaxed font-sans border-none p-0 focus:ring-0" style="height: auto;">${fusedText}</textarea>
+        <span class="absolute top-1.5 right-1.5 text-[9px] text-slate-500 select-none font-bold font-mono">#${targetBlockId.replace('b-', '')}</span>
+        <textarea class="w-full bg-slate-950/70 text-slate-200 outline-none resize-none text-[12.5px] font-mono leading-relaxed border border-cyan-500/30 rounded p-2 focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 animate-fade-in" style="height: auto;">${fusedText}</textarea>
     `;
 
     const textarea = targetCard.querySelector('textarea');
