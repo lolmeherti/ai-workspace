@@ -43,150 +43,163 @@
         </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-6 space-y-8" id="chatWindow">
-        <?php if (empty($history)): ?>
-            <div class="flex flex-col items-center justify-center text-center h-full py-20 opacity-80" id="empty-state">
-                <div class="w-20 h-20 mb-6 rounded-full bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                    <uk-icon icon="bot" class="w-10 h-10 text-cyan-400"></uk-icon>
-                </div>
-                <h3 class="text-2xl font-bold tracking-tight text-white mb-2">How can I assist you today?</h3>
-                <p class="text-sm text-slate-400 max-w-sm">Enter a prompt, ask a question, or attach a document/image to start the conversation.</p>
-            </div>
-        <?php else: ?>
-            <?php foreach ($history as $msg): ?>
-                <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
-                    
-                    <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
-                        <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
-                            <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
-                            <?php if ($msg['role'] !== 'user'): ?>
-                                <?php if (!empty($msg['cache_used'])): ?>
-                                    <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
-                                        <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cached
-                                    </span>
-                                <?php elseif (!empty($msg['search_query'])): ?>
-                                    <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
-                                        <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search
-                                    </span>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        </span>
-                        <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center animate-fade-in" 
-                                onclick="copyToClipboard(this)" 
-                                title="Copy message">
-                            <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
-                        </button>
+    <!-- NEW SPLIT-PANE WRAPPER -->
+    <div class="flex-1 flex h-full relative overflow-hidden">
+        
+        <!-- LEFT PANE: CONVERSATION HUB (100% width on load, shrinks to 40% when editor is active) -->
+        <div class="flex-1 flex flex-col h-full min-w-0" id="chat-pane">
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-8" id="chatWindow">
+                <?php if (empty($history)): ?>
+                    <div class="flex flex-col items-center justify-center text-center h-full py-20 opacity-80" id="empty-state">
+                        <div class="w-20 h-20 mb-6 rounded-full bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
+                            <uk-icon icon="bot" class="w-10 h-10 text-cyan-400"></uk-icon>
+                        </div>
+                        <h3 class="text-2xl font-bold tracking-tight text-white mb-2">How can I assist you today?</h3>
+                        <p class="text-sm text-slate-400 max-w-sm">Enter a prompt, ask a question, or attach a document/image to start the conversation.</p>
                     </div>
-                    
-                    <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
-                         data-raw="<?php echo htmlspecialchars($msg['message']); ?>">
-                        <?php if (!empty($msg['image_path'])): ?>
-                            <?php 
-                            $ext = strtolower(pathinfo($msg['image_path'], PATHINFO_EXTENSION));
-                            if (in_array($ext, ["png", "jpg", "jpeg", "gif", "webp"])): 
-                            ?>
-                                <img src="<?php echo htmlspecialchars($msg['image_path']); ?>" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block" alt="Uploaded image">
-                            <?php else: ?>
-                                <div class="flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3">
-                                    <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
-                                    <span class="text-xs text-slate-300 font-medium truncate"><?php echo htmlspecialchars(basename($msg['image_path'])); ?></span>
-                                </div>
-                            <?php endif; ?>
-                        <?php endif; ?>
-                        
-                        <?php if ($msg['role'] === 'assistant'): ?>
-                            <?php if (!empty($msg['scraped_urls']) || !empty($msg['search_query']) || !empty($msg['cache_used'])): ?>
-                                <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group">
-                                    <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
-                                        <span class="flex items-center gap-2">
-                                            <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
-                                            Agent Execution Trace
-                                        </span>
-                                        <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
-                                    </summary>
-                                    <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2">
+                <?php else: ?>
+                    <?php foreach ($history as $msg): ?>
+                        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
+                            
+                            <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
+                                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
+                                    <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
+                                    <?php if ($msg['role'] !== 'user'): ?>
                                         <?php if (!empty($msg['cache_used'])): ?>
-                                            <div class="text-xs text-amber-400 flex items-center gap-1.5 font-medium">
-                                                <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cache matched successfully
-                                            </div>
+                                            <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
+                                                <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cached
+                                            </span>
                                         <?php elseif (!empty($msg['search_query'])): ?>
-                                            <div class="text-xs text-blue-400 flex items-center gap-1.5 font-medium">
-                                                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"
-                                            </div>
+                                            <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
+                                                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search
+                                            </span>
                                         <?php endif; ?>
-                                        <?php if (!empty($msg['scraped_urls'])): ?>
-                                            <?php $urls = json_decode($msg['scraped_urls'], true); ?>
-                                            <?php if (is_array($urls) && !empty($urls)): ?>
-                                                <div class="flex flex-col gap-1.5">
-                                                    <?php foreach ($urls as $url): ?>
-                                                        <a href="<?php echo htmlspecialchars($url); ?>" target="_blank" class="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950/40 p-2 rounded border border-slate-850 hover:bg-slate-800/30 transition-colors w-full font-medium">
-                                                            <uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>
-                                                            <span class="truncate max-w-full"><?php echo htmlspecialchars($url); ?></span>
-                                                        </a>
-                                                     <?php endforeach; ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        <?php endif; ?>
-                                    </div>
-                                </details>
-                            <?php endif; ?>
-                            <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
-                        <?php else: ?>
-                            <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
-                        <?php endif; ?>
-
-                        <?php if (strlen($msg['message']) > 300): ?>
-                            <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 bottom-copy-container mt-auto">
-                                <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 animate-fade-in flex items-center gap-1" 
+                                    <?php endif; ?>
+                                </span>
+                                <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center animate-fade-in" 
                                         onclick="copyToClipboard(this)" 
                                         title="Copy message">
-                                    <uk-icon icon="copy" class="w-3 h-3"></uk-icon>
+                                    <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                                 </button>
                             </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
+                            
+                            <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
+                                 data-raw="<?php echo htmlspecialchars($msg['message']); ?>">
+                                <?php if (!empty($msg['image_path'])): ?>
+                                    <?php 
+                                    $ext = strtolower(pathinfo($msg['image_path'], PATHINFO_EXTENSION));
+                                    if (in_array($ext, ["png", "jpg", "jpeg", "gif", "webp"])): 
+                                    ?>
+                                        <img src="<?php echo htmlspecialchars($msg['image_path']); ?>" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block" alt="Uploaded image">
+                                    <?php else: ?>
+                                        <div class="flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3">
+                                            <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
+                                            <span class="text-xs text-slate-300 font-medium truncate"><?php echo htmlspecialchars(basename($msg['image_path'])); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                
+                                <?php if ($msg['role'] === 'assistant'): ?>
+                                    <?php if (!empty($msg['scraped_urls']) || !empty($msg['search_query']) || !empty($msg['cache_used'])): ?>
+                                        <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group">
+                                            <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
+                                                <span class="flex items-center gap-2">
+                                                    <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
+                                                    Agent Execution Trace
+                                                </span>
+                                                <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
+                                            </summary>
+                                            <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2">
+                                                <?php if (!empty($msg['cache_used'])): ?>
+                                                    <div class="text-xs text-amber-400 flex items-center gap-1.5 font-medium">
+                                                        <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cache matched successfully
+                                                    </div>
+                                                <?php elseif (!empty($msg['search_query'])): ?>
+                                                    <div class="text-xs text-blue-400 flex items-center gap-1.5 font-medium">
+                                                        <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($msg['scraped_urls'])): ?>
+                                                    <?php $urls = json_decode($msg['scraped_urls'], true); ?>
+                                                    <?php if (is_array($urls) && !empty($urls)): ?>
+                                                        <div class="flex flex-col gap-1.5">
+                                                            <?php foreach ($urls as $url): ?>
+                                                                <a href="<?php echo htmlspecialchars($url); ?>" target="_blank" class="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950/40 p-2 rounded border border-slate-850 hover:bg-slate-800/30 transition-colors w-full font-medium">
+                                                                    <uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>
+                                                                    <span class="truncate max-w-full"><?php echo htmlspecialchars($url); ?></span>
+                                                                </a>
+                                                             <?php endforeach; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        </details>
+                                    <?php endif; ?>
+                                    <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
+                                <?php else: ?>
+                                    <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
+                                <?php endif; ?>
 
-    <div class="p-4 border-t border-slate-800/80 glass-panel backdrop-blur-md relative z-10">
-        <div class="max-w-[92%] mx-auto relative">
-            
-            <div id="image-preview-container" class="hidden absolute bottom-full left-0 mb-3 p-2 bg-[#0f172a] border border-slate-700 rounded-lg flex items-center gap-3 shadow-xl">
-                <div class="relative">
-                    <div id="file-icon-preview" class="hidden h-16 w-16 bg-slate-800 rounded-md border border-slate-600 flex items-center justify-center">
-                        <uk-icon icon="file-text" class="w-8 h-8 text-cyan-400"></uk-icon>
-                    </div>
-                    <img id="image-preview" src="" class="hidden h-16 w-16 object-cover rounded-md border border-slate-600" alt="Preview">
-                    <button type="button" class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-400 shadow-md" onclick="removeFile()">×</button>
-                </div>
-                <div class="flex flex-col pr-2">
-                    <span id="file-preview-name" class="text-xs text-slate-300 font-medium truncate max-w-[150px]">File attached</span>
-                    <span id="file-preview-type" class="text-[10px] text-slate-500 uppercase font-bold">Document</span>
-                </div>
+                                <?php if (strlen($msg['message']) > 300): ?>
+                                    <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 bottom-copy-container mt-auto">
+                                        <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 animate-fade-in flex items-center gap-1" 
+                                                onclick="copyToClipboard(this)" 
+                                                title="Copy message">
+                                            <uk-icon icon="copy" class="w-3 h-3"></uk-icon>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
 
-            <div id="referenced-files-container" class="flex flex-wrap gap-2 mb-3"></div>
-            
-            <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
-                <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
-                <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
-                
-                <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
-                    <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
-                        <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
-                    </button>
+            <div class="p-4 border-t border-slate-800/80 glass-panel backdrop-blur-md relative z-10">
+                <div class="max-w-[92%] mx-auto relative">
                     
-                    <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant..." required autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                    <div id="image-preview-container" class="hidden absolute bottom-full left-0 mb-3 p-2 bg-[#0f172a] border border-slate-700 rounded-lg flex items-center gap-3 shadow-xl">
+                        <div class="relative">
+                            <div id="file-icon-preview" class="hidden h-16 w-16 bg-slate-800 rounded-md border border-slate-600 flex items-center justify-center">
+                                <uk-icon icon="file-text" class="w-8 h-8 text-cyan-400"></uk-icon>
+                            </div>
+                            <img id="image-preview" src="" class="hidden h-16 w-16 object-cover rounded-md border border-slate-600" alt="Preview">
+                            <button type="button" class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-400 shadow-md" onclick="removeFile()">×</button>
+                        </div>
+                        <div class="flex flex-col pr-2">
+                            <span id="file-preview-name" class="text-xs text-slate-300 font-medium truncate max-w-[150px]">File attached</span>
+                            <span id="file-preview-type" class="text-[10px] text-slate-500 uppercase font-bold">Document</span>
+                        </div>
+                    </div>
+
+                    <div id="referenced-files-container" class="flex flex-wrap gap-2 mb-3"></div>
                     
-                    <button type="submit" class="btn-futuristic shrink-0 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 h-[44px]">
-                        Send <uk-icon icon="send" class="w-4 h-4"></uk-icon>
-                    </button>
+                    <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
+                        <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
+                        <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
+                        
+                        <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
+                            <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
+                                <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
+                            </button>
+                            
+                            <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant..." required autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                            
+                            <button type="submit" class="btn-futuristic shrink-0 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 h-[44px]">
+                                Send <uk-icon icon="send" class="w-4 h-4"></uk-icon>
+                            </button>
+                        </div>
+                    </form>
                 </div>
-            </form>
-        </div>
-    </div>
+            </div>
+            
+        </div> <!-- END LEFT PANE -->
+
+        <!-- RIGHT PANE: DRAWER WORKSPACE (Included modularly) -->
+        <?php include 'chat-file-editor-drawer.php'; ?>
+
+    </div> <!-- END NEW SPLIT-PANE WRAPPER -->
 
     <div id="condensation-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[#070b14]/90 backdrop-blur-sm">
         <div id="condensation-modal-card" class="bg-[#0f172a] border border-cyan-500/30 p-8 rounded-2xl max-w-md w-full shadow-[0_0_50px_rgba(6,182,212,0.2)] text-center transition-all duration-300">
@@ -244,7 +257,7 @@
                     <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1" 
                             onclick="copyToClipboard(this)" 
                             title="Copy message">
-                        <uk-icon icon="copy" class="w-3 h-3"></uk-icon> <span>Copy Entire Message</span>
+                        <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon> <span>Copy Entire Message</span>
                     </button>
                 </div>
             </div>

@@ -20,6 +20,22 @@ class FileController extends BaseController
 
         if ($method === 'POST') {
             $apiActionStr = $_GET['api_action'] ?? '';
+            $apiAction = ApiAction::tryFrom($apiActionStr);
+
+            if ($apiAction === ApiAction::UPDATE_DRAFT) {
+                $this->handleUpdateDraftRequest();
+                return;
+            } elseif ($apiAction === ApiAction::SAVE_DRAFT) {
+                $this->handleSaveDraftRequest();
+                return;
+            } elseif ($apiAction === ApiAction::DISCARD_DRAFT) {
+                $this->handleDiscardDraftRequest();
+                return;
+            } elseif ($apiAction === ApiAction::DELETE_DRAFT_BLOCKS) {
+                $this->handleDeleteDraftBlocksRequest();
+                return;
+            }
+
             if ($apiActionStr === 'upload_file') {
                 $this->handleDirectUploadRequest();
                 return;
@@ -38,6 +54,8 @@ class FileController extends BaseController
             $this->handleFileContentRequest();
         } elseif ($apiAction === ApiAction::SEARCH_FILES) {
             $this->handleSearchFilesRequest();
+        } elseif ($apiAction === ApiAction::OPEN_DRAFT) {
+            $this->handleOpenDraftRequest();
         } elseif ($apiActionVal === 'sync_files') {
             $this->handleSyncFilesRequest();
         }
@@ -135,6 +153,288 @@ class FileController extends BaseController
             'errors' => $errors
         ]);
     }
+
+    /**
+     * Opens a file, clones its clean text content to a .draft version, 
+     * and parses it on-the-fly into indexed blocks.
+     */
+    private function handleOpenDraftRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+
+        $file = $_GET['file'] ?? '';
+        
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid file name.'], 400);
+            return;
+        }
+
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $txtPath = realpath($uploadDir . '/' . $file . '.txt');
+        $origPath = realpath($uploadDir . '/' . $file);
+
+        // Resolve which file holds the text content we want to edit
+        $sourcePath = null;
+        if ($txtPath && file_exists($txtPath)) {
+            $sourcePath = $txtPath;
+        } elseif ($origPath && file_exists($origPath) && (str_ends_with(strtolower($file), '.txt') || str_ends_with(strtolower($file), '.md'))) {
+            $sourcePath = $origPath;
+        }
+
+        if (!$sourcePath) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'No editable text content found for this file.'], 404);
+            return;
+        }
+
+        // Define draft path
+        $draftPath = $uploadDir . '/' . $file . '.draft.txt';
+
+        // Copy original source text to draft on disk if it doesn't exist yet
+        if (!file_exists($draftPath)) {
+            if (!copy($sourcePath, $draftPath)) {
+                $this->jsonResponse(['status' => 'error', 'message' => 'Failed to initialize draft file on disk.'], 500);
+                return;
+            }
+        }
+
+        // Read draft content and split strictly on single newlines
+        $content = file_get_contents($draftPath);
+        $content = str_replace("\r\n", "\n", $content); // Normalize line endings
+        $lines = explode("\n", $content);
+
+        $blocks = [];
+        foreach ($lines as $index => $line) {
+            $blocks[] = [
+                'id' => 'b-' . ($index + 1),
+                'content' => rtrim($line) // Trim trailing carriage returns/spaces
+            ];
+        }
+
+        $this->jsonResponse([
+            'status' => 'success',
+            'file' => $file,
+            'blocks' => $blocks
+        ]);
+    }
+
+    /**
+     * Updates a specific block ID (line) within the draft on disk and returns the updated block map.
+     */
+    private function handleUpdateDraftRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+
+        // Read POST parameters from raw input stream
+        $input = json_decode(file_get_contents('php://input'), true);
+        $file = $input['file'] ?? '';
+        $blockId = $input['block_id'] ?? '';
+        $newContent = $input['content'] ?? '';
+        $replaceRange = $input['replace_range'] ?? []; // Array of block IDs to delete on merge
+
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file) || empty($blockId)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid update parameters.'], 400);
+            return;
+        }
+
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $draftPath = realpath($uploadDir . '/' . $file . '.draft.txt');
+
+        if (!$draftPath || !file_exists($draftPath)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'No active draft found.'], 404);
+            return;
+        }
+
+        // Parse blocks strictly on single newlines
+        $content = file_get_contents($draftPath);
+        $content = str_replace("\r\n", "\n", $content);
+        $lines = explode("\n", $content);
+
+        // Extract target block index (e.g., 'b-3' => index 2)
+        $index = (int)str_replace('b-', '', $blockId) - 1;
+
+        // Apply the updated content to the primary target block
+        if ($index >= 0 && $index < count($lines)) {
+            $lines[$index] = $newContent;
+        } else {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Target block index out of bounds.'], 400);
+            return;
+        }
+
+        // REMOVE MERGED BLOCKS: Unset any other indices in the replacement range
+        if (is_array($replaceRange) && !empty($replaceRange)) {
+            foreach ($replaceRange as $idToRemove) {
+                $remIdx = (int)str_replace('b-', '', $idToRemove) - 1;
+                if ($remIdx >= 0 && $remIdx < count($lines)) {
+                    unset($lines[$remIdx]);
+                }
+            }
+        }
+
+        // Re-index array keys to prevent holes in the document layout
+        $lines = array_values($lines);
+
+        // Reconstruct document and write to disk
+        $updatedContent = implode("\n", $lines);
+        file_put_contents($draftPath, $updatedContent);
+
+        // Return the fresh block array to synchronize frontend state
+        $blocks = [];
+        foreach ($lines as $idx => $line) {
+            $blocks[] = [
+                'id' => 'b-' . ($idx + 1),
+                'content' => rtrim($line)
+            ];
+        }
+
+        $this->jsonResponse([
+            'status' => 'success',
+            'blocks' => $blocks
+        ]);
+    }
+
+    /**
+     * Commits the draft changes to the main file or companion text extraction, 
+     * then cleans up the draft asset.
+     */
+    private function handleSaveDraftRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $file = $input['file'] ?? '';
+
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid file parameter.'], 400);
+            return;
+        }
+
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $draftPath = realpath($uploadDir . '/' . $file . '.draft.txt');
+        $txtPath = realpath($uploadDir . '/' . $file . '.txt');
+        $origPath = realpath($uploadDir . '/' . $file);
+
+        if (!$draftPath || !file_exists($draftPath)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Active draft not found.'], 404);
+            return;
+        }
+
+        // Determine target file to overwrite
+        $targetPath = null;
+        if ($txtPath && file_exists($txtPath)) {
+            $targetPath = $txtPath;
+        } elseif ($origPath && file_exists($origPath) && (str_ends_with(strtolower($file), '.txt') || str_ends_with(strtolower($file), '.md'))) {
+            $targetPath = $origPath;
+        }
+
+        if (!$targetPath) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Failed to resolve save target.'], 500);
+            return;
+        }
+
+        // Overwrite target and clean up draft
+        if (copy($draftPath, $targetPath)) {
+            unlink($draftPath);
+            $this->jsonResponse(['status' => 'success']);
+        } else {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Failed to commit draft changes.'], 500);
+        }
+    }
+
+
+    /**
+     * Deletes the sandbox draft file from the disk to preserve directory cleanliness.
+     */
+    private function handleDiscardDraftRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $file = $input['file'] ?? '';
+
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid file parameter.'], 400);
+            return;
+        }
+
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $draftPath = realpath($uploadDir . '/' . $file . '.draft.txt');
+
+        if ($draftPath && file_exists($draftPath)) {
+            if (unlink($draftPath)) {
+                $this->jsonResponse(['status' => 'success']);
+            } else {
+                $this->jsonResponse(['status' => 'error', 'message' => 'Failed to delete draft file from disk.']);
+            }
+        } else {
+            $this->jsonResponse(['status' => 'success', 'message' => 'No active draft found to discard.']);
+        }
+    }
+
+    /**
+     * Safely unlinks a single or multiple block IDs from the draft file on disk, 
+     * automatically re-indexing remaining lines.
+     */
+    private function handleDeleteDraftBlocksRequest(): void
+    {
+        if (ob_get_length()) ob_clean();
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $file = $input['file'] ?? '';
+        $blockIds = $input['block_ids'] ?? []; // Array of block IDs to delete
+
+        if (empty($file) || !preg_match('/^[a-zA-Z0-9._\-]+$/', $file) || empty($blockIds)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid parameters.'], 400);
+            return;
+        }
+
+        $uploadDir = realpath(__DIR__ . '/../../uploads/');
+        $draftPath = realpath($uploadDir . '/' . $file . '.draft.txt');
+
+        if (!$draftPath || !file_exists($draftPath)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'No active draft found.'], 404);
+            return;
+        }
+
+        // Read draft content
+        $content = file_get_contents($draftPath);
+        $content = str_replace("\r\n", "\n", $content);
+        $lines = explode("\n", $content);
+
+        // Map block IDs (e.g., 'b-3') to zero-indexed array keys
+        $indicesToRemove = [];
+        foreach ($blockIds as $id) {
+            $indicesToRemove[] = (int)str_replace('b-', '', $id) - 1;
+        }
+
+        // Filter out target lines
+        foreach ($indicesToRemove as $remIdx) {
+            if (isset($lines[$remIdx])) {
+                unset($lines[$remIdx]);
+            }
+        }
+
+        // Re-index remaining keys to prevent holes in document structure
+        $lines = array_values($lines);
+
+        // Write back to disk
+        $updatedContent = implode("\n", $lines);
+        file_put_contents($draftPath, $updatedContent);
+
+        // Parse and return newly re-split block elements
+        $blocks = [];
+        foreach ($lines as $idx => $line) {
+            $blocks[] = [
+                'id' => 'b-' . ($idx + 1),
+                'content' => rtrim($line)
+            ];
+        }
+
+        $this->jsonResponse([
+            'status' => 'success',
+            'blocks' => $blocks
+        ]);
+    }
+    
 
     /**
      * Handles web UI dropped or pasted uploads (multipart form data).
@@ -514,19 +814,31 @@ class FileController extends BaseController
         }
         
         $uploadDir = realpath(__DIR__ . '/../../uploads/');
-        $txtPath = realpath($uploadDir . '/' . $file . '.txt');
         
+        // 1. ALWAYS PREFER THE SANDBOX DRAFT FIRST (For real-time sync)
+        $draftPath = realpath($uploadDir . '/' . $file . '.draft.txt');
+        if ($draftPath && str_starts_with($draftPath, $uploadDir) && file_exists($draftPath)) {
+            $content = file_get_contents($draftPath);
+            $this->jsonResponse(['status' => 'success', 'content' => $content]);
+            return;
+        }
+        
+        // 2. FALLBACK A: Companion text extraction (.txt)
+        $txtPath = realpath($uploadDir . '/' . $file . '.txt');
         if ($txtPath && str_starts_with($txtPath, $uploadDir) && file_exists($txtPath)) {
             $content = file_get_contents($txtPath);
             $this->jsonResponse(['status' => 'success', 'content' => $content]);
-        } else {
-            $origPath = realpath($uploadDir . '/' . $file);
-            if ($origPath && str_starts_with($origPath, $uploadDir) && file_exists($origPath)) {
-                $content = file_get_contents($origPath);
-                $this->jsonResponse(['status' => 'success', 'content' => $content]);
-            } else {
-                $this->jsonResponse(['status' => 'error', 'message' => 'Extracted text document not found.'], 404);
-            }
+            return;
         }
+        
+        // 3. FALLBACK B: Original file (if text/markdown)
+        $origPath = realpath($uploadDir . '/' . $file);
+        if ($origPath && str_starts_with($origPath, $uploadDir) && file_exists($origPath)) {
+            $content = file_get_contents($origPath);
+            $this->jsonResponse(['status' => 'success', 'content' => $content]);
+            return;
+        }
+        
+        $this->jsonResponse(['status' => 'error', 'message' => 'Text content not found.'], 404);
     }
 }

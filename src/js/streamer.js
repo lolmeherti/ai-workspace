@@ -1,3 +1,5 @@
+// src/js/streamer.js
+
 import { state } from './state.js';
 import { showCondensationModal, updateTokenCounter } from './ui.js';
 
@@ -15,8 +17,15 @@ function cleanAssistantStreamText(html) {
 
 export async function streamResponse(formData, originalMessage) {
     state.isGenerating = true;
-    const chatWindow = document.getElementById('chatWindow');
+    
+    // 1. IMMEDIATELY LOCK THE EDITOR DRAWER AT THE START OF THE THINKING PHASE
+    const lockOverlay = document.getElementById('editor-lock-overlay');
+    if (lockOverlay) {
+        lockOverlay.classList.remove('opacity-0', 'pointer-events-none');
+        lockOverlay.classList.add('opacity-100', 'pointer-events-auto');
+    }
 
+    const chatWindow = document.getElementById('chatWindow');
     const tplAi = document.getElementById('tpl-ai-message');
     const aiNode = tplAi.content.cloneNode(true);
     const aiWrapper = aiNode.querySelector('.ai-wrapper');
@@ -51,6 +60,7 @@ export async function streamResponse(formData, originalMessage) {
     const loadingText = aiWrapper.querySelector('.loading-text');
     const scrapingContainer = aiWrapper.querySelector('.scraping-container');
     const textContainer = aiWrapper.querySelector('.streaming-text-container');
+    
     let markdownBuffer = "";
     let isFirstToken = true;
 
@@ -219,11 +229,58 @@ export async function streamResponse(formData, originalMessage) {
                                 if (loadingIndicator && loadingIndicator.parentNode) {
                                     loadingIndicator.remove();
                                 }
+                                window.processedBlockIds = new Set();
                             }
 
                             markdownBuffer += data.chunk;
-                            let htmlContent = marked.parse(markdownBuffer);
-                            
+
+                            let displayBuffer = markdownBuffer;
+                            let hasAppliedEdit = false;
+
+                            // 2. HIGH-SPEED STATE MACHINE PARSER (ZERO BACKTRACKING)
+                            while (true) {
+                                let startIndex = displayBuffer.indexOf('<update id="');
+                                if (startIndex === -1) break;
+
+                                let tagEndIndex = displayBuffer.indexOf('">', startIndex);
+                                if (tagEndIndex === -1) break;
+
+                                let blockId = displayBuffer.substring(startIndex + 12, tagEndIndex);
+                                let endIndex = displayBuffer.indexOf('</update>', tagEndIndex);
+
+                                if (endIndex !== -1) {
+                                    // A. COMPLETED UPDATE: Parse final content and commit exactly once to PHP
+                                    let finalContent = displayBuffer.substring(tagEndIndex + 2, endIndex).trim();
+                                    
+                                    if (!window.processedBlockIds.has(blockId)) {
+                                        window.processedBlockIds.add(blockId);
+                                        window.commitBlockEditDirectly(blockId, finalContent);
+                                    }
+                                    hasAppliedEdit = true;
+                                    
+                                    // Remove completed update block from the conversational chat display
+                                    displayBuffer = displayBuffer.substring(0, startIndex) + displayBuffer.substring(endIndex + 9);
+                                } else {
+                                    // B. INCOMPLETE UPDATE: Stream partial tokens directly to editor container
+                                    let partialContent = displayBuffer.substring(tagEndIndex + 2).trim();
+                                    
+                                    // Check if another tag opens inside (self-healing boundary protection)
+                                    let nextTagIndex = partialContent.indexOf('<update id="');
+                                    if (nextTagIndex !== -1) {
+                                        partialContent = partialContent.substring(0, nextTagIndex).trim();
+                                    }
+
+                                    window.streamUpdateBlockContent(blockId, partialContent);
+                                    hasAppliedEdit = true;
+                                    
+                                    // Omit streaming content from conversational chat bubble view
+                                    displayBuffer = displayBuffer.substring(0, startIndex);
+                                    break;
+                                }
+                            }
+
+                            // 3. Render Clean Conversation Text
+                            let htmlContent = marked.parse(displayBuffer);
                             htmlContent = cleanAssistantStreamText(htmlContent);
                             
                             if (window.parseInlineFiles) {
@@ -238,15 +295,18 @@ export async function streamResponse(formData, originalMessage) {
                             });
                             
                             aiBubble.setAttribute('data-raw', markdownBuffer);
+                            
+                            if (payload.done) {
+                                window.evaluateStreamCompletion(hasAppliedEdit, aiBubble, textContainer);
+                            }
+                            
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
                         if (event === 'done') {
-                            state.isGenerating = false;
                             const cursor = textContainer.querySelector('.animate-pulse');
-                            if (cursor) {
-                                cursor.remove();
-                            }
+                            if (cursor) cursor.remove();
+                            
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
@@ -291,19 +351,27 @@ export async function streamResponse(formData, originalMessage) {
             }
         }
 
-        state.isGenerating = false;
         aiBubble.classList.add('parsed');
 
     } catch (error) {
-        state.isGenerating = false;
         console.error("Stream Error:", error);
         if (loadingText) loadingText.textContent = "Connection failed.";
         const spinner = loadingIndicator ? loadingIndicator.querySelector('.uk-spinner') : null;
         if (spinner) spinner.remove();
         if (loadingIndicator) loadingIndicator.classList.replace('text-cyan-400', 'text-rose-400');
+    } finally {
+        state.isGenerating = false;
+        
+        // 4. ALWAYS RELEASE THE WORKSPACE LOCK WHEN THE STREAM DISCONNECTS OR COMPLETES
+        const lockOverlay = document.getElementById('editor-lock-overlay');
+        if (lockOverlay) {
+            lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
+            lockOverlay.classList.add('opacity-0', 'pointer-events-none');
+        }
     }
 }
 
+// Keep the rest of your file-accordion helper functions identical
 function renderFileChoices(data, textContainer, chatWindow) {
     const files = data.files;
     if (!files || files.length === 0) return;
@@ -368,6 +436,12 @@ function renderFileChoices(data, textContainer, chatWindow) {
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
                             Append to Chat
                         </button>
+                        ${!isImage ? `
+                        <button type="button" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-blue-950/40 hover:bg-blue-900/60 text-blue-400 border border-blue-500/20 hover:border-blue-400/50 rounded-lg transition-all cursor-pointer" onclick="window.openEditorDrawer('${file.physical_name}', this)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            Edit Document
+                        </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>

@@ -34,8 +34,31 @@ export async function handleChatSubmit(e) {
         formData.set("file", state.selectedFile, state.selectedFile.name);
     }
 
+    if (window.activeEditFile) {
+        formData.set("active_edit_file", window.activeEditFile);
+    }
+
     let finalQueryText = message;
     
+    // LOOK UP THE TEXT CONTENT OF SELECTED BLOCKS AND INJECT INTO PAYLOAD
+    if (window.activeToggledBlocks && window.activeToggledBlocks.size > 0 && window.activeBlocks.length > 0) {
+        const toggledArray = Array.from(window.activeToggledBlocks);
+        
+        let injectedContext = "The user has highlighted the following exact text sections from their active workspace file for your attention:\n";
+        
+        toggledArray.forEach(id => {
+            const blockObj = window.activeBlocks.find(b => b.id === id);
+            if (blockObj) {
+                injectedContext += `- [${id}]: "${blockObj.content}"\n`;
+            }
+        });
+        
+        // DYNAMIC SYSTEM INSTRUCTIONS: Teach the model how to write XML edits
+        injectedContext += "\nCRITICAL COMPILER INSTRUCTION: If the user asks you to rewrite, edit, or modify any of these highlighted sections, DO NOT just explain or output standard lists. You MUST execute the edits directly by wrapping each rewritten section inside <update id=\"BLOCK_ID\">your modified text</update> tags inline during your conversation. Only modify the targeted blocks. Do not wrap updates in code fences.";
+        
+        finalQueryText = `${injectedContext}\nuser has toggled blocks [${toggledArray.join(', ')}] and wrote the following prompt:\n"${message}"`;
+    }
+
     if (hasReferences) {
         window.selectedFileReferences.forEach(ref => {
             finalQueryText += ` [File: ${ref.physical_name}]`;
