@@ -35,7 +35,12 @@ $isFileAction = (
     $apiAction === ApiAction::SHOW_IN_EXPLORER || 
     $apiAction === ApiAction::GET_FILE_CONTENT || 
     $apiAction === ApiAction::SEARCH_FILES ||
-    $apiActionVal === 'sync_files' ||
+    $apiAction === ApiAction::OPEN_DRAFT ||
+    $apiAction === ApiAction::UPDATE_DRAFT ||
+    $apiAction === ApiAction::SAVE_DRAFT ||
+    $apiAction === ApiAction::DISCARD_DRAFT ||
+    $apiAction === ApiAction::DELETE_DRAFT_BLOCKS ||
+    $apiActionVal === 'sync_files' || // fallback for actions outside the enum
     $apiActionVal === 'upload_file'
 );
 

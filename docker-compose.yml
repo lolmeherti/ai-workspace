@@ -1,6 +1,8 @@
+# docker-compose.yml (Development Version)
+
 services:
   web:
-    build: .
+    image: ${DOCKER_REGISTRY:-local}/ai_php_web:latest
     container_name: ai_php_web
     user: "root"
     ports:
@@ -8,6 +10,7 @@ services:
     volumes:
       - ./src:/var/www/html
       - ./.env:/var/www/html/.env
+      - /mnt/c/Users/Admin-PC/AppData/Local/localsy/uploads:/var/www/html/uploads
     environment:
       - DB_HOST=${DB_HOST}
       - DB_NAME=${DB_NAME}
