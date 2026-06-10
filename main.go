@@ -692,6 +692,8 @@ func mergeAndWriteEnvFile(workDir string, activeModel string, vram float64, mode
 		"FLARESOLVERR_HOST":                  "http://flaresolverr:8191",
 		"TZ":                                 "Europe/Vienna",
 		"LOG_LEVEL":                          "info",
+		"TODOIST_API_KEY":                    "#PLACEHOLDER#",
+		"CALENDAR_FETCH_LIMIT":               "5",
 	}
 
 	// 1. Read existing config and capture the currently saved model

@@ -58,12 +58,7 @@ TEXT;
         $temperature = (float) Config::get('AGENT_DECIDER_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        if (strpos($response, '```') !== false) {
-            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
-            $response = trim($response);
-        }
-
-        $data = json_decode($response, true);
+        $data = \App\JsonParser::extractAndDecode($response);
 
         if (is_array($data) && isset($data['requires_search']) && $data['requires_search'] === true) {
             return !empty($data['search_query']) ? trim($data['search_query']) : null;

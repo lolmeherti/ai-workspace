@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\ChatManager;
 use App\Enums\Action;
+use App\Enums\ApiAction;
 use App\Enums\Tab;
 use App\Repositories\ChatSessionRepository;
 use App\Agents\SearchDecider;
@@ -54,6 +55,14 @@ class ChatController extends BaseController
 
     private function handleGet(): void
     {
+        $apiActionVal = $_GET['api_action'] ?? '';
+        $apiAction = ApiAction::tryFrom($apiActionVal);
+        
+        if ($apiAction === ApiAction::DELETE_TODOIST_TASK) {
+            $this->handleDeleteTodoistTask();
+            return;
+        }
+
         $newChat = $_GET['new_chat'] ?? '';
         $deleteSessionId = (int)($_GET['delete_session'] ?? 0);
         $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
@@ -86,6 +95,33 @@ class ChatController extends BaseController
                 $this->redirect("index.php?new_chat=1");
                 return;
             }
+        }
+    }
+
+    private function handleDeleteTodoistTask(): void
+    {
+        $taskId = $_GET['task_id'] ?? '';
+        if (empty($taskId)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Missing task ID.'], 400);
+            return;
+        }
+
+        try {
+            $uploadDir = \App\Config::getProjectRoot() . '/uploads/';
+            
+            $toolService = new \App\Services\ToolExecutionService($this->db, $this->agentManager, $uploadDir);
+            
+            $toolService->makeTodoistRequest('DELETE', '/tasks/' . $taskId);
+            
+            $this->jsonResponse([
+                'status' => 'success', 
+                'message' => 'Task successfully deleted from Todoist.'
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse([
+                'status' => 'error', 
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 

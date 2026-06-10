@@ -123,10 +123,80 @@ window.appendFileFromAccordion = function(button, file) {
     }
 };
 
+/**
+ * Handles the direct click-to-delete AJAX execution, strips any remaining 
+ * streaming cursors from the bubble, and transitions the UI elements elegantly.
+ */
+window.deleteTodoistTaskDirectly = function(taskId, button) {
+    if (!taskId) return;
+
+    const originalHTML = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `
+        <svg class="animate-spin h-3.5 w-3.5 text-rose-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Deleting...
+    `;
+
+    fetch(`index.php?api_action=delete_todoist_task&task_id=${encodeURIComponent(taskId)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                button.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+                    Deleted!
+                `;
+                button.className = button.className
+                    .replace('text-rose-400', 'text-emerald-400')
+                    .replace('border-rose-500/30', 'border-emerald-500/40')
+                    .replace('bg-rose-950/40', 'bg-emerald-950/20');
+                
+                // --- ACTIVE CURSOR CLEANUP HOOK ---
+                const bubble = button.closest('.chat-assistant');
+                if (bubble) {
+                    // Remove standard streaming classes and visual blinking spans
+                    bubble.classList.remove('streaming', 'generating', 'typing');
+                    const cursor = bubble.querySelector('.streaming-cursor, .typing-indicator, .cursor, .pending-cursor, span[class*="cursor"]');
+                    if (cursor) {
+                        cursor.remove();
+                    }
+                }
+                // ----------------------------------
+
+                // Smoothly fade out the confirmation card from view
+                const card = button.closest('.todoist-delete-card');
+                if (card) {
+                    setTimeout(() => {
+                        card.style.transition = 'all 0.5s ease';
+                        card.style.opacity = '0';
+                        card.style.maxHeight = '0';
+                        card.style.padding = '0';
+                        card.style.margin = '0';
+                        card.style.border = 'none';
+                        setTimeout(() => card.remove(), 500);
+                    }, 1500);
+                }
+            } else {
+                alert(`Error deleting task: ${data.message}`);
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert(`Error communicating with system: ${err.message}`);
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        });
+};
+
 window.parseInlineFiles = function(content) {
     if (!content) return '';
+
+    // 1. First Parse File Accordions
     const fileRegex = /\[File:\s*([a-zA-Z0-9._\-]+)\]/g;
-    return content.replace(fileRegex, (match, filename) => {
+    let parsedContent = content.replace(fileRegex, (match, filename) => {
         const ext = filename.split('.').pop().toLowerCase();
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
         
@@ -137,7 +207,7 @@ window.parseInlineFiles = function(content) {
                     <span class="flex items-center justify-center shrink-0 w-8 h-8 bg-slate-950/80 rounded border border-cyan-500/20 text-cyan-400">
                         ${isImage 
                             ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
-                            : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>'}
+                            : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>'}
                     </span>
                     <div class="truncate flex-1 min-w-0">
                         <div class="text-[11px] font-bold text-slate-200 truncate tracking-wide">${filename}</div>
@@ -168,7 +238,6 @@ window.parseInlineFiles = function(content) {
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
                             Append to Chat
                         </button>
-                        <!-- DYNAMIC LIVE EDIT TRIGGER BUTTON -->
                         ${!isImage ? `
                         <button type="button" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-blue-950/40 hover:bg-blue-900/60 text-blue-400 border border-blue-500/20 hover:border-blue-400/50 rounded-lg transition-all cursor-pointer" onclick="window.openEditorDrawer('${filename}', this)">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -180,6 +249,25 @@ window.parseInlineFiles = function(content) {
             </div>
         </div>`;
     });
+
+    // 2. Next Parse Todoist Task Deletions
+    const deleteRegex = /\[TodoistDelete:\s*([a-zA-Z0-9_\-]+)\]/g;
+    parsedContent = parsedContent.replace(deleteRegex, (match, taskId) => {
+        return `
+        <div class="todoist-delete-card my-4 p-4 max-w-xl bg-slate-950/60 border border-rose-500/20 rounded-xl shadow-md text-left flex flex-col gap-3 select-none animate-fade-in relative overflow-hidden">
+            <div class="text-[10px] text-rose-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Confirm Task Deletion
+            </div>
+            <p class="text-slate-300 text-xs leading-relaxed font-sans">Are you absolutely sure you want to permanently delete this task from your Todoist schedule?</p>
+            <button type="button" class="btn-delete-todoist flex items-center justify-center gap-1.5 px-4 py-2 text-[10px] font-extrabold tracking-wider uppercase bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 hover:border-rose-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none" onclick="window.deleteTodoistTaskDirectly('${taskId}', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"/></svg>
+                Yes, delete task
+            </button>
+        </div>`;
+    });
+
+    return parsedContent;
 };
 
 window.addFileReference = function(file) {
@@ -398,7 +486,6 @@ document.addEventListener('DOMContentLoaded', () => {
         observer.observe(chatWindow, { childList: true, subtree: true, characterData: true });
     }
 
-    // Bind Close & Save actions inside DOMContentLoaded
     const closeBtn = document.getElementById('editor-close-btn');
     if (closeBtn) {
         closeBtn.addEventListener('click', window.closeEditorDrawer);
@@ -410,18 +497,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// -------------------------------------------------------------
-// LIVE EDITOR DRAWER STATE & CONTROLLER METHODS
-// -------------------------------------------------------------
-
 window.activeEditFile = null;
 window.activeBlocks = [];
-window.activeToggledBlocks = new Set(); // Tracks clicked context blocks
+window.activeToggledBlocks = new Set();
 let blockSaveTimeout = null;
 
-/**
- * Calls the open_draft API, populates the editor blocks, and slides open the split drawer.
- */
 window.openEditorDrawer = function(filename, button) {
     if (!filename) return;
     
@@ -444,21 +524,16 @@ window.openEditorDrawer = function(filename, button) {
                 window.activeEditFile = filename;
                 window.activeBlocks = data.blocks;
                 
-                // Persist active file in session storage to survive page reloads
                 sessionStorage.setItem('activeEditFile', filename);
 
-                // Update Header UI
                 document.getElementById('editor-file-title').textContent = filename;
 
-                // Open the drawer split-viewport
                 const drawer = document.getElementById('chat-file-editor-drawer');
                 drawer.classList.remove('w-0', 'border-transparent');
                 drawer.classList.add('w-[60%]', 'border-slate-800/80');
 
-                // Render the blocks
                 window.renderEditorBlocks();
                 
-                // Restore any saved toggled blocks from session storage
                 const savedToggles = sessionStorage.getItem('activeToggledBlocks');
                 if (savedToggles) {
                     const array = JSON.parse(savedToggles);
@@ -466,7 +541,7 @@ window.openEditorDrawer = function(filename, button) {
                         window.activeToggledBlocks.add(id);
                         const card = document.getElementById(`block-card-${id}`);
                         if (card) {
-                            card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.1)]";
+                            card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.15)]";
                             const gutter = card.querySelector('.line-num-gutter');
                             if (gutter) {
                                 gutter.classList.remove('text-slate-600');
@@ -490,12 +565,8 @@ window.openEditorDrawer = function(filename, button) {
         });
 };
 
-/**
- * Closes the drawer and resets state, automatically discarding the draft on disk.
- */
 window.closeEditorDrawer = function() {
     if (window.activeEditFile) {
-        // Fire-and-forget discard request to clean up the draft from disk
         fetch('index.php?api_action=discard_draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -518,9 +589,6 @@ window.closeEditorDrawer = function() {
     window.updateActiveTargetPill();
 };
 
-/**
- * Commits the draft changes to disk and collapses the drawer on success.
- */
 window.saveEditorDraft = function() {
     if (!window.activeEditFile) return;
 
@@ -554,10 +622,6 @@ window.saveEditorDraft = function() {
     });
 };
 
-/**
- * Generates and binds the interactive click-to-toggle block list.
- * Styled to tightly pack lines with a continuous margin alignment, mimicking standard code panes.
- */
 window.renderEditorBlocks = function() {
     const container = document.getElementById('editor-blocks-container');
     if (!container) return;
@@ -571,7 +635,7 @@ window.renderEditorBlocks = function() {
         
         const isSelected = window.activeToggledBlocks.has(block.id);
         const selectedClasses = isSelected 
-            ? "bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.1)]" 
+            ? "bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.15)]" 
             : "border-transparent bg-transparent";
 
         blockNode.className = `group relative flex items-start px-4 py-0.5 transition-colors duration-75 select-none hover:bg-[#0c152d]/60 ${selectedClasses}`;
@@ -579,30 +643,22 @@ window.renderEditorBlocks = function() {
         const displayLineNum = block.id.replace('b-', '');
 
         blockNode.innerHTML = `
-            <!-- Line Number Gutter (Continuously Aligned Left Sheet) -->
             <div class="select-none text-[10px] font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
                 ${displayLineNum}
             </div>
-
-            <!-- Content Pane -->
             <div class="flex-1 min-w-0 pl-3">
                 <div class="block-text text-slate-300 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">${block.content || '&nbsp;'}</div>
             </div>
-
-            <!-- High-tech micro control bar, scaled to look clean inside tightly stacked rows -->
             <div class="absolute top-0.5 right-2 flex items-center gap-1 bg-[#0b1329]/95 border border-slate-800 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 block-action-bar shadow-md">
-                <!-- Edit Pen -->
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-cyan-950 hover:text-cyan-400 rounded transition-colors cursor-pointer outline-none block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${block.id}')" title="Edit Line">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
-                <!-- Delete Trash -->
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${block.id}')" title="Delete Line">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
         `;
 
-        // Single-Click: Toggle Selection (Context targeting)
         blockNode.addEventListener('click', (e) => {
             if (e.target.tagName === 'TEXTAREA' || e.target.closest('.block-action-bar')) return;
             window.toggleBlockSelection(block.id);
@@ -612,9 +668,6 @@ window.renderEditorBlocks = function() {
     });
 };
 
-/**
- * Toggles a block's selection state and updates visual borders.
- */
 window.toggleBlockSelection = function(blockId) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (!card) return;
@@ -637,15 +690,11 @@ window.toggleBlockSelection = function(blockId) {
         }
     }
 
-    // Persist active selections to survive reloads
     sessionStorage.setItem('activeToggledBlocks', JSON.stringify(Array.from(window.activeToggledBlocks)));
     
     window.updateActiveTargetPill();
 };
 
-/**
- * Transforms standard text element into an editable textarea.
- */
 window.enableManualBlockEdit = function(blockId) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (!card) return;
@@ -655,7 +704,6 @@ window.enableManualBlockEdit = function(blockId) {
 
     const originalContent = textDiv.textContent === '\u00A0' ? '' : textDiv.textContent;
 
-    // Replace inner structure with structured block edit frame
     card.innerHTML = `
         <span class="absolute top-1 right-2 text-[9px] text-slate-500 select-none font-bold font-mono z-10">#${blockId.replace('b-', '')}</span>
         <textarea class="w-full bg-slate-950/90 text-slate-200 outline-none resize-none text-[12px] font-mono leading-relaxed border border-cyan-500/30 rounded px-2 py-1 focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 animate-fade-in" oninput="window.handleBlockInput('${blockId}', this)">${originalContent}</textarea>
@@ -666,36 +714,27 @@ window.enableManualBlockEdit = function(blockId) {
     textarea.style.height = '';
     textarea.style.height = textarea.scrollHeight + 'px';
 
-    // Save and revert to line on blur, dynamically resetting continuous gutter lines
     textarea.addEventListener('blur', () => {
         const finalValue = textarea.value.trim();
         const isSelected = window.activeToggledBlocks.has(blockId);
 
         card.innerHTML = `
-            <!-- Line Number Gutter -->
             <div class="select-none text-[10px] font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
                 ${blockId.replace('b-', '')}
             </div>
-
-            <!-- Content Pane -->
             <div class="flex-1 min-w-0 pl-3">
                 <div class="block-text text-slate-300 text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">${finalValue || '&nbsp;'}</div>
             </div>
-
-            <!-- High-tech micro control bar, visible on block hover -->
             <div class="absolute top-0.5 right-2 flex items-center gap-1 bg-[#0b1329]/95 border border-slate-800 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 block-action-bar shadow-md">
-                <!-- Edit Pen -->
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-cyan-950 hover:text-cyan-400 rounded transition-colors cursor-pointer outline-none block-edit-trigger" onclick="event.stopPropagation(); window.enableManualBlockEdit('${blockId}')" title="Edit Line">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
-                <!-- Delete Trash -->
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${blockId}')" title="Delete Line">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
         `;
         
-        // Re-apply selected styles if active
         if (isSelected) {
             card.className = "group relative flex items-start px-4 py-0.5 select-none bg-cyan-950/25 border-y border-cyan-500/15 shadow-[inset_3px_0_0_#06b6d4,0_0_12px_rgba(6,182,212,0.15)]";
         } else {
@@ -704,9 +743,6 @@ window.enableManualBlockEdit = function(blockId) {
     });
 };
 
-/**
- * Debounces keystrokes and auto-saves the updated block on disk.
- */
 window.handleBlockInput = function(blockId, textarea) {
     textarea.style.height = '';
     textarea.style.height = textarea.scrollHeight + 'px';
@@ -737,17 +773,13 @@ window.handleBlockInput = function(blockId, textarea) {
                 }
             }
         });
-    }, 600); // 600ms debounce
+    }, 600);
 };
 
-/**
- * Renders the glowing active context pill above your chat input.
- */
 window.updateActiveTargetPill = function() {
     const container = document.getElementById('referenced-files-container');
     if (!container) return;
 
-    // Remove any existing target pill
     const existingPill = document.getElementById('active-target-pill');
     if (existingPill) existingPill.remove();
 
@@ -774,9 +806,6 @@ window.updateActiveTargetPill = function() {
     container.appendChild(pill);
 };
 
-/**
- * Resets all selection parameters.
- */
 window.clearActiveBlockToggles = function() {
     window.activeToggledBlocks.clear();
     sessionStorage.removeItem('activeToggledBlocks');
@@ -791,11 +820,9 @@ window.clearActiveBlockToggles = function() {
     window.updateActiveTargetPill();
 };
 
-// AUTO-RESTORE ACTIVE WORKSPACE WORKFLOW ON PAGE LOAD
 document.addEventListener('DOMContentLoaded', () => {
     const savedActiveFile = sessionStorage.getItem('activeEditFile');
     if (savedActiveFile) {
-        // Automatically reopen editor drawer on reload/sync redirect
         window.openEditorDrawer(savedActiveFile);
     }
 
@@ -810,29 +837,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-/**
- * Updates a block's text area in real-time as tokens stream in.
- */
 window.streamUpdateBlockContent = function(blockId, partialText) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (!card) return;
 
-    // Mutate the local memory array
     const blockObj = window.activeBlocks.find(b => b.id === blockId);
     if (blockObj) {
         blockObj.content = partialText;
     }
 
-    // Update the DOM element
     const textDiv = card.querySelector('.block-text');
     if (textDiv) {
         textDiv.textContent = partialText || '\u00A0';
     }
 };
 
-/**
- * Commits the completed block content directly to the draft on disk.
- */
 window.commitBlockEditDirectly = function(blockId, finalContent) {
     const card = document.getElementById(`block-card-${blockId}`);
     if (card) {
@@ -858,14 +877,9 @@ window.commitBlockEditDirectly = function(blockId, finalContent) {
     });
 };
 
-/**
- * Evaluates if the stream completed without applying any edits.
- * If true, renders the manual "Apply" fallback button inside the chat bubble.
- */
 window.evaluateStreamCompletion = function(hasAppliedEdit, bubble, textContainer) {
     if (hasAppliedEdit || window.activeToggledBlocks.size === 0) return;
 
-    // Check if the apply button already exists in this bubble
     if (bubble.querySelector('.manual-apply-trigger')) return;
 
     const toggledArray = Array.from(window.activeToggledBlocks);
@@ -878,14 +892,9 @@ window.evaluateStreamCompletion = function(hasAppliedEdit, bubble, textContainer
         Apply Suggestion to Selected Blocks (${toggledArray.join(', ')})
     `;
 
-    // When clicked, grab the suggestion text inside the bubble and overwrite selected blocks
     applyBtn.onclick = function() {
         const rawText = bubble.getAttribute('data-raw') || bubble.textContent;
-        
-        // Clean out conversational notes, keeping only lists or core code
         const cleanedText = rawText.replace(/user has toggled[\s\S]*?prompt:/gi, '').trim();
-
-        // Split suggestion by lines
         const suggestionLines = cleanedText.split("\n").map(l => l.trim()).filter(l => l !== '');
 
         let lineIdx = 0;
@@ -897,7 +906,6 @@ window.evaluateStreamCompletion = function(hasAppliedEdit, bubble, textContainer
             lineIdx++;
         });
 
-        // Change button to success state
         applyBtn.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
             Applied!
@@ -913,10 +921,6 @@ window.evaluateStreamCompletion = function(hasAppliedEdit, bubble, textContainer
     textContainer.appendChild(applyBtn);
 };
 
-/**
- * Validates if the selected blocks are strictly sequential (adjacent on disk).
- * Ignores empty whitespace blocks in between.
- */
 window.isSelectionSequential = function() {
     if (window.activeToggledBlocks.size <= 1) return true;
 
@@ -927,20 +931,16 @@ window.isSelectionSequential = function() {
         const currentNum = numbers[i];
         const nextNum = numbers[i + 1];
 
-        // Check if there are non-empty blocks in the gaps between selections
         for (let j = currentNum + 1; j < nextNum; j++) {
             const middleBlock = window.activeBlocks.find(b => b.id === 'b-' + j);
             if (middleBlock && middleBlock.content.trim() !== '') {
-                return false; // Non-empty gap found! Selections are non-sequential
+                return false;
             }
         }
     }
     return true;
 };
 
-/**
- * Dispatches a single or multi-block deletion request to the server and refreshes the canvas.
- */
 window.deleteSelectedBlocks = function(targetIds = null) {
     const idsToDelete = targetIds || Array.from(window.activeToggledBlocks);
     if (!window.activeEditFile || idsToDelete.length === 0) return;
@@ -948,7 +948,6 @@ window.deleteSelectedBlocks = function(targetIds = null) {
     const confirmMsg = `Are you sure you want to permanently delete these ${idsToDelete.length} line(s) from the draft?`;
     if (!confirm(confirmMsg)) return;
 
-    // Show locking spinner
     const lockOverlay = document.getElementById('editor-lock-overlay');
     if (lockOverlay) {
         lockOverlay.classList.remove('opacity-0', 'pointer-events-none');
@@ -970,7 +969,6 @@ window.deleteSelectedBlocks = function(targetIds = null) {
             window.activeToggledBlocks.clear();
             sessionStorage.removeItem('activeToggledBlocks');
 
-            // Re-render the newly consolidated document blocks
             window.renderEditorBlocks();
             window.updateActiveTargetPill();
 
@@ -991,14 +989,10 @@ window.deleteSelectedBlocks = function(targetIds = null) {
     });
 };
 
-/**
- * Wrapper to delete a single block immediately from the hover gutter trash icon.
- */
 window.deleteSingleBlockDirectly = function(blockId) {
     window.deleteSelectedBlocks([blockId]);
 };
 
-// Bind Delete actions inside DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     const deleteSelectionBtn = document.getElementById('editor-delete-selection-btn');
     if (deleteSelectionBtn) {
@@ -1006,9 +1000,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-/**
- * Recalculates selection state, toggles edit-selection buttons, and handles warnings.
- */
 const originalToggleSelection = window.toggleBlockSelection;
 window.toggleBlockSelection = function(blockId) {
     originalToggleSelection(blockId);
@@ -1020,7 +1011,6 @@ window.toggleBlockSelection = function(blockId) {
     const count = window.activeToggledBlocks.size;
 
     if (count >= 1) {
-        // Show Crimson Delete Button
         deleteSelectionBtn.classList.remove('hidden');
         
         if (count >= 2) {
@@ -1045,7 +1035,6 @@ window.toggleBlockSelection = function(blockId) {
             editSelectionBtn.classList.add('hidden');
         }
 
-        // Hide individual hover buttons when multiple items are active
         if (count >= 2) {
             document.querySelectorAll('.block-action-bar').forEach(btn => btn.classList.add('hidden', '!opacity-0'));
         }
@@ -1056,9 +1045,6 @@ window.toggleBlockSelection = function(blockId) {
     }
 };
 
-/**
- * Fuses all adjacent selected blocks into a single editable textarea.
- */
 window.enableFusedRangeEdit = function() {
     if (window.activeToggledBlocks.size < 2 || !window.isSelectionSequential()) return;
 
@@ -1067,24 +1053,21 @@ window.enableFusedRangeEdit = function() {
     });
 
     const targetBlockId = sortedIds[0];
-    const rangeToRemove = sortedIds.slice(1); // Rest of the blocks will be deleted on save
+    const rangeToRemove = sortedIds.slice(1);
 
     const targetCard = document.getElementById(`block-card-${targetBlockId}`);
     if (!targetCard) return;
 
-    // Combine contents of selected blocks
     const fusedText = sortedIds.map(id => {
         const block = window.activeBlocks.find(b => b.id === id);
         return block ? block.content : '';
     }).join('\n');
 
-    // Hide all other cards in the selected range to prevent layout shift
     rangeToRemove.forEach(id => {
         const cardToHide = document.getElementById(`block-card-${id}`);
         if (cardToHide) cardToHide.classList.add('hidden');
     });
 
-    // Replace the first card's content with a single multi-line textarea
     targetCard.innerHTML = `
         <span class="absolute top-1.5 right-1.5 text-[9px] text-slate-500 select-none font-bold font-mono">#${targetBlockId.replace('b-', '')}</span>
         <textarea class="w-full bg-slate-950/70 text-slate-200 outline-none resize-none text-[12.5px] font-mono leading-relaxed border border-cyan-500/30 rounded p-2 focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 animate-fade-in" style="height: auto;">${fusedText}</textarea>
@@ -1095,11 +1078,9 @@ window.enableFusedRangeEdit = function() {
     textarea.style.height = '';
     textarea.style.height = textarea.scrollHeight + 'px';
 
-    // Save and re-split on blur
     textarea.addEventListener('blur', () => {
         const finalValue = textarea.value.trim();
 
-        // 1. Instantly write merged content to disk, removing target sub-range
         fetch('index.php?api_action=update_draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1117,7 +1098,6 @@ window.enableFusedRangeEdit = function() {
                 window.activeToggledBlocks.clear();
                 sessionStorage.removeItem('activeToggledBlocks');
 
-                // Re-render fresh, newly re-split block elements
                 window.renderEditorBlocks();
                 window.updateActiveTargetPill();
 
@@ -1128,7 +1108,6 @@ window.enableFusedRangeEdit = function() {
     });
 };
 
-// Bind "Edit Selection" actions inside DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     const editSelectionBtn = document.getElementById('editor-edit-selection-btn');
     if (editSelectionBtn) {
