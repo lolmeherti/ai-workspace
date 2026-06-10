@@ -27,6 +27,23 @@ This is what keeps you up to date. If you see data from what you perceive to be 
 
 If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
 {"tool": "search_files", "query": "search words here"}
+
+If the user wants to schedule a reminder, set a task, plan an appointment, create a task or see their upcoming calendar/schedule, you can help the user easily.
+In this scenario your reply MUST BE only one of the following JSON blocks.
+
+To create a task:
+{"tool": "create_todoist_task", "content": "clean task summary here", "due_string": "tomorrow at 3pm"}
+
+To fetch upcoming tasks or search for a specific scheduled appointment/reminder:
+{"tool": "get_todoist_tasks"}
+
+To update or edit an existing task's title, date, or time:
+{"tool": "update_todoist_task", "query": "search words here", "new_content": "new title", "new_due_string": "new date/time"}
+
+To delete or remove a task/reminder:
+{"tool": "delete_todoist_task", "query": "search words here"}
+
+Do not confirm that you've done a tool call. Only do the tool call and nothing else.
 TEXT;
 
         if (!empty($condensedContext)) {

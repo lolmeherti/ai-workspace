@@ -26,3 +26,6 @@ SEARXNG_HOST=http://searxng:8080
 FLARESOLVERR_HOST=http://flaresolverr:8191
 TZ=Europe/Vienna
 LOG_LEVEL=info
+
+
+TODOIST_API_KEY =76b97b1bd3fdc7b70289bfd72ff40e08f3a5e128

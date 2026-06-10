@@ -15,4 +15,6 @@ enum ApiAction: string
     case SAVE_DRAFT = 'save_draft';
     case DISCARD_DRAFT = 'discard_draft';
     case DELETE_DRAFT_BLOCKS = 'delete_draft_blocks';
+
+    case DELETE_TODOIST_TASK = 'delete_todoist_task';
 }
