@@ -6,3 +6,4 @@ __pycache__/
 uploads/
 db_errors.log
 App/db_errors.log
+env
