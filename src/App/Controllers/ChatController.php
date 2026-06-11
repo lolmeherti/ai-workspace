@@ -426,6 +426,8 @@ class ChatController extends BaseController
             $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
         }
 
+        $emit('token', ['chunk' => "Cross-referencing inbox data with current schedule... (Sub-Agent executing)\n\n"]);
+
         $suggestionsTags = "";
         try {
             $schedulingAgent = new SchedulingAgent($this->agentManager);
@@ -478,13 +480,17 @@ class ChatController extends BaseController
             $emit('token', ['chunk' => $token]);
         });
 
+        $briefingTitle = "Daily Briefing - " . date('F j, Y');
         if ($this->db) {
+            $this->db->update('chat_sessions', ['title' => $briefingTitle], ['id' => $sessionId]);
             $this->db->insert('chat_history', [
                 'session_id' => $sessionId,
                 'role'       => 'assistant',
                 'message'    => $finalBriefingText
             ]);
         }
+
+        $emit('title_updated', ['title' => $briefingTitle]);
     }
 
     private function handleToggleStar(): void
