@@ -124,8 +124,7 @@ window.appendFileFromAccordion = function(button, file) {
 };
 
 /**
- * Handles the direct click-to-delete AJAX execution, strips any remaining 
- * streaming cursors from the bubble, and transitions the UI elements elegantly.
+ * Handles the direct click-to-delete AJAX execution.
  */
 window.deleteTodoistTaskDirectly = function(taskId, button) {
     if (!taskId) return;
@@ -176,6 +175,73 @@ window.deleteTodoistTaskDirectly = function(taskId, button) {
                 }
             } else {
                 alert(`Error deleting task: ${data.message}`);
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert(`Error communicating with system: ${err.message}`);
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        });
+};
+
+/**
+ * Handles the direct click-to-create task prompt.
+ */
+window.createTodoistTaskDirectly = function(content, dueString, button, bypass = false) {
+    if (!content) return;
+
+    const originalHTML = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `
+        <svg class="animate-spin h-3.5 w-3.5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Scheduling...
+    `;
+
+    const bypassParam = bypass ? "&bypass=1" : "";
+
+    fetch(`index.php?api_action=create_todoist_task&content=${encodeURIComponent(content)}&due_string=${encodeURIComponent(dueString)}${bypassParam}`)
+        .then(async res => {
+            const text = await res.text();
+            console.log("RAW PHP OUTPUT:", text);
+            return JSON.parse(text);
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                button.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
+                    Scheduled!
+                `;
+                button.className = button.className
+                    .replace('text-indigo-400', 'text-emerald-400')
+                    .replace('border-indigo-500/30', 'border-emerald-500/40')
+                    .replace('bg-indigo-950/40', 'bg-emerald-950/20');
+                
+                const card = button.closest('.todoist-suggest-card');
+                if (card) {
+                    setTimeout(() => {
+                        card.style.transition = 'all 0.5s ease';
+                        card.style.opacity = '0';
+                        card.style.maxHeight = '0';
+                        card.style.padding = '0';
+                        card.style.margin = '0';
+                        card.style.border = 'none';
+                        setTimeout(() => card.remove(), 500);
+                    }, 1500);
+                }
+            } else if (data.status === 'conflict') {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+                
+                if (confirm(data.message)) {
+                    window.createTodoistTaskDirectly(content, dueString, button, true);
+                }
+            } else {
+                alert(`Error creating task: ${data.message}`);
                 button.innerHTML = originalHTML;
                 button.disabled = false;
             }
@@ -263,8 +329,33 @@ window.parseInlineFiles = function(content) {
             </div>
             <p class="text-slate-300 text-xs leading-relaxed font-sans">Are you absolutely sure you want to permanently delete this task from your Todoist schedule?</p>
             <button type="button" class="btn-delete-todoist flex items-center justify-center gap-1.5 px-4 py-2 text-[10px] font-extrabold tracking-wider uppercase bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 hover:border-rose-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none" onclick="window.deleteTodoistTaskDirectly('${taskId}', this)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Yes, delete task
+            </button>
+        </div>`;
+    });
+
+    // Suggested Event Parser
+    const suggestRegex = /\[TodoistSuggest:\s*([^|\]]+)\s*\|\s*([^\]]+)\]/g;
+    parsedContent = parsedContent.replace(suggestRegex, (match, taskContent, dueString) => {
+        taskContent = taskContent.trim();
+        dueString = dueString.trim();
+        const escapedContent = taskContent.replace(/'/g, "\\'");
+        const escapedDue = dueString.replace(/'/g, "\\'");
+        
+        return `
+        <div class="todoist-suggest-card my-4 p-4 max-w-xl bg-slate-950/60 border border-indigo-500/30 rounded-xl shadow-md text-left flex flex-col gap-3 select-none animate-fade-in relative overflow-hidden">
+            <div class="text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Suggested Appointment Reminder
+            </div>
+            <div class="flex flex-col gap-1">
+                <p class="text-slate-200 text-xs font-bold leading-relaxed font-sans">${taskContent}</p>
+                <p class="text-indigo-400/80 text-[10px] font-mono">Suggested schedule: ${dueString}</p>
+            </div>
+            <button type="button" class="btn-create-todoist flex items-center justify-center gap-1.5 px-4 py-2 text-[10px] font-extrabold tracking-wider uppercase bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none" onclick="window.createTodoistTaskDirectly('${escapedContent}', '${escapedDue}', this)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><polyline points="20 6 9 17 4 12"/></svg>
+                Accept & Create Task
             </button>
         </div>`;
     });
@@ -1161,7 +1252,7 @@ window.toggleBlockSelection = function(blockId) {
                 `;
             } else {
                 editSelectionBtn.disabled = true;
-                editSelectionBtn.className = editSelectionBtn.className.replace('text-blue-400', 'text-rose-400/50').replace('border-blue-500/30', 'border-rose-500/10');
+                editSelectionBtn.className = editSelectionBtn.className.replace('text-blue-400', 'text-rose-400/50').replace('border-rose-500/10', 'border-rose-500/10');
                 editSelectionBtn.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-500/50"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                     Non-Sequential Selection

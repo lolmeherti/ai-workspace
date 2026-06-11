@@ -11,6 +11,7 @@ use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
 use App\Agents\MemorySelector;
+use App\Agents\SchedulingAgent;
 
 class ChatController extends BaseController
 {
@@ -63,6 +64,11 @@ class ChatController extends BaseController
             return;
         }
 
+        if ($apiActionVal === 'create_todoist_task') {
+            $this->handleCreateTodoistTask();
+            return;
+        }
+
         $newChat = $_GET['new_chat'] ?? '';
         $deleteSessionId = (int)($_GET['delete_session'] ?? 0);
         $activeTab = Tab::tryFrom($_GET['tab'] ?? '') ?? Tab::CHATS;
@@ -95,6 +101,95 @@ class ChatController extends BaseController
                 $this->redirect("index.php?new_chat=1");
                 return;
             }
+        }
+    }
+
+    private function handleCreateTodoistTask(): void
+    {
+        $content = $_GET['content'] ?? '';
+        $dueString = $_GET['due_string'] ?? '';
+        $bypass = ($_GET['bypass'] ?? '0') === '1';
+
+        if (empty($content)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Missing task content.'], 400);
+            return;
+        }
+
+        try {
+            $uploadDir = \App\Config::getProjectRoot() . '/uploads/';
+            $toolService = new \App\Services\ToolExecutionService($this->db, $this->agentManager, $uploadDir);
+
+            if (!$bypass) {
+                $response = $toolService->makeTodoistRequest('GET', '/tasks');
+                $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
+
+                $normalizedProposedDue = preg_replace('/\s+at\s+/i', ' ', $dueString);
+                $proposedTimestamp = strtotime($normalizedProposedDue);
+
+                $conflictTask = null;
+                $isExactDuplicate = false;
+
+                foreach ($tasks as $t) {
+                    if (strcasecmp(trim($t['content']), trim($content)) === 0) {
+                        $conflictTask = $t;
+                        $isExactDuplicate = true;
+                        break;
+                    }
+
+                    if ($proposedTimestamp !== false && $proposedTimestamp > 0) {
+                        $tDueStr = isset($t['due']['datetime']) ? $t['due']['datetime'] : (isset($t['due']['date']) ? $t['due']['date'] : '');
+                        if (!empty($tDueStr)) {
+                            $tTimestamp = strtotime($tDueStr);
+                            if ($tTimestamp !== false && $tTimestamp > 0) {
+                                if (abs($tTimestamp - $proposedTimestamp) < 1800) {
+                                    $conflictTask = $t;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($conflictTask !== null) {
+                    $tDueStr = isset($conflictTask['due']['datetime']) ? $conflictTask['due']['datetime'] : (isset($conflictTask['due']['date']) ? $conflictTask['due']['date'] : '');
+                    $dueFormatted = '';
+                    if (!empty($tDueStr)) {
+                        $dueFormatted = date('g:i A', strtotime($tDueStr));
+                    }
+
+                    if ($isExactDuplicate) {
+                        $msg = "Duplicate entry detected: \"" . $conflictTask['content'] . "\" is already on your list.";
+                        if (!empty($dueFormatted)) {
+                            $msg .= " (Scheduled for " . $dueFormatted . ")";
+                        }
+                    } else {
+                        $msg = "Time overlap detected: \"" . $conflictTask['content'] . "\" is already scheduled for " . $dueFormatted . ".";
+                    }
+
+                    $this->jsonResponse([
+                        'status' => 'conflict',
+                        'message' => $msg . " Do you want to schedule this anyway?"
+                    ]);
+                    return;
+                }
+            }
+
+            $postData = ['content' => $content];
+            if (!empty($dueString)) {
+                $postData['due_string'] = $dueString;
+            }
+
+            $task = $toolService->makeTodoistRequest('POST', '/tasks', $postData);
+
+            $this->jsonResponse([
+                'status' => 'success',
+                'task' => $task
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -274,6 +369,7 @@ class ChatController extends BaseController
         $emit('token', ['chunk' => "Retrieving calendar schedules...\n\n"]);
 
         $todoistSummary = "";
+        $tasks = [];
         try {
             $uploadDir = \App\Config::getProjectRoot() . '/uploads/';
             $toolService = new \App\Services\ToolExecutionService($this->db, $this->agentManager, $uploadDir);
@@ -285,7 +381,11 @@ class ChatController extends BaseController
             } else {
                 $twoWeeksSeconds = 14 * 24 * 60 * 60;
                 $now = time();
+                $todayStart = strtotime('today 00:00:00');
+                $todayEnd = strtotime('today 23:59:59');
                 $upcomingTasks = [];
+                $pastTasksToday = [];
+
                 foreach ($tasks as $task) {
                     $dueTime = null;
                     if (isset($task['due']['datetime'])) {
@@ -293,8 +393,12 @@ class ChatController extends BaseController
                     } elseif (isset($task['due']['date'])) {
                         $dueTime = strtotime($task['due']['date']);
                     }
-                    if ($dueTime !== null && ($dueTime - $now) <= $twoWeeksSeconds) {
-                        $upcomingTasks[] = $task;
+                    if ($dueTime !== null) {
+                        if ($dueTime >= $now && ($dueTime - $now) <= $twoWeeksSeconds) {
+                            $upcomingTasks[] = $task;
+                        } elseif ($dueTime < $now && $dueTime >= $todayStart && $dueTime <= $todayEnd) {
+                            $pastTasksToday[] = $task;
+                        }
                     }
                 }
 
@@ -322,13 +426,46 @@ class ChatController extends BaseController
             $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
         }
 
+        $suggestionsTags = "";
+        try {
+            $schedulingAgent = new SchedulingAgent($this->agentManager);
+            $suggestionsArray = $schedulingAgent->extractBriefingSuggestions($emails, $tasks);
+            if (is_array($suggestionsArray) && !empty($suggestionsArray)) {
+                foreach ($suggestionsArray as $s) {
+                    if (isset($s['content']) && isset($s['due_string'])) {
+                        $suggestionsTags .= "[TodoistSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
         $emit('token', ['chunk' => "Generating final consolidated executive briefing...\n\n"]);
 
+        $currentDate = date('l, F j, Y (H:i)');
         $finalInput = "Here are the summaries of the user's unread emails:\n\n" . implode("\n\n", $emailSummaries)
                     . "\n\nHere is the summary of upcoming calendar tasks for the next two weeks:\n\n" . $todoistSummary;
 
-        $finalSystem = "You are a highly professional, friendly, and intelligent AI personal executive assistant. Your goal is to deliver a beautifully structured, highly readable daily briefing for the user based on the summaries provided. Focus on priority action items, schedule highlights, and a clean overview of their status. Keep the language direct, elegant, and action-oriented.\n\n"
-                     . "CRITICAL VISUAL CARD INSTRUCTION: When mentioning or referring to any email in your summary, you MUST output its exact Email Reference tag at the end of the line (e.g. `[Email: 2:4852]`). This is captured by the frontend to render inline interactive email link-card to the user.";
+        if (!empty($pastTasksToday)) {
+            $pastTasksTxt = "";
+            foreach ($pastTasksToday as $task) {
+                $due = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : '');
+                $timeStr = !empty($due) ? date('g:i A', strtotime($due)) : '';
+                $pastTasksTxt .= "- \"" . $task['content'] . "\" (Scheduled earlier today at " . $timeStr . ")\n";
+            }
+            $finalInput .= "\n\n[PAST EVENTS FROM TODAY (ALREADY COMPLETED)]:\n" . $pastTasksTxt;
+            $finalInput .= "CRITICAL: The past events from today listed above have ALREADY occurred. Do NOT list them as upcoming under schedule highlights or this week. Instead, address them conversationally and ask how they went (e.g. 'You had a doctor appointment earlier today at 13:30—hope that went well!').\n";
+        }
+
+        if (!empty($suggestionsTags)) {
+            $finalInput .= "\n\n[RECOMMENDED ACTION CARDS]:\n";
+            $finalInput .= "The following suggested calendar events were extracted and cross-referenced by your background sub-agent. You MUST append these exact tags to the very end of your final briefing response so the user can review and click them:\n";
+            $finalInput .= $suggestionsTags;
+        }
+
+        $finalSystem = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the summaries provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n"
+                     . "Visual Card rule: Append `[Email: account_id:uid]` when mentioning any email.\n"
+                     . "Action Card rule: Append any pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your final response.";
 
         $finalMessages = [
             ['role' => 'system', 'content' => $finalSystem],
