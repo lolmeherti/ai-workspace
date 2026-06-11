@@ -44,26 +44,6 @@ class EmailController extends BaseController
         }
     }
 
-    private function ensureCacheTableExists(): void
-    {
-        try {
-            $this->db->query("CREATE TABLE IF NOT EXISTS email_cache (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                account_id INT NOT NULL,
-                uid VARCHAR(255) NOT NULL,
-                subject VARCHAR(255) NULL,
-                from_name VARCHAR(255) NULL,
-                date_str VARCHAR(255) NULL,
-                body LONGTEXT NULL,
-                snippet TEXT NULL,
-                is_seen TINYINT(1) DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_email (account_id, uid)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
-        } catch (\Throwable $e) {
-        }
-    }
-
     private function addAccount(): void
     {
         $label = trim($_POST['label'] ?? '');
@@ -117,8 +97,6 @@ class EmailController extends BaseController
         if ($page < 1) {
             $page = 1;
         }
-
-        $this->ensureCacheTableExists();
 
         $limit = 12;
         $offset = ($page - 1) * $limit;

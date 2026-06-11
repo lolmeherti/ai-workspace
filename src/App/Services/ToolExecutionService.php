@@ -6,6 +6,8 @@ use App\Database;
 use App\AgentManager;
 use App\Config;
 use App\Enums\Tool;
+use App\Agents\SchedulingAgent;
+use App\Agents\TaskMatcher;
 
 class ToolExecutionService
 {
@@ -18,6 +20,11 @@ class ToolExecutionService
         $this->db = $db;
         $this->agent = $agent;
         $this->uploadDir = $uploadDir;
+    }
+
+    private function callSubAgent(array $messages): string
+    {
+        return $this->agent->chat($messages, false);
     }
 
     public function processToolCall(string $aiResponse, int $sessionId, array $messages, callable $emit): string
@@ -184,21 +191,32 @@ TEXT;
                     $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
                 }
 
-                $emit('file_choices', [
-                    'files' => $matchingFiles,
-                    'query' => $toolQuery
-                ]);
-
                 return $cleanJson . "\n\n" . $aiCommentary;
 
             } elseif ($toolType === Tool::CREATE_TODOIST_TASK) {
-                $emit('token', ['chunk' => "\n\nCreating task in Todoist..."]);
+                $emit('token', ['chunk' => "\n\nAnalyzing calendar schedule..."]);
                 
                 $content = $toolData['content'] ?? '';
                 $dueString = $toolData['due_string'] ?? null;
 
                 if (empty($content)) {
                     throw new \Exception("Task content is required.");
+                }
+
+                $response = $this->makeTodoistRequest('GET', '/tasks');
+                $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
+
+                $schedulingAgent = new SchedulingAgent($this->agent);
+                $analysis = $schedulingAgent->analyzeTask($content, $dueString, $tasks);
+
+                if (is_array($analysis) && isset($analysis['status']) && $analysis['status'] !== 'clear') {
+                    $aiCommentary = "\n\n### ⚠️ Calendar " . ucfirst($analysis['status']) . " Detected\n\n";
+                    $aiCommentary .= $analysis['analysis'] . "\n\n";
+                    $aiCommentary .= "Please tell me how you would like to proceed (e.g., reschedule, skip, or create it anyway)!";
+
+                    $emit('token', ['chunk' => $aiCommentary]);
+
+                    return $cleanJson . "\n\n" . $aiCommentary;
                 }
 
                 $postData = ['content' => $content];
@@ -262,7 +280,7 @@ TEXT;
 
                     $query = $toolData['query'] ?? $userPrompt;
 
-                    $taskMatcher = new \App\Agents\TaskMatcher($this->agent);
+                    $taskMatcher = new TaskMatcher($this->agent);
                     $matchedTasks = $taskMatcher->filterTasks($query, $tasks);
 
                     if (!empty($matchedTasks)) {
@@ -341,7 +359,7 @@ TEXT;
                 if (empty($tasks)) {
                     $replyText = "\n\n**No active tasks found in your Todoist account.**";
                 } else {
-                    $taskMatcher = new \App\Agents\TaskMatcher($this->agent);
+                    $taskMatcher = new TaskMatcher($this->agent);
                     $matchedTasks = $taskMatcher->filterTasks($query, $tasks);
 
                     if (!empty($matchedTasks)) {
@@ -391,7 +409,7 @@ TEXT;
                 if (empty($tasks)) {
                     $instructions = "System successfully searched active tasks from Todoist:\n- No active tasks found.\n";
                 } else {
-                    $taskMatcher = new \App\Agents\TaskMatcher($this->agent);
+                    $taskMatcher = new TaskMatcher($this->agent);
                     $matchedTasks = $taskMatcher->filterTasks($query, $tasks);
 
                     if (!empty($matchedTasks)) {
@@ -457,17 +475,57 @@ TEXT;
                 return $cleanJson . "\n\n" . $aiCommentary;
 
             } elseif ($toolType === Tool::GET_EMAIL_BRIEFING) {
-                $emit('token', ['chunk' => "\n\nSyncing your inboxes..."]);
+                $emit('token', ['chunk' => "\n\nSyncing inboxes..."]);
 
                 $emailService = new \App\Services\EmailService($this->db);
-                // Updated to include the mandatory boolean argument
                 $emails = $emailService->fetchRecentEmails(true);
 
-                $instructions = '';
+                $todoistResponse = $this->makeTodoistRequest('GET', '/tasks');
+                $tasks = isset($todoistResponse['results']) ? $todoistResponse['results'] : (is_array($todoistResponse) ? $todoistResponse : []);
+
+                $emit('token', ['chunk' => "\n\nExtracting scheduled appointments and resolving conflicts..."]);
+
+                $schedulingAgent = new SchedulingAgent($this->agent);
+                $suggestionsArray = $schedulingAgent->extractBriefingSuggestions($emails, $tasks);
+
+                $suggestionsTags = "";
+                if (is_array($suggestionsArray) && !empty($suggestionsArray)) {
+                    foreach ($suggestionsArray as $s) {
+                        if (isset($s['content']) && isset($s['due_string'])) {
+                            $suggestionsTags .= "[TodoistSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
+                        }
+                    }
+                }
+
+                $currentDate = date('l, F j, Y (H:i)');
+                $currentTimestamp = time();
+                $upcomingTasksStr = "";
+                $pastTasksTodayStr = "";
+
+                foreach ($tasks as $t) {
+                    $tDueStr = isset($t['due']['datetime']) ? $t['due']['datetime'] : (isset($t['due']['date']) ? $t['due']['date'] : '');
+                    if (!empty($tDueStr)) {
+                        $tTimestamp = strtotime($tDueStr);
+                        if ($tTimestamp !== false && $tTimestamp > 0) {
+                            if ($tTimestamp < $currentTimestamp) {
+                                if (date('Y-m-d', $tTimestamp) === date('Y-m-d')) {
+                                    $pastTasksTodayStr .= "- \"" . $t['content'] . "\" (Scheduled for earlier today at " . date('g:i A', $tTimestamp) . ")\n";
+                                }
+                            } else {
+                                $upcomingTasksStr .= "- \"" . $t['content'] . "\" (Due: " . $tDueStr . ")\n";
+                            }
+                        } else {
+                            $upcomingTasksStr .= "- \"" . $t['content'] . "\" (No due time)\n";
+                        }
+                    } else {
+                        $upcomingTasksStr .= "- \"" . $t['content'] . "\" (No due date)\n";
+                    }
+                }
+
+                $instructions = "System successfully checked your inboxes:\n";
                 if (empty($emails)) {
-                    $instructions = "System successfully checked your inboxes:\n- No emails found in the last 24 hours across connected accounts.\n";
+                    $instructions = "- No emails found in the last 24 hours across connected accounts.\n";
                 } else {
-                    $instructions = "System successfully scanned your connected mail accounts. Here are the emails retrieved:\n";
                     foreach ($emails as $email) {
                         if (isset($email['error'])) {
                             $instructions .= "- [Account: {$email['account_label']} ({$email['account_email']})] Connection Error: {$email['error']}\n";
@@ -475,6 +533,23 @@ TEXT;
                             $instructions .= "- [Account: {$email['account_label']} ({$email['account_email']})] From: {$email['from']} | Subject: \"{$email['subject']}\" | Date: {$email['date']}\n  Brief Snippet: {$email['snippet']}\n";
                         }
                     }
+                }
+
+                if (!empty($upcomingTasksStr)) {
+                    $instructions .= "\n\n[UPCOMING SCHEDULE (FUTURE EVENTS ONLY)]:\n" . $upcomingTasksStr;
+                } else {
+                    $instructions .= "\n\n[UPCOMING SCHEDULE (FUTURE EVENTS ONLY)]:\n- No upcoming tasks listed on your schedule.\n";
+                }
+
+                if (!empty($pastTasksTodayStr)) {
+                    $instructions .= "\n\n[PAST EVENTS FROM TODAY (ALREADY COMPLETED)]:\n" . $pastTasksTodayStr;
+                    $instructions .= "CRITICAL: The past events from today listed above have ALREADY occurred relative to {$currentDate}. Do NOT list them as upcoming under 'Upcoming Schedule' or 'This Week'. Instead, address them as past events and conversationally check in on how they went (e.g., 'You had a doctor appointment earlier today at 13:30—hope that went well!').\n";
+                }
+
+                if (!empty($suggestionsTags)) {
+                    $instructions .= "\n\n[RECOMMENDED ACTIONS]:\n";
+                    $instructions .= "The following suggested calendar events were extracted and cross-referenced by your background sub-agent. You MUST append these exact tags to the very end of your final briefing response so the user can review and click them:\n";
+                    $instructions .= $suggestionsTags;
                 }
 
                 $instructions .= "\n[SYSTEM NOTE]: Summarize these emails and present a beautiful daily briefing. Mention each account's status. Keep your response professional, precise, and highly readable. If any accounts had connection errors, mention them gracefully.";

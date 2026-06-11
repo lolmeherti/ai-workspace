@@ -21,8 +21,6 @@ class EmailService
             return [];
         }
 
-        $this->ensureCacheTableExists();
-
         $allEmails = [];
         $cm = new ClientManager();
 
@@ -121,10 +119,10 @@ class EmailService
                         $sanitizedSnippet = mb_convert_encoding($bodyText, 'UTF-8', 'UTF-8');
 
                         try {
-                            $this->db->query("INSERT INTO email_cache (account_id, uid, subject, from_name, date_str, body, snippet) 
-                                VALUES (:account_id, :uid, :subject, :from_name, :date_str, :body, :snippet)
+                            $this->db->query("INSERT INTO email_cache (account_id, uid, subject, from_name, date_str, body, snippet, is_seen) 
+                                VALUES (:account_id, :uid, :subject, :from_name, :date_str, :body, :snippet, :is_seen)
                                 ON DUPLICATE KEY UPDATE 
-                                subject = :u_subject, from_name = :u_from_name, date_str = :u_date_str, body = :u_body, snippet = :u_snippet", [
+                                subject = :u_subject, from_name = :u_from_name, date_str = :u_date_str, body = :u_body, snippet = :u_snippet, is_seen = :u_is_seen", [
                                 ':account_id'  => $account['id'],
                                 ':uid'         => $uid,
                                 ':subject'     => $sanitizedSubject,
@@ -132,11 +130,13 @@ class EmailService
                                 ':date_str'    => $date,
                                 ':body'        => $sanitizedBody,
                                 ':snippet'     => $sanitizedSnippet,
+                                ':is_seen'     => $includeSeen ? 1 : 0,
                                 ':u_subject'   => $sanitizedSubject,
                                 ':u_from_name' => $sanitizedFromName,
                                 ':u_date_str'  => $date,
                                 ':u_body'      => $sanitizedBody,
-                                ':u_snippet'   => $sanitizedSnippet
+                                ':u_snippet'   => $sanitizedSnippet,
+                                ':u_is_seen'   => $includeSeen ? 1 : 0
                             ]);
                         } catch (\Throwable $errCacheWrite) {
                         }
@@ -174,25 +174,5 @@ class EmailService
         }
 
         return $allEmails;
-    }
-
-    private function ensureCacheTableExists(): void
-    {
-        try {
-            $this->db->query("CREATE TABLE IF NOT EXISTS email_cache (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                account_id INT NOT NULL,
-                uid VARCHAR(255) NOT NULL,
-                subject VARCHAR(255) NULL,
-                from_name VARCHAR(255) NULL,
-                date_str VARCHAR(255) NULL,
-                body LONGTEXT NULL,
-                snippet TEXT NULL,
-                is_seen TINYINT(1) DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_email (account_id, uid)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
-        } catch (\Throwable $e) {
-        }
     }
 }

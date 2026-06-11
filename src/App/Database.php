@@ -158,6 +158,30 @@ TEXT;
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
+
+        $this->executeStatement("
+            CREATE TABLE IF NOT EXISTS email_cache (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                account_id INT NOT NULL,
+                uid VARCHAR(255) NOT NULL,
+                subject VARCHAR(255) NULL,
+                from_name VARCHAR(255) NULL,
+                date_str VARCHAR(255) NULL,
+                body LONGTEXT NULL,
+                snippet TEXT NULL,
+                is_seen TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_email (account_id, uid)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        try {
+            $columns = $this->query("SHOW COLUMNS FROM email_cache LIKE 'is_seen'");
+            if (empty($columns)) {
+                $this->executeStatement("ALTER TABLE email_cache ADD COLUMN is_seen TINYINT(1) DEFAULT 0 AFTER snippet");
+            }
+        } catch (PDOException $e) {
+        }
     }
 
     public function nukeAndRebuildTables(): void
@@ -168,6 +192,7 @@ TEXT;
         $this->executeStatement("DROP TABLE IF EXISTS memories;");
         $this->executeStatement("DROP TABLE IF EXISTS uploaded_files;");
         $this->executeStatement("DROP TABLE IF EXISTS email_accounts;");
+        $this->executeStatement("DROP TABLE IF EXISTS email_cache;");
         $this->executeStatement("SET FOREIGN_KEY_CHECKS = 1;");
 
         $this->initTables();

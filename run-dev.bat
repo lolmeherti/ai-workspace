@@ -5,23 +5,26 @@ echo  Localsy - Hot-Development Environment
 echo ==============================================
 echo.
 
-:: 1. Launch localsy.exe in the background WITH the debug flag automatically appended
-echo [+] Booting up localsy launcher with -debug and warming up background AI engine...
+echo [+] Booting up localsy launcher in background...
 start "" "localsy.exe" -debug
 
-:: 2. Wait for the Alpine VM and Docker to initialize
-echo [+] Waiting for WSL backend and Docker sockets to bind...
-timeout /t 10 /nobreak >nul
+echo [+] Waiting for local AI engine to start...
+:wait_port
+netstat -ano | findstr ":1234" | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    timeout /t 2 /nobreak >nul
+    goto wait_port
+)
 
-:: 3. Sync the dynamically generated .env (with the correct host IP)
+echo [+] AI engine detected on port 1234. Settling background processes...
+timeout /t 5 /nobreak >nul
+
 echo [+] Syncing network environment parameters...
 copy /y "%LOCALAPPDATA%\localsy\.env" "%~dp0.env" >nul
 
-:: 4. Convert Windows path to WSL path natively (Matches Go launcher's toWslPath logic)
 set WORKSPACE_DIR=%~dp0
 if "%WORKSPACE_DIR:~-1%"=="\" set WORKSPACE_DIR=%WORKSPACE_DIR:~0,-1%
 
-:: Extract drive letter and make it lowercase
 set DRIVE_LETTER=%WORKSPACE_DIR:~0,1%
 set DRIVE_LETTER_LOWER=c
 if /i "%DRIVE_LETTER%"=="A" set DRIVE_LETTER_LOWER=a
@@ -32,19 +35,27 @@ if /i "%DRIVE_LETTER%"=="E" set DRIVE_LETTER_LOWER=e
 if /i "%DRIVE_LETTER%"=="F" set DRIVE_LETTER_LOWER=f
 if /i "%DRIVE_LETTER%"=="G" set DRIVE_LETTER_LOWER=g
 
-:: Strip drive prefix and convert backslashes to forward slashes
 set RAW_PATH=%WORKSPACE_DIR:~2%
 set WSL_PATH=%RAW_PATH:\=/%
 set WSL_PATH=/mnt/%DRIVE_LETTER_LOWER%%WSL_PATH%
 
-:: 5. Hot-stopping and removing the production web container to prevent naming conflicts
 echo [+] Hot-stopping the production web container...
 wsl -d localsy-docker-backend docker stop ai_php_web >nul 2>&1
 wsl -d localsy-docker-backend docker rm ai_php_web >nul 2>&1
 
-:: 6. Start the development container, joining the existing "localsy" network
+echo [+] Resolving Windows Host IP from WSL...
+for /f "usebackq tokens=3" %%A in (`wsl -d localsy-docker-backend sh -c "ip route | grep default | head -n1"`) do set WINDOWS_HOST_IP=%%A
+if "%WINDOWS_HOST_IP%"=="" (
+    for /f "usebackq tokens=2" %%A in (`wsl -d localsy-docker-backend sh -c "grep nameserver /etc/resolv.conf | head -n1"`) do set WINDOWS_HOST_IP=%%A
+)
+echo [+] Windows Host IP detected: %WINDOWS_HOST_IP%
+
+echo [+] Hot-stopping the production web container...
+wsl -d localsy-docker-backend docker stop ai_php_web >nul 2>&1
+wsl -d localsy-docker-backend docker rm ai_php_web >nul 2>&1
+
 echo [+] Launching development container with live volume mounts...
-wsl -d localsy-docker-backend docker compose -p localsy --project-directory "%WSL_PATH%" -f "%WSL_PATH%/docker-compose.yml" up -d --no-deps web
+wsl -d localsy-docker-backend env WINDOWS_HOST_IP="%WINDOWS_HOST_IP%" docker compose -p localsy --project-directory "%WSL_PATH%" -f "%WSL_PATH%/docker-compose.yml" up -d --no-deps web
 
 echo.
 echo ==========================================================
@@ -59,5 +70,5 @@ pause
 
 echo.
 echo [-] Shutting down development container...
-wsl -d localsy-docker-backend docker compose -p localsy --project-directory "%WSL_PATH%" -f "%WSL_PATH%/docker-compose.yml" down >nul 2>&1
+wsl -d localsy-docker-backend env WINDOWS_HOST_IP="%WINDOWS_HOST_IP%" docker compose -p localsy --project-directory "%WSL_PATH%" -f "%WSL_PATH%/docker-compose.yml" down >nul 2>&1
 echo [+] Done.
