@@ -19,6 +19,8 @@ services:
       - REDIS_HOST=${REDIS_HOST}
       - SEARXNG_HOST=${SEARXNG_HOST}
       - FLARESOLVERR_HOST=${FLARESOLVERR_HOST}
+      # Pass the dynamic Windows Host IP directly to Xdebug 
+      - XDEBUG_CONFIG=client_host=${WINDOWS_HOST_IP:-host.docker.internal} client_port=9003
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

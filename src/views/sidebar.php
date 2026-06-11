@@ -2,8 +2,8 @@
 window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
     localStorage.setItem('activeTab', tabId);
 
-    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads'];
-    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads'];
+    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads', 'panel-emails'];
+    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads', 'tab-btn-emails'];
     
     panels.forEach(id => {
         const el = document.getElementById(id);
@@ -29,21 +29,27 @@ window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
 
     const chatWorkspace = document.getElementById('chat-workspace');
     const galleryWorkspace = document.getElementById('gallery-workspace');
+    const emailWorkspace = document.getElementById('email-workspace');
     
     if (tabId === 'uploads') {
         if (chatWorkspace) chatWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
         document.dispatchEvent(new CustomEvent('gallery-opened'));
-    } else {
-        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+    } else if (tabId === 'emails') {
+        if (chatWorkspace) chatWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.remove('hidden');
+    } else {
+        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.add('hidden');
+        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
     }
 };
 </script>
 
 <aside class="w-[340px] glass-panel border-r flex flex-col h-full shrink-0 z-10 shadow-xl overflow-hidden bg-[#0a0f1d]">
     
-    <!-- Top Header Area (Properly closed) -->
     <div class="p-4 border-b border-slate-800/60 bg-[#0d1321]">
         <div class="mb-4">
             <a href="index.php?new_chat=1" class="btn-futuristic w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm">
@@ -51,32 +57,33 @@ window.switchSidebarTab = window.switchSidebarTab || function(tabId) {
             </a>
         </div>
 
-        <!-- Rooms-Spaced Horizontal Row -->
         <div class="flex bg-[#070b14] p-1 rounded-lg border border-slate-800 text-xs font-semibold gap-1 relative select-none">
-            <button onclick="switchSidebarTab('chats')" id="tab-btn-chats" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer px-1">
+            <button onclick="switchSidebarTab('chats')" id="tab-btn-chats" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
                 <uk-icon icon="message-square" class="w-3.5 h-3.5"></uk-icon> Chats
             </button>
-            <button onclick="switchSidebarTab('uploads')" id="tab-btn-uploads" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer px-1">
+            <button onclick="switchSidebarTab('uploads')" id="tab-btn-uploads" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
                 <uk-icon icon="folder" class="w-3.5 h-3.5"></uk-icon> Files
             </button>
-            <button onclick="switchSidebarTab('memories')" id="tab-btn-memories" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer px-1">
-                <uk-icon icon="brain" class="w-3.5 h-3.5"></uk-icon> Memories
+            <button onclick="switchSidebarTab('memories')" id="tab-btn-memories" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
+                <uk-icon icon="brain" class="w-3.5 h-3.5"></uk-icon> Brain
             </button>
-            <button onclick="switchSidebarTab('queries')" id="tab-btn-queries" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer px-1">
-                <uk-icon icon="search" class="w-3.5 h-3.5"></uk-icon> Queries
+            <button onclick="switchSidebarTab('emails')" id="tab-btn-emails" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
+                <uk-icon icon="mail" class="w-3.5 h-3.5"></uk-icon> Mails
+            </button>
+            <button onclick="switchSidebarTab('queries')" id="tab-btn-queries" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
+                <uk-icon icon="search" class="w-3.5 h-3.5"></uk-icon> Find
             </button>
         </div>
-    </div> <!-- <-- THIS PARENT DIV CLOSURE WAS MISSING AND IS NOW RESTORED! -->
+    </div>
 
-    <!-- Middle Scrollable Pane -->
     <div class="flex-1 overflow-hidden relative">
         <?php include __DIR__ . '/tab-chats.php'; ?>
         <?php include __DIR__ . '/tab-uploads.php'; ?>
         <?php include __DIR__ . '/tab-memories.php'; ?>
+        <?php include __DIR__ . '/tab-emails.php'; ?>
         <?php include __DIR__ . '/tab-queries.php'; ?>
     </div>
     
-    <!-- Settings Section (Pushed perfectly edge-to-edge at the absolute bottom) -->
     <div class="border-t border-slate-800/80 bg-[#090d18] mt-auto select-none shrink-0">
         <div class="p-4 space-y-4">
             <p class="m-0">

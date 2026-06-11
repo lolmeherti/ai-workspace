@@ -17,4 +17,7 @@ enum ApiAction: string
     case DELETE_DRAFT_BLOCKS = 'delete_draft_blocks';
 
     case DELETE_TODOIST_TASK = 'delete_todoist_task';
+
+    case GET_EMAILS = 'get_emails';
+    case GET_EMAIL_BODY = 'get_email_body';
 }

@@ -1,5 +1,5 @@
 <?php
-// this is index.php
+
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
@@ -98,17 +98,18 @@ if ($status->redis) {
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased selection:bg-cyan-500/30">
     <div class="h-full w-full flex">
-        <!-- Sidebar Navigation -->
         <?php include __DIR__ . '/views/sidebar.php'; ?>
         
-        <!-- Chat Panel Workspace -->
         <div id="chat-workspace" class="flex-1 flex flex-col h-full min-w-0">
             <?php include __DIR__ . '/views/chat-window.php'; ?>
         </div>
 
-        <!-- NEW: Uploads Gallery Panel Workspace -->
         <div id="gallery-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">
             <?php include __DIR__ . '/views/gallery-workspace.php'; ?>
+        </div>
+
+        <div id="email-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden bg-[#040810]">
+            <?php include __DIR__ . '/views/email-workspace.php'; ?>
         </div>
     </div>
 
