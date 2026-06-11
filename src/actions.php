@@ -7,6 +7,7 @@ use App\Controllers\MemoryController;
 use App\Controllers\AISettingsController;
 use App\Controllers\FileController;
 use App\Controllers\CacheController;
+use App\Controllers\EmailController;
 use App\Enums\Action;
 use App\Enums\ApiAction;
 
@@ -40,7 +41,7 @@ $isFileAction = (
     $apiAction === ApiAction::SAVE_DRAFT ||
     $apiAction === ApiAction::DISCARD_DRAFT ||
     $apiAction === ApiAction::DELETE_DRAFT_BLOCKS ||
-    $apiActionVal === 'sync_files' || // fallback for actions outside the enum
+    $apiActionVal === 'sync_files' ||
     $apiActionVal === 'upload_file'
 );
 
@@ -72,6 +73,12 @@ if ($isFileAction) {
                 $controller->setDatabase($db);
                 break;
 
+            case Action::ADD_EMAIL_ACCOUNT:
+            case Action::DELETE_EMAIL_ACCOUNT:
+            case Action::SEND_REPLY:
+                $controller = new EmailController($db);
+                break;
+
             default:
                 $controller = new ChatController($db, $chatSessionRepository, $agentManager, $memoryExtractor, $status);
                 break;
@@ -84,6 +91,8 @@ if ($isFileAction) {
         $controller = new CacheController($status);
     } elseif ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
         $controller = new AISettingsController($db, $chatSessionRepository, $envEditor);
+    } elseif ($apiAction === ApiAction::GET_EMAILS || $apiAction === ApiAction::GET_EMAIL_BODY) {
+        $controller = new EmailController($db);
     } else {
         $controller = new ChatController($db, $chatSessionRepository, $agentManager, $memoryExtractor, $status);
     }

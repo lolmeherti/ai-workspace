@@ -153,19 +153,15 @@ window.deleteTodoistTaskDirectly = function(taskId, button) {
                     .replace('border-rose-500/30', 'border-emerald-500/40')
                     .replace('bg-rose-950/40', 'bg-emerald-950/20');
                 
-                // --- ACTIVE CURSOR CLEANUP HOOK ---
                 const bubble = button.closest('.chat-assistant');
                 if (bubble) {
-                    // Remove standard streaming classes and visual blinking spans
                     bubble.classList.remove('streaming', 'generating', 'typing');
                     const cursor = bubble.querySelector('.streaming-cursor, .typing-indicator, .cursor, .pending-cursor, span[class*="cursor"]');
                     if (cursor) {
                         cursor.remove();
                     }
                 }
-                // ----------------------------------
 
-                // Smoothly fade out the confirmation card from view
                 const card = button.closest('.todoist-delete-card');
                 if (card) {
                     setTimeout(() => {
@@ -191,10 +187,17 @@ window.deleteTodoistTaskDirectly = function(taskId, button) {
         });
 };
 
+window.emailBodyCache = window.emailBodyCache || {};
+window.activeEmailFetches = window.activeEmailFetches || new Set();
+
 window.parseInlineFiles = function(content) {
     if (!content) return '';
 
-    // 1. First Parse File Accordions
+    content = content.replace(/<code>\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*<\/code>/gi, '[Email:$1:$2]');
+    content = content.replace(/`\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*`/gi, '[Email:$1:$2]');
+    content = content.replace(/\(\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*\)/gi, '[Email:$1:$2]');
+    content = content.replace(/\[+Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]+/gi, '[Email:$1:$2]');
+
     const fileRegex = /\[File:\s*([a-zA-Z0-9._\-]+)\]/g;
     let parsedContent = content.replace(fileRegex, (match, filename) => {
         const ext = filename.split('.').pop().toLowerCase();
@@ -250,7 +253,6 @@ window.parseInlineFiles = function(content) {
         </div>`;
     });
 
-    // 2. Next Parse Todoist Task Deletions
     const deleteRegex = /\[TodoistDelete:\s*([a-zA-Z0-9_\-]+)\]/g;
     parsedContent = parsedContent.replace(deleteRegex, (match, taskId) => {
         return `
@@ -267,7 +269,141 @@ window.parseInlineFiles = function(content) {
         </div>`;
     });
 
+    const emailRegex = /\[Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\][.\s]*/gi;
+    parsedContent = parsedContent.replace(emailRegex, (match, accountId, uid) => {
+        const uniqueId = `inline-email-${accountId}-${uid}`;
+        const cacheKey = `${accountId}-${uid}`;
+
+        if (window.emailBodyCache && window.emailBodyCache[cacheKey]) {
+            const data = window.emailBodyCache[cacheKey];
+            
+            let tempDiv = document.createElement("div");
+            tempDiv.innerHTML = data.body;
+            
+            const styles = tempDiv.querySelectorAll("style, script");
+            styles.forEach(s => s.remove());
+            
+            let text = tempDiv.textContent || tempDiv.innerText || "";
+            text = text.replace(/\s+/g, ' ').trim();
+            if (text.length > 160) {
+                text = text.substring(0, 160) + '...';
+            }
+
+            return `
+            <div id="${uniqueId}" class="inline-email-card my-4 max-w-xl bg-[#091124]/90 border border-cyan-500/20 hover:border-cyan-500/40 rounded-xl overflow-hidden shadow-md select-none text-left transition-all">
+                <div class="p-4 flex flex-col gap-3">
+                    <div class="flex items-center gap-3">
+                        <span class="flex items-center justify-center shrink-0 w-8 h-8 bg-slate-950/80 rounded border border-cyan-500/20 text-cyan-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[11px] font-bold text-slate-200 truncate tracking-wide">${data.subject || '(No Subject)'}</div>
+                            <div class="text-[9px] text-cyan-500/70 font-mono truncate mt-0.5">${data.from}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-950/40 border border-slate-900 rounded-lg p-3 text-[10px] font-mono text-slate-400 leading-relaxed text-left min-h-[40px]">
+                        <div class="line-clamp-2">${text || '[No preview content]'}</div>
+                    </div>
+
+                    <div class="flex items-center justify-between border-t border-slate-900/40 pt-3 select-none">
+                        <span class="text-[9px] text-slate-500 font-mono">${data.date}</span>
+                        <button type="button" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none shadow-md" onclick="window.openEmailDirectly(${accountId}, '${uid}')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                            Open in Com Deck
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        if (!window.activeEmailFetches.has(cacheKey)) {
+            window.activeEmailFetches.add(cacheKey);
+
+            fetch(`index.php?api_action=get_email_body&account_id=${accountId}&uid=${uid}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.emailBodyCache[cacheKey] = data;
+
+                        const card = document.getElementById(uniqueId);
+                        if (card) {
+                            const loader = card.querySelector('.email-lazy-loader');
+                            const content = card.querySelector('.email-lazy-content');
+                            
+                            if (loader && content) {
+                                loader.classList.add('hidden');
+                                content.classList.remove('hidden');
+                                
+                                card.querySelector('.email-subject').textContent = data.subject || '(No Subject)';
+                                card.querySelector('.email-from').textContent = data.from;
+                                card.querySelector('.email-date').textContent = data.date;
+                                
+                                let tempDiv = document.createElement("div");
+                                tempDiv.innerHTML = data.body;
+                                
+                                const styles = tempDiv.querySelectorAll("style, script");
+                                styles.forEach(s => s.remove());
+                                
+                                let text = tempDiv.textContent || tempDiv.innerText || "";
+                                text = text.replace(/\s+/g, ' ').trim();
+                                if (text.length > 160) {
+                                    text = text.substring(0, 160) + '...';
+                                }
+                                card.querySelector('.email-snippet').textContent = text || '[No preview content]';
+                            }
+                        }
+                    }
+                }).catch(err => console.error(err));
+        }
+
+        return `
+        <div id="${uniqueId}" class="inline-email-card my-4 max-w-xl bg-[#091124]/90 border border-cyan-500/20 hover:border-cyan-500/40 rounded-xl overflow-hidden shadow-md select-none text-left transition-all">
+            <div class="email-lazy-loader p-4 flex items-center justify-center gap-2 select-none text-cyan-400">
+                <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <span class="text-[10px] font-bold tracking-widest uppercase animate-pulse">Linking email stream...</span>
+            </div>
+            
+            <div class="email-lazy-content hidden p-4 flex flex-col gap-3">
+                <div class="flex items-center gap-3">
+                    <span class="flex items-center justify-center shrink-0 w-8 h-8 bg-slate-950/80 rounded border border-cyan-500/20 text-cyan-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <div class="email-subject text-[11px] font-bold text-slate-200 truncate tracking-wide"></div>
+                        <div class="email-from text-[9px] text-cyan-500/70 font-mono truncate mt-0.5"></div>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-950/40 border border-slate-900 rounded-lg p-3 text-[10px] font-mono text-slate-400 leading-relaxed text-left min-h-[40px]">
+                    <div class="email-snippet line-clamp-2"></div>
+                </div>
+
+                <div class="flex items-center justify-between border-t border-slate-900/40 pt-3 select-none">
+                    <span class="email-date text-[9px] text-slate-500 font-mono"></span>
+                    <button type="button" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none shadow-md" onclick="window.openEmailDirectly(${accountId}, '${uid}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                        Open in Com Deck
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    });
+
     return parsedContent;
+};
+
+window.openEmailDirectly = function(accountId, uid) {
+    if (typeof window.switchSidebarTab === 'function') {
+        window.switchSidebarTab('emails');
+    }
+    const select = document.getElementById('workspace-account-select');
+    if (select) {
+        select.value = accountId;
+    }
+    if (typeof window.loadInbox === 'function') {
+        window.loadInbox(accountId, 1, uid);
+    }
 };
 
 window.addFileReference = function(file) {
@@ -1114,3 +1250,21 @@ document.addEventListener('DOMContentLoaded', () => {
         editSelectionBtn.addEventListener('click', window.enableFusedRangeEdit);
     }
 });
+
+window.triggerUnifiedBriefing = function() {
+    if (typeof window.switchSidebarTab === 'function') {
+        window.switchSidebarTab('chats');
+    }
+    
+    const chatInput = document.getElementById("q");
+    const form = document.getElementById("chatForm");
+    const includeReadCheckbox = document.getElementById("briefing-include-read");
+    const includeRead = includeReadCheckbox ? includeReadCheckbox.checked : false;
+    
+    if (chatInput && form) {
+        chatInput.value = "[TRIGGER_BRIEFING_PIPELINE]" + (includeRead ? ":include_read" : "");
+        chatInput.style.height = 'auto';
+        chatInput.style.height = chatInput.scrollHeight + 'px';
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+};

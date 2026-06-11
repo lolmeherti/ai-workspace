@@ -15,4 +15,7 @@ enum Action: string
     case DELETE_QUERY = 'delete_query';
     case CLEAR_ALL = 'clear_all';
     case DELETE_FILES = 'delete_files';
+    case ADD_EMAIL_ACCOUNT = 'add_email_account';
+    case DELETE_EMAIL_ACCOUNT = 'delete_email_account';
+    case SEND_REPLY = 'send_reply';
 }

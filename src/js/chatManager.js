@@ -40,7 +40,6 @@ export async function handleChatSubmit(e) {
 
     let finalQueryText = message;
     
-    // LOOK UP THE TEXT CONTENT OF SELECTED BLOCKS AND INJECT INTO PAYLOAD
     if (window.activeToggledBlocks && window.activeToggledBlocks.size > 0 && window.activeBlocks.length > 0) {
         const toggledArray = Array.from(window.activeToggledBlocks);
         
@@ -53,7 +52,6 @@ export async function handleChatSubmit(e) {
             }
         });
         
-        // DYNAMIC SYSTEM INSTRUCTIONS: Teach the model how to write XML edits
         injectedContext += "\nCRITICAL COMPILER INSTRUCTION: If the user asks you to rewrite, edit, or modify any of these highlighted sections, DO NOT just explain or output standard lists. You MUST execute the edits directly by wrapping each rewritten section inside <update id=\"BLOCK_ID\">your modified text</update> tags inline during your conversation. Only modify the targeted blocks. Do not wrap updates in code fences.";
         
         finalQueryText = `${injectedContext}\nuser has toggled blocks [${toggledArray.join(', ')}] and wrote the following prompt:\n"${message}"`;
@@ -77,9 +75,14 @@ export async function handleChatSubmit(e) {
     const msgText = userNode.querySelector(".msg-text");
     const imgElement = userNode.querySelector(".upload-img");
     
-    userBubble.setAttribute("data-raw", message);
+    let displayMessage = message;
+    if (message.startsWith("[TRIGGER_BRIEFING_PIPELINE]")) {
+        displayMessage = "Please generate my unified daily briefing.";
+    }
     
-    let renderedUserMsg = message
+    userBubble.setAttribute("data-raw", displayMessage);
+    
+    let renderedUserMsg = displayMessage
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -117,7 +120,7 @@ export async function handleChatSubmit(e) {
     window.selectedFileReferences = [];
     window.updateFileReferencesUI();
 
-    await streamResponse(formData, message);
+    await streamResponse(formData, displayMessage);
 }
 
 export function toggleChatEditMode() {

@@ -26,11 +26,9 @@ class ToolExecutionService
         $toolType = null;
         $toolData = [];
 
-        // Single robust parse call using extracted utility
         $decoded = \App\JsonParser::extractAndDecode($aiResponse);
 
         if (is_array($decoded) && isset($decoded['tool'])) {
-            // Try to resolve the parsed string to our strongly typed Tool enum
             $resolvedTool = Tool::tryFrom($decoded['tool']);
             if ($resolvedTool !== null) {
                 $isToolCall = true;
@@ -43,8 +41,6 @@ class ToolExecutionService
             return $aiResponse;
         }
 
-        // Clean the assistant response to contain ONLY the JSON block using the utility,
-        // discarding any premature conversational output from the first turn.
         $cleanJson = json_encode($decoded);
 
         try {
@@ -264,7 +260,6 @@ TEXT;
                         }
                     }
 
-                    // Use the specific tool query if the AI requested a targeted search, fallback to user prompt
                     $query = $toolData['query'] ?? $userPrompt;
 
                     $taskMatcher = new \App\Agents\TaskMatcher($this->agent);
@@ -346,7 +341,6 @@ TEXT;
                 if (empty($tasks)) {
                     $replyText = "\n\n**No active tasks found in your Todoist account.**";
                 } else {
-                    // Corrected: Pass the exact tool search query to the TaskMatcher, NOT the raw user prompt
                     $taskMatcher = new \App\Agents\TaskMatcher($this->agent);
                     $matchedTasks = $taskMatcher->filterTasks($query, $tasks);
 
@@ -461,6 +455,54 @@ TEXT;
                 }
 
                 return $cleanJson . "\n\n" . $aiCommentary;
+
+            } elseif ($toolType === Tool::GET_EMAIL_BRIEFING) {
+                $emit('token', ['chunk' => "\n\nSyncing your inboxes..."]);
+
+                $emailService = new \App\Services\EmailService($this->db);
+                // Updated to include the mandatory boolean argument
+                $emails = $emailService->fetchRecentEmails(true);
+
+                $instructions = '';
+                if (empty($emails)) {
+                    $instructions = "System successfully checked your inboxes:\n- No emails found in the last 24 hours across connected accounts.\n";
+                } else {
+                    $instructions = "System successfully scanned your connected mail accounts. Here are the emails retrieved:\n";
+                    foreach ($emails as $email) {
+                        if (isset($email['error'])) {
+                            $instructions .= "- [Account: {$email['account_label']} ({$email['account_email']})] Connection Error: {$email['error']}\n";
+                        } else {
+                            $instructions .= "- [Account: {$email['account_label']} ({$email['account_email']})] From: {$email['from']} | Subject: \"{$email['subject']}\" | Date: {$email['date']}\n  Brief Snippet: {$email['snippet']}\n";
+                        }
+                    }
+                }
+
+                $instructions .= "\n[SYSTEM NOTE]: Summarize these emails and present a beautiful daily briefing. Mention each account's status. Keep your response professional, precise, and highly readable. If any accounts had connection errors, mention them gracefully.";
+
+                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
+                $messages[] = [
+                    'role' => 'system',
+                    'content' => $instructions
+                ];
+
+                $aiCommentary = '';
+                $commentaryBuffer = '';
+
+                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
+                    $aiCommentary .= $chunk;
+                    $commentaryBuffer .= $chunk;
+
+                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
+                        $emit('token', ['chunk' => $commentaryBuffer]);
+                        $commentaryBuffer = '';
+                    }
+                });
+
+                if (!empty($commentaryBuffer)) {
+                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
+                }
+
+                return $cleanJson . "\n\n" . $aiCommentary;
             }
 
             return $aiResponse;
@@ -470,10 +512,6 @@ TEXT;
         }
     }
 
-    /**
-     * Declared as public so any of your UI routes, action handlers, or controllers 
-     * can easily reuse this to fire the final DELETE call via API when the user clicks 'Delete'.
-     */
     public function makeTodoistRequest(string $method, string $endpoint, ?array $data = null): array
     {
         $apiKey = Config::get('TODOIST_API_KEY');
@@ -481,7 +519,6 @@ TEXT;
             throw new \Exception("Todoist API Key is not configured in your .env file.");
         }
 
-        // Updated Base URL from legacy /rest/v2 to the active unified /api/v1 endpoints
         $ch = curl_init("https://api.todoist.com/api/v1" . $endpoint);
         $headers = [
             "Authorization: Bearer {$apiKey}",
@@ -505,7 +542,6 @@ TEXT;
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        // Todoist delete endpoint returns 204 No Content with an empty response body
         if ($httpCode === 204) {
             return ['status' => 'success'];
         }

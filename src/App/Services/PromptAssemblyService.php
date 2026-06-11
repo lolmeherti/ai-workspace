@@ -43,6 +43,9 @@ To update or edit an existing task's title, date, or time:
 To delete or remove a task/reminder:
 {"tool": "delete_todoist_task", "query": "search words here"}
 
+To fetch a daily briefing of your recent emails or look up unread messages:
+{"tool": "get_email_briefing"}
+
 Do not confirm that you've done a tool call. Only do the tool call and nothing else.
 TEXT;
 

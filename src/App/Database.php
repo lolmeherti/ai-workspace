@@ -145,6 +145,19 @@ TEXT;
                     ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
+
+        $this->executeStatement("
+            CREATE TABLE IF NOT EXISTS email_accounts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                label VARCHAR(255) NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                email_address VARCHAR(255) NOT NULL,
+                app_password TEXT NOT NULL,
+                imap_host VARCHAR(255) NULL,
+                imap_port INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
     }
 
     public function nukeAndRebuildTables(): void
@@ -153,6 +166,8 @@ TEXT;
         $this->executeStatement("DROP TABLE IF EXISTS chat_history;");
         $this->executeStatement("DROP TABLE IF EXISTS chat_sessions;");
         $this->executeStatement("DROP TABLE IF EXISTS memories;");
+        $this->executeStatement("DROP TABLE IF EXISTS uploaded_files;");
+        $this->executeStatement("DROP TABLE IF EXISTS email_accounts;");
         $this->executeStatement("SET FOREIGN_KEY_CHECKS = 1;");
 
         $this->initTables();
