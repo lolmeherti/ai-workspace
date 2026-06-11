@@ -123,9 +123,6 @@ window.appendFileFromAccordion = function(button, file) {
     }
 };
 
-/**
- * Handles the direct click-to-delete AJAX execution.
- */
 window.deleteTodoistTaskDirectly = function(taskId, button) {
     if (!taskId) return;
 
@@ -186,9 +183,6 @@ window.deleteTodoistTaskDirectly = function(taskId, button) {
         });
 };
 
-/**
- * Handles the direct click-to-create task prompt.
- */
 window.createTodoistTaskDirectly = function(content, dueString, button, bypass = false) {
     if (!content) return;
 
@@ -264,8 +258,9 @@ window.parseInlineFiles = function(content) {
     content = content.replace(/\(\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*\)/gi, '[Email:$1:$2]');
     content = content.replace(/\[+Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]+/gi, '[Email:$1:$2]');
 
-    const fileRegex = /\[File:\s*([a-zA-Z0-9._\-]+)\]/g;
+    const fileRegex = /\[File:\s*([a-zA-Z0-9._\-\/]+)\]/g;
     let parsedContent = content.replace(fileRegex, (match, filename) => {
+        filename = filename.replace(/^uploads\//i, '');
         const ext = filename.split('.').pop().toLowerCase();
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
         
@@ -329,13 +324,12 @@ window.parseInlineFiles = function(content) {
             </div>
             <p class="text-slate-300 text-xs leading-relaxed font-sans">Are you absolutely sure you want to permanently delete this task from your Todoist schedule?</p>
             <button type="button" class="btn-delete-todoist flex items-center justify-center gap-1.5 px-4 py-2 text-[10px] font-extrabold tracking-wider uppercase bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 hover:border-rose-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none" onclick="window.deleteTodoistTaskDirectly('${taskId}', this)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"/></svg>
                 Yes, delete task
             </button>
         </div>`;
     });
 
-    // Suggested Event Parser
     const suggestRegex = /\[TodoistSuggest:\s*([^|\]]+)\s*\|\s*([^\]]+)\]/g;
     parsedContent = parsedContent.replace(suggestRegex, (match, taskContent, dueString) => {
         taskContent = taskContent.trim();
@@ -881,7 +875,7 @@ window.renderEditorBlocks = function() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${block.id}')" title="Delete Line">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
         `;
@@ -957,7 +951,7 @@ window.enableManualBlockEdit = function(blockId) {
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 </button>
                 <button type="button" class="p-0.5 text-slate-400 hover:bg-rose-950 hover:text-rose-400 rounded transition-colors cursor-pointer outline-none block-delete-trigger" onclick="event.stopPropagation(); window.deleteSingleBlockDirectly('${blockId}')" title="Delete Line">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3 h-3"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
         `;
@@ -1252,7 +1246,7 @@ window.toggleBlockSelection = function(blockId) {
                 `;
             } else {
                 editSelectionBtn.disabled = true;
-                editSelectionBtn.className = editSelectionBtn.className.replace('text-blue-400', 'text-rose-400/50').replace('border-rose-500/10', 'border-rose-500/10');
+                editSelectionBtn.className = editSelectionBtn.className.replace('text-blue-400', 'text-rose-400/50').replace('border-blue-500/30', 'border-rose-500/10');
                 editSelectionBtn.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-500/50"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                     Non-Sequential Selection
