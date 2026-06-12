@@ -14,6 +14,7 @@ use App\EnvEditor;
 use App\Cache;
 use App\Repositories\MemoryRepository;
 use App\Repositories\ChatSessionRepository;
+use App\Bootstrap\PageDataLoader;
 
 Config::load(__DIR__);
 
@@ -44,39 +45,8 @@ $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
 require_once __DIR__ . '/actions.php';
 
-$sessions = [];
-$activeSessionTitle = 'New Conversation';
-$history = [];
-$totalSessionTokens = 0;
-$memories = [];
-$memoryCount = 0;
-$queries = [];
-
-if ($db) {
-    $sessions = $chatSessionRepository->getAllDesc();
-    foreach ($sessions as $s) {
-        if ((int)$s['id'] === $sessionId) {
-            $activeSessionTitle = $s['title'];
-            break;
-        }
-    }
-
-    $history = $chatSessionRepository->getHistory($sessionId);
-    foreach ($history as $msg) {
-        $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
-    }
-
-    try {
-        $memories = $memoryRepository->getAllLimit500();
-        $memoryCount = count($memories);
-    } catch (\Exception $e) {}
-}
-
-if ($status->redis) {
-    try {
-        $queries = Cache::getSearchLedger();
-    } catch (\Exception $e) {}
-}
+$pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
+extract($pageData);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -121,6 +91,7 @@ if ($status->redis) {
         const maxTokensLimit = <?php echo (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000); ?>;
     </script>
     <script type="module" src="js/app.js"></script>
-    <script type="module" src="js/gallery.js"></script>
+    <script type="module" src="js/gallery/galleryBootstrap.js"></script>
+    <script type="module" src="js/email/emailWorkspaceBootstrap.js"></script>
 </body>
 </html>

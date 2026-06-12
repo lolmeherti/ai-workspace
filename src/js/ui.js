@@ -4,7 +4,6 @@
  */
 
 import { state } from './state.js';
-import { streamResponse } from './streamer.js';
 
 export function enableMemoryEdit(id) {
     document.getElementById(`memory-view-${id}`).classList.add('hidden');

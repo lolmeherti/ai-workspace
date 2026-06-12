@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { streamResponse } from './streamer.js';
+import { streamResponse } from './streamer/streamResponse.js';
 import { removeFile } from './fileHandler.js';
 
 export async function handleChatSubmit(e) {

@@ -9,7 +9,8 @@ import { initFilePaste, previewFile, removeFile } from './fileHandler.js';
 import { parseMarkdownElements, copyToClipboard } from './markdown.js';
 import { handleChatSubmit, toggleChatEditMode, handleChatSelection, submitMultiDelete } from './chatManager.js';
 import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation, triggerManualCondensation } from './ui.js';
-import './gallery.js';
+import './gallery/galleryBootstrap.js';
+import './tabs/tabsBootstrap.js';
 
 window.switchSidebarTab = window.switchSidebarTab || switchSidebarTab;
 window.enableMemoryEdit = enableMemoryEdit;

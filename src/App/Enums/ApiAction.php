@@ -16,6 +16,10 @@ enum ApiAction: string
     case DISCARD_DRAFT = 'discard_draft';
     case DELETE_DRAFT_BLOCKS = 'delete_draft_blocks';
 
+    case SYNC_FILES = 'sync_files';
+    case UPLOAD_FILE = 'upload_file';
+    case CREATE_TODOIST_TASK = 'create_todoist_task';
+
     case DELETE_TODOIST_TASK = 'delete_todoist_task';
 
     case GET_EMAILS = 'get_emails';
