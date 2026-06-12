@@ -562,6 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Floating batch bar actions binding
     if (batchActionAppend) batchActionAppend.addEventListener('click', batchAppendSelected);
     if (batchActionDelete) batchActionDelete.addEventListener('click', triggerBatchDelete);
+
+    window.fetchGalleryFiles = fetchGalleryFiles;
 });
 
 // --- DIRECT DROP, COPY-PASTE, & DISK SYNCHRONIZATION INTEGRATIONS ---

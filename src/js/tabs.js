@@ -17,12 +17,18 @@ export function initTabs() {
 export function switchSidebarTab(tabId) {
     localStorage.setItem('activeTab', tabId);
 
-    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads'];
-    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads'];
-    
+    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads', 'panel-emails'];
+    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads', 'tab-btn-emails'];
+
     panels.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.classList.toggle('hidden', id !== 'panel-' + tabId);
+        if (el) {
+            if (id === 'panel-' + tabId) {
+                el.classList.remove('hidden');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
     });
 
     buttons.forEach(id => {
@@ -38,13 +44,20 @@ export function switchSidebarTab(tabId) {
 
     const chatWorkspace = document.getElementById('chat-workspace');
     const galleryWorkspace = document.getElementById('gallery-workspace');
-    
+    const emailWorkspace = document.getElementById('email-workspace');
+
     if (tabId === 'uploads') {
         if (chatWorkspace) chatWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
         document.dispatchEvent(new CustomEvent('gallery-opened'));
-    } else {
-        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+    } else if (tabId === 'emails') {
+        if (chatWorkspace) chatWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.remove('hidden');
+    } else {
+        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.add('hidden');
+        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
     }
 }

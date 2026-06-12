@@ -314,4 +314,4 @@
     </template>
 </section>
 
-<script src="js/chatWindow.js"></script>
+<script type="module" src="js/chat/chatWindowBootstrap.js"></script>

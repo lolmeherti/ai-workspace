@@ -96,7 +96,7 @@
 
             <div>
                 <label class="block text-slate-400 font-medium mb-1.5">App Password</label>
-                <input type="password" name="app_password" required placeholder="••••••••••••••••" class="w-full bg-[#0b101c] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 font-mono">
+                <input type="password" name="app_password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" class="w-full bg-[#0b101c] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 font-mono">
                 <p class="text-[10px] text-slate-500 mt-1">For Gmail/Yahoo, generate an "App Password" in your account security settings. Do not use your primary password.</p>
             </div>
 
@@ -120,22 +120,3 @@
         </form>
     </div>
 </div>
-
-<script>
-window.toggleCustomImapFields = function(provider) {
-    const wrapper = document.getElementById('custom-imap-wrapper');
-    const hostInput = wrapper.querySelector('input[name="imap_host"]');
-    const portInput = wrapper.querySelector('input[name="imap_port"]');
-    if (provider === 'Custom IMAP') {
-        wrapper.classList.remove('hidden');
-        hostInput.required = true;
-        portInput.required = true;
-    } else {
-        wrapper.classList.add('hidden');
-        hostInput.required = false;
-        portInput.required = false;
-        hostInput.value = '';
-        portInput.value = '';
-    }
-};
-</script>
