@@ -16,6 +16,29 @@ class PromptAssemblyService
         $this->uploadDir = $uploadDir;
     }
 
+    public function buildRouterPrompt(string $query): string
+    {
+        return <<<TEXT
+You are a highly accurate task router. Analyze the user's input and identify ALL categories of actions they want to take.
+
+Categories:
+- "search_files": User wants to find, look up, view, or check files/documents/images on disk.
+- "todoist_create": User wants to create, add, plan, or schedule a task/reminder/appointment.
+- "todoist_get": User wants to see, read, fetch, or list their tasks/calendar/schedule.
+- "todoist_update": User wants to edit, update, reschedule, or change an existing task/appointment.
+- "todoist_delete": User wants to delete, remove, or clear a task/reminder.
+- "none": The input is standard conversation or a general question.
+
+Rules:
+1. Output a comma-separated list of ALL categories that apply (e.g., "todoist_create, search_files").
+2. If the input is just normal conversation, output "none".
+3. Do NOT write explanations, markdown, or punctuation other than commas.
+
+User Input: "{$query}"
+Categories:
+TEXT;
+    }
+
     public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query): string
     {
         $currentDate = date('l, F j, Y (H:i)');
@@ -43,21 +66,7 @@ To update or edit an existing task's title, date, or time:
 To delete or remove a task/reminder:
 {"tool": "delete_todoist_task", "query": "search words here"}
 
-To fetch a daily briefing of your recent emails or look up unread messages:
-{"tool": "get_email_briefing"}
-
 Do not confirm that you've done a tool call. Only do the tool call and nothing else.
-
-TEMPORAL AWARENESS FOR DAILY BRIEFINGS:
-Today's exact system date and current time is {$currentDate}.
-When summarizing emails, calendar tasks, or updates during your daily briefing:
-1. Always compare any mentioned appointment or event times against the current clock ({$currentDate}).
-2. If an event or appointment was scheduled for today but its slot has already passed (e.g. it was at 15:30 and the current time is 21:10), do not present it as an upcoming task under 'Upcoming Schedule' or 'This Week'.
-3. Instead, address it as a historical event from earlier today and conversationally check in on it (e.g., "You had a haircut at 15:30 today—how did that go?" or "I hope your team sync at noon went well.").
-4. Only suggest reminder cards or upcoming scheduling options for genuine future events.
-
-DAILY BRIEFING SUMMARY INSTRUCTIONS:
-When summarizing emails, make sure to highlight any explicit dates, times, invitations, obligations, pickups, or task-like requests mentioned by the senders so the user is fully aware of their commitments. Do not write vague or lazy summaries.
 
 INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
@@ -93,7 +102,7 @@ TEXT;
         return $systemPrompt;
     }
 
-    public function buildMessagesArray(string $systemPrompt, array $history): array
+    public function buildMessagesArray(string $systemPrompt, array $history, string $intent = 'none'): array
     {
         $messages = [];
         $messages[] = [
@@ -104,12 +113,19 @@ TEXT;
         $rollingLimit = (int) Config::get('CHAT_ROLLING_WINDOW_LIMIT', 15);
         $recentHistory = array_slice($history, -$rollingLimit);
 
-        foreach ($recentHistory as $row) {
+        $lastUserIdx = -1;
+        foreach ($recentHistory as $idx => $row) {
+            if ($row['role'] === 'user') {
+                $lastUserIdx = $idx;
+            }
+        }
+
+        foreach ($recentHistory as $idx => $row) {
             $hasImage = false;
             $messageContent = $row['message'];
 
             if (preg_match_all('/\[File:\s*([a-zA-Z0-9._\-]+)\]/', $messageContent, $matches)) {
-                foreach ($matches[1] as $idx => $matchedFilename) {
+                foreach ($matches[1] as $matchIdx => $matchedFilename) {
                     $fullFilePath = $this->uploadDir . $matchedFilename;
                     $txtPath = $fullFilePath . '.txt';
 
@@ -121,10 +137,18 @@ TEXT;
                         if (str_starts_with($mimeType, 'image/')) {
                             $hasImage = true;
                             $base64 = base64_encode(file_get_contents($fullFilePath));
+                            
+                            if ($idx === $lastUserIdx && $intent !== 'none') {
+                                $messages[] = [
+                                    'role' => 'system',
+                                    'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
+                                ];
+                            }
+
                             $messages[] = [
                                 'role' => $row['role'],
                                 'content' => [
-                                    ['type' => 'text', 'text' => str_replace($matches[0][$idx], '', $messageContent)],
+                                    ['type' => 'text', 'text' => str_replace($matches[0][$matchIdx], '', $messageContent)],
                                     ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
                                 ]
                             ];
@@ -141,6 +165,14 @@ TEXT;
                     if (str_starts_with($mimeType, 'image/')) {
                         $hasImage = true;
                         $base64 = base64_encode(file_get_contents($fullFilePath));
+                        
+                        if ($idx === $lastUserIdx && $intent !== 'none') {
+                            $messages[] = [
+                                'role' => 'system',
+                                'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
+                            ];
+                        }
+
                         $messages[] = [
                             'role' => $row['role'],
                             'content' => [
@@ -162,6 +194,13 @@ TEXT;
             }
 
             if (!$hasImage) {
+                if ($idx === $lastUserIdx && $intent !== 'none') {
+                    $messages[] = [
+                        'role' => 'system',
+                        'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
+                    ];
+                }
+
                 $messages[] = [
                     'role' => $row['role'],
                     'content' => $messageContent
