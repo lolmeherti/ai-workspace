@@ -133,7 +133,7 @@ TEXT;
         return true;
     }
 
-    public function selectSafe(string $table, array $conditions = []): array
+    public function selectSafe(string $table, array $conditions = [], ?string $orderBy = null, bool $desc = false, ?int $limit = null): array
     {
         $this->assertIdentifier($table, 'table');
 
@@ -148,6 +148,16 @@ TEXT;
                 $params[":$key"] = $value;
             }
             $sql .= " WHERE " . implode(" AND ", $where);
+        }
+
+        if ($orderBy !== null) {
+            $this->assertIdentifier($orderBy, 'column');
+            $sql .= " ORDER BY `$orderBy` " . ($desc ? "DESC" : "ASC");
+        }
+
+        if ($limit !== null) {
+            $sql .= " LIMIT :limit";
+            $params[':limit'] = $limit;
         }
 
         return $this->query($sql, $params);

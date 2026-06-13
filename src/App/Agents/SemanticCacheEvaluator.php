@@ -23,10 +23,10 @@ class SemanticCacheEvaluator
 
         $currentDate = date('l, F j, Y g:i A');
         
+        $slicedLedger = array_slice($ledger, -5, null, true);
         $ledgerText = "";
-        foreach ($ledger as $index => $item) {
+        foreach ($slicedLedger as $index => $item) {
             $rawContent = Cache::get($item['cache_key']) ?? '';
-
             $ledgerText .= "ID: {$index}\nQuery: \"{$item['query']}\"\nCache:\n\"{$rawContent}\"\n";
             $ledgerText .= "--------------------------------------------------\n";
         }
@@ -34,16 +34,23 @@ class SemanticCacheEvaluator
         $systemPrompt = <<<TEXT
 Today is {$currentDate}.
 
-Return ONLY JSON matching this schema:
+You are a strict Cache Verification Agent. Your job is to analyze if any existing cached context in the Ledger contains the exact, highly specific data required to answer the New Query.
+
+Decision Guidelines:
+- "AUTO_USE": Choose this ONLY if the cached context text actually contains the specific facts, numbers, lists, or entities required to fully answer the New Query. It is not enough for the cache query to be on the same topic.
+- "ASK_USER": Choose this if the cached context contains the exact facts, but the information is time-sensitive (e.g., news, sports standings, real-time status) and may need confirmation if it is more than a few hours old.
+- "NONE": Choose this if:
+  1. The cached text does NOT contain the specific details asked for.
+  2. The user is asking for a complete list or full details (e.g. "full standings", "complete details", "all items") but the cached text only contains a summary, a single item, or partial data.
+  3. No ledger entries are relevant.
+
+CRITICAL WARNING: Avoid "Topic Matching". For example, if the New Query is "what are the full standings" and a cached entry is "who is leading the championship", do NOT choose AUTO_USE. The cached text only has the leader, not the full standings. In such cases of incomplete details, you MUST choose "NONE".
+
+Format your output STRICTLY as a JSON object matching this schema:
 {
   "decision": "AUTO_USE" | "ASK_USER" | "NONE",
   "matched_id": integer or null
 }
-
-Rules:
-- "AUTO_USE": This is when a cache entry contains the exact, specific answer to the New Query, and it is reasonably recent.
-- "ASK_USER": This is when a cache entry contains the exact, specific answer to the New Query, but it might be outdated (e.g., several hours or days old).
-- "NONE": This is when the cache content doesn't contain the answer to the New Query, or details are missing. If a cache entry is on the same topic but lacks the specific detail asked for, you MUST choose "NONE".
 TEXT;
 
         $userMessage = "New Query: {$newSearchQuery}\n\nLedger:\n{$ledgerText}";
@@ -53,15 +60,10 @@ TEXT;
             ['role' => 'user', 'content' => $userMessage]
         ];
 
-        $temperature = (float) Config::get('AGENT_CACHE_EVAL_TEMP', 0.2);
+        $temperature = (float) Config::get('AGENT_CACHE_EVAL_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
 
-        if (strpos($response, '```') !== false) {
-            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
-            $response = trim($response);
-        }
-
-        $data = json_decode($response, true);
+        $data = \App\JsonParser::extractAndDecode($response);
 
         if (is_array($data) && isset($data['decision'])) {
             $decision = strtoupper($data['decision']);
@@ -72,11 +74,11 @@ TEXT;
 
             $id = isset($data['matched_id']) ? (int)$data['matched_id'] : -1;
 
-            if (isset($ledger[$id])) {
+            if (isset($slicedLedger[$id])) {
                 return [
                     'decision' => $decision,
-                    'cache_key' => $ledger[$id]['cache_key'],
-                    'query' => $ledger[$id]['query']
+                    'cache_key' => $slicedLedger[$id]['cache_key'],
+                    'query' => $slicedLedger[$id]['query']
                 ];
             }
         }

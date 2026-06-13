@@ -174,6 +174,15 @@ class ChatBriefingStreamAction extends BaseAction
         }
 
         $finalSystem = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the summaries provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n"
+                     . "TEMPORAL AWARENESS FOR DAILY BRIEFINGS:\n"
+                     . "Today's exact system date and current time is " . date('l, F j, Y (H:i)') . ".\n"
+                     . "When summarizing emails, calendar tasks, or updates during your daily briefing:\n"
+                     . "1. Always compare any mentioned appointment or event times against the current clock.\n"
+                     . "2. If an event or appointment was scheduled for today but its slot has already passed, do not present it as an upcoming task under 'Upcoming Schedule' or 'This Week'.\n"
+                     . "3. Instead, address it as a historical event from earlier today and conversationally check in on it.\n"
+                     . "4. Only suggest reminder cards or upcoming scheduling options for genuine future events.\n\n"
+                     . "DAILY BRIEFING SUMMARY INSTRUCTIONS:\n"
+                     . "When summarizing emails, make sure to highlight any explicit dates, times, invitations, obligations, pickups, or task-like requests mentioned by the senders so the user is fully aware of their commitments. Do not write vague or lazy summaries.\n\n"
                      . "Visual Card rule: Append `[Email: account_id:uid]` when mentioning any email.\n"
                      . "Action Card rule: Append any pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your final response.";
 

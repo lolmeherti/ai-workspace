@@ -40,6 +40,15 @@ class WebSearchService
             return '';
         }
 
+        $isForced = false;
+        if (preg_match('/force\s+(?:the\s+)?(?:web\s+)?search/i', $query) || preg_match('/search\s+for/i', $query)) {
+            $isForced = true;
+        }
+
+        if ($isForced) {
+            $cacheAction = 'force_live';
+        }
+
         $searchQuery = $this->searchDecider->requiresSearch($query, $history);
         if (!$searchQuery) {
             return '';

@@ -20,7 +20,8 @@ class Scraper
         $payload = json_encode([
             "cmd" => "request.get",
             "url" => $targetUrl,
-            "maxTimeout" => 15000 // 15 seconds max
+            "maxTimeout" => 15000,
+            "disableMedia" => true
         ]);
 
         $ch = curl_init($endpoint);

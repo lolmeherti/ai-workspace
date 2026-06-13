@@ -101,8 +101,35 @@ class ChatManager
             return [];
         }
 
+        $intent = 'none';
+        if (empty($cacheAction)) {
+            $routerPrompt = $this->promptAssemblyService->buildRouterPrompt($query);
+            $routerMessages = [
+                ['role' => 'system', 'content' => $routerPrompt]
+            ];
+            $intentRaw = $this->agent->chat($routerMessages, false, null, 0.1);
+            
+            $validIntents = [
+                'search_files',
+                'todoist_create',
+                'todoist_get',
+                'todoist_update',
+                'todoist_delete',
+                'email_briefing'
+            ];
+            
+            $foundIntents = [];
+            foreach ($validIntents as $vi) {
+                if (stripos($intentRaw, $vi) !== false) {
+                    $foundIntents[] = $vi;
+                }
+            }
+            
+            $intent = empty($foundIntents) ? 'none' : implode(',', $foundIntents);
+        }
+
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
-        $messages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
+        $messages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
 
         $emit('generating', []);
 

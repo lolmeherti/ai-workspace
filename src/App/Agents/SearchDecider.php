@@ -14,11 +14,31 @@ class SearchDecider
         $this->agent = $agent;
     }
 
-    /**
-     * Decides if search is needed, using recent chat history to contextualize the query.
-     */
     public function requiresSearch(string $userPrompt, array $history = []): ?string
     {
+        $cleanPrompt = trim(strtolower($userPrompt));
+
+        if (preg_match('/^(?:force\s+)?(?:the\s+)?(?:web\s+)?search\s+(.+)$/i', $userPrompt, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/^search\s+for\s+(.+)$/i', $userPrompt, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (preg_match('/^force\s+(?:the\s+)?(?:web\s+)?search$/i', $userPrompt)) {
+            $lastUserQuery = null;
+            foreach (array_reverse($history) as $msg) {
+                if ($msg['role'] === 'user' && $msg['message'] !== $userPrompt) {
+                    $lastUserQuery = $msg['message'];
+                    break;
+                }
+            }
+            if ($lastUserQuery) {
+                return $lastUserQuery;
+            }
+        }
+
         $currentDate = date('l, F j, Y g:i A');
         
         $historyText = "";

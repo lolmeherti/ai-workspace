@@ -4,12 +4,18 @@ namespace App;
 
 class JsonParser
 {
-    /**
-     * Robustly extracts and decodes the first valid JSON block (object or array) found in a string.
-     */
     public static function extractAndDecode(string $text): ?array
     {
-        // 1. Determine if we are parsing an object '{' or array '['
+        if (preg_match('/(?:call|tool_call):([a-zA-Z0-9_\-]+)\s*(\{.*\})/is', $text, $matches)) {
+            $toolName = trim($matches[1]);
+            $jsonStr = trim($matches[2]);
+            $decoded = @json_decode($jsonStr, true);
+            if (is_array($decoded)) {
+                $decoded['tool'] = $toolName;
+                return self::normalizeOutput($decoded);
+            }
+        }
+
         $startIndex = strpos($text, '{');
         $isObject = true;
         
@@ -24,25 +30,20 @@ class JsonParser
         }
 
         if ($isObject) {
-            // Find the first double quotes '"' after '{'
             $firstQuote = strpos($text, '"', $startIndex);
             if ($firstQuote !== false) {
-                // Find the closing key quote '"'
                 $secondQuote = strpos($text, '"', $firstQuote + 1);
                 if ($secondQuote !== false) {
-                    // Find the colon ':'
                     $colon = strpos($text, ':', $secondQuote + 1);
                     if ($colon !== false) {
-                        // Find the space and opening mark (e.g., ", {, [, digit, or word)
                         $remaining = substr($text, $colon + 1);
                         if (preg_match('/^\s*([{"\[\d\w])/', $remaining)) {
-                            // Start verified! Find matching closing brace from the end
                             $endIndex = strrpos($text, '}');
                             if ($endIndex !== false && $endIndex > $startIndex) {
                                 $jsonStr = substr($text, $startIndex, $endIndex - $startIndex + 1);
                                 $decoded = @json_decode($jsonStr, true);
                                 if (is_array($decoded)) {
-                                    return $decoded;
+                                    return self::normalizeOutput($decoded);
                                 }
                             }
                         }
@@ -50,13 +51,12 @@ class JsonParser
                 }
             }
         } else {
-            // It is a bracketed array '['
             $endIndex = strrpos($text, ']');
             if ($endIndex !== false && $endIndex > $startIndex) {
                 $jsonStr = substr($text, $startIndex, $endIndex - $startIndex + 1);
                 $decoded = @json_decode($jsonStr, true);
                 if (is_array($decoded)) {
-                    return $decoded;
+                    return self::normalizeOutput($decoded);
                 }
             }
         }
@@ -64,20 +64,35 @@ class JsonParser
         return self::fallbackDecode($text);
     }
 
-    /**
-     * Fallback clean-up using regex backtick extraction and raw decode.
-     */
+    private static function normalizeOutput(array $decoded): array
+    {
+        if (isset($decoded['name']) && isset($decoded['arguments']) && is_array($decoded['arguments'])) {
+            $normalized = $decoded['arguments'];
+            $normalized['tool'] = $decoded['name'];
+            return $normalized;
+        }
+        if (isset($decoded['tool_call']) && is_array($decoded['tool_call'])) {
+            $tc = $decoded['tool_call'];
+            if (isset($tc['name']) && isset($tc['arguments']) && is_array($tc['arguments'])) {
+                $normalized = $tc['arguments'];
+                $normalized['tool'] = $tc['name'];
+                return $normalized;
+            }
+        }
+        return $decoded;
+    }
+
     private static function fallbackDecode(string $text): ?array
     {
         if (strpos($text, '```') !== false) {
             $cleaned = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $text);
             $decoded = @json_decode(trim($cleaned), true);
             if (is_array($decoded)) {
-                return $decoded;
+                return self::normalizeOutput($decoded);
             }
         }
 
         $decoded = @json_decode(trim($text), true);
-        return is_array($decoded) ? $decoded : null;
+        return is_array($decoded) ? self::normalizeOutput($decoded) : null;
     }
 }
