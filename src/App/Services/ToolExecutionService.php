@@ -12,6 +12,7 @@ use App\Services\Tools\GetTodoistTasksTool;
 use App\Services\Tools\DeleteTodoistTaskTool;
 use App\Services\Tools\UpdateTodoistTaskTool;
 use App\Services\Tools\GetEmailBriefingTool;
+use App\Services\Tools\SearchMemoriesTool;
 
 class ToolExecutionService
 {
@@ -25,6 +26,7 @@ class ToolExecutionService
     private DeleteTodoistTaskTool $deleteTodoistTaskTool;
     private UpdateTodoistTaskTool $updateTodoistTaskTool;
     private GetEmailBriefingTool $getEmailBriefingTool;
+    private SearchMemoriesTool $searchMemoriesTool;
 
     public function __construct(Database $db, AgentManager $agent, string $uploadDir)
     {
@@ -39,6 +41,7 @@ class ToolExecutionService
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->updateTodoistTaskTool = new UpdateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getEmailBriefingTool = new GetEmailBriefingTool($db, $agent, $uploadDir, $this->todoist);
+        $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
     }
 
     public function processToolCall(string $aiResponse, int $sessionId, array $messages, callable $emit): string
@@ -64,6 +67,7 @@ class ToolExecutionService
                 Tool::DELETE_TODOIST_TASK => $this->deleteTodoistTaskTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
                 Tool::UPDATE_TODOIST_TASK => $this->updateTodoistTaskTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
                 Tool::GET_EMAIL_BRIEFING => $this->getEmailBriefingTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
+                Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
             };
         } catch (\Throwable $e) {
             $emit('token', ['chunk' => "\n\n**System Error executing tool:** " . $e->getMessage()]);

@@ -14,6 +14,7 @@ class JsonParser
                 $decoded['tool'] = $toolName;
                 return self::normalizeOutput($decoded);
             }
+            self::logError($text, "Tool call JSON failed: " . json_last_error_msg());
         }
 
         $startIndex = strpos($text, '{');
@@ -45,6 +46,7 @@ class JsonParser
                                 if (is_array($decoded)) {
                                     return self::normalizeOutput($decoded);
                                 }
+                                self::logError($text, "Object extraction failed: " . json_last_error_msg());
                             }
                         }
                     }
@@ -58,6 +60,7 @@ class JsonParser
                 if (is_array($decoded)) {
                     return self::normalizeOutput($decoded);
                 }
+                self::logError($text, "Array extraction failed: " . json_last_error_msg());
             }
         }
 
@@ -82,6 +85,23 @@ class JsonParser
         return $decoded;
     }
 
+    private static function logError(string $text, string $error): void
+    {
+        $logFile = \App\Config::getProjectRoot() . '/json_parser_errors.log';
+        $date = date('Y-m-d H:i:s');
+        
+        $logEntry = <<<TEXT
+================ JSON PARSER ERROR ================
+Date: {$date}
+Error: {$error}
+Input: 
+{$text}
+==================================================
+
+TEXT;
+        file_put_contents($logFile, $logEntry, FILE_APPEND);
+    }
+
     private static function fallbackDecode(string $text): ?array
     {
         if (strpos($text, '```') !== false) {
@@ -90,9 +110,18 @@ class JsonParser
             if (is_array($decoded)) {
                 return self::normalizeOutput($decoded);
             }
+            self::logError($text, "Markdown JSON failed: " . json_last_error_msg());
         }
 
         $decoded = @json_decode(trim($text), true);
-        return is_array($decoded) ? self::normalizeOutput($decoded) : null;
+        if (is_array($decoded)) {
+            return self::normalizeOutput($decoded);
+        }
+        
+        if ($text !== '' && $text !== 'null') {
+             self::logError($text, "Final fallback failed: " . json_last_error_msg());
+        }
+
+        return null;
     }
 }

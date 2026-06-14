@@ -92,13 +92,7 @@ TEXT;
 
         $temperature = (float) Config::get('AGENT_MEMORY_SELECTOR_TEMP', 0.1);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
-
-        if (strpos($response, '```') !== false) {
-            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
-            $response = trim($response);
-        }
-
-        $data = json_decode($response, true);
+        $data = \App\JsonParser::extractAndDecode($response);
         $selectedIds = [];
 
         if (is_array($data) && isset($data['relevant_memory_ids']) && is_array($data['relevant_memory_ids'])) {

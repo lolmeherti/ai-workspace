@@ -9,9 +9,11 @@ class PromptAssemblyService
 {
     private ?MemorySelector $memorySelector;
     private string $uploadDir;
+    private \App\Database $db;
 
-    public function __construct(?MemorySelector $memorySelector, string $uploadDir)
+    public function __construct(\App\Database $db, ?MemorySelector $memorySelector, string $uploadDir)
     {
+        $this->db = $db;
         $this->memorySelector = $memorySelector;
         $this->uploadDir = $uploadDir;
     }
@@ -41,11 +43,18 @@ TEXT;
 
     public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query): string
     {
-        $currentDate = date('l, F j, Y (H:i)');
-        $cutoffDate = 'early 2024';
+        // 1. ABSOLUTE ANCHOR: Stable Profile from DB (Most stable)
+        $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
+        $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
 
-        $systemPrompt = <<<TEXT
-You are a helpful, friendly, and highly intelligent AI conversational assistant. Today's date and exact current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}. You are being supplemented with up to date data from a third party source via content injection. 
+        $systemPrompt = "";
+        if (!empty($stableProfile)) {
+            $systemPrompt .= "USER IDENTITY AND CORE CONSTRAINTS:\n{$stableProfile}\n\n";
+        }
+
+        // 2. STATIC INSTRUCTIONS: Tool definitions and core behavior (Very stable)
+        $systemPrompt .= <<<TEXT
+You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
 
 If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
@@ -66,38 +75,32 @@ To update or edit an existing task's title, date, or time:
 To delete or remove a task/reminder:
 {"tool": "delete_todoist_task", "query": "search words here"}
 
+If you need to retrieve specific information from your long-term memories about the user that is NOT already present in the "USER IDENTITY" section at the top of this prompt, use the following tool:
+{"tool": "search_memories", "query": "specific search query for memories"}
+
 Do not confirm that you've done a tool call. Only do the tool call and nothing else.
 
 INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
 TEXT;
 
+        // 3. TEMPORAL CONTEXT: Changes every turn (Volatile)
+        $currentDate = date('l, F j, Y (H:i)');
+        $cutoffDate = 'early 2024';
+        $systemPrompt .= "\n\nToday's date and exact current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+
+        // 4. DYNAMIC DATA: Web Search (Highly Volatile)
         if (!empty($condensedContext)) {
-            $systemPrompt .= <<<TEXT
-
-
-LIVE WEB SEARCH CONTEXT:
-{$condensedContext}
-TEXT;
+            $systemPrompt .= "\n\nLIVE WEB SEARCH CONTEXT:\n{$condensedContext}\n";
             if ($usedCache) {
-                $systemPrompt .= <<<TEXT
-
-(Note: This context was retrieved from your recent semantic memory cache).
-TEXT;
+                $systemPrompt .= "\n(Note: This context was retrieved from your recent semantic memory cache).\n";
             }
         }
 
-        if ($this->memorySelector) {
-            $relevantMemories = $this->memorySelector->selectRelevantMemory($query);
-            if (!empty($relevantMemories)) {
-                $systemPrompt .= <<<TEXT
-
-
-Relevant details you recall about the user:
-{$relevantMemories}
-TEXT;
-            }
-        }
+        // 5. DYNAMIC DATA: Recalled Memories (Highly Volatile)
+        // Note: This is no longer automatically injected to prevent mandatory latency tax.
+        // The AI must now explicitly call the 'search_memories' tool if needed.
+        // (Left empty for future transition or manual overrides)
 
         return $systemPrompt;
     }
@@ -138,13 +141,7 @@ TEXT;
                             $hasImage = true;
                             $base64 = base64_encode(file_get_contents($fullFilePath));
                             
-                            if ($idx === $lastUserIdx && $intent !== 'none') {
-                                $messages[] = [
-                                    'role' => 'system',
-                                    'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
-                                ];
-                            }
-
+                            $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
                             $messages[] = [
                                 'role' => $row['role'],
                                 'content' => [
@@ -166,13 +163,7 @@ TEXT;
                         $hasImage = true;
                         $base64 = base64_encode(file_get_contents($fullFilePath));
                         
-                        if ($idx === $lastUserIdx && $intent !== 'none') {
-                            $messages[] = [
-                                'role' => 'system',
-                                'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
-                            ];
-                        }
-
+                        $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
                         $messages[] = [
                             'role' => $row['role'],
                             'content' => [
@@ -194,13 +185,8 @@ TEXT;
             }
 
             if (!$hasImage) {
-                if ($idx === $lastUserIdx && $intent !== 'none') {
-                    $messages[] = [
-                        'role' => 'system',
-                        'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
-                    ];
-                }
-
+                $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
+                
                 $messages[] = [
                     'role' => $row['role'],
                     'content' => $messageContent
@@ -209,5 +195,15 @@ TEXT;
         }
 
         return $messages;
+    }
+
+    private function maybeAddRoutingHint(array &$messages, int $idx, int $lastUserIdx, string $intent): void
+    {
+        if ($idx === $lastUserIdx && $intent !== 'none') {
+            $messages[] = [
+                'role' => 'system',
+                'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
+            ];
+        }
     }
 }

@@ -14,6 +14,14 @@ class Schema
     public function initTables(): void
     {
         $this->db->executeStatement("
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id INT PRIMARY KEY,
+                profile_text TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        $this->db->executeStatement("
             CREATE TABLE IF NOT EXISTS chat_sessions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,

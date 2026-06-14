@@ -40,7 +40,7 @@ class ChatManager
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
         $this->webSearchService = new WebSearchService($searchDecider, $cacheEvaluator, $contextCondenser);
-        $this->promptAssemblyService = new PromptAssemblyService($memorySelector, $this->uploadDir);
+        $this->promptAssemblyService = new PromptAssemblyService($this->db, $memorySelector, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
     }
 

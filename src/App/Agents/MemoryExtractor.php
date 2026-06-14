@@ -199,15 +199,8 @@ TEXT;
         ];
 
         $temperature = (float) Config::get('AGENT_EXTRACTOR_TEMP', 0.5);
-        $response = $this->agent->chat($messages, false, null, $temperature);
-
-        $response = trim($response);
-        if (strpos($response, '```') !== false) {
-            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
-            $response = trim($response);
-        }
-
-        $data = json_decode($response, true);
+        $response = trim($this->agent->chat($messages, false, null, $temperature));
+        $data = \App\JsonParser::extractAndDecode($response);
 
         if (is_array($data)) {
             try {
@@ -256,12 +249,64 @@ TEXT;
                 }
 
                 $this->db->query("COMMIT");
+                
+                // After successful memory update, distill the current state into a Stable Profile Anchor
+                $this->updateUserProfile();
             } catch (Exception $e) {
                 $this->db->query("ROLLBACK");
                 error_log("MemoryExtractor: Failed to write consolidated memories: " . $e->getMessage());
             }
         } else {
             error_log("MemoryExtractor: Invalid JSON response received from LLM during consolidation. Raw response: " . $response);
+        }
+    }
+
+    private function updateUserProfile(): void
+    {
+        $memories = $this->db->query("SELECT memory_text FROM memories");
+        if (empty($memories)) {
+            return;
+        }
+
+        $allMemoriesText = "";
+        foreach ($memories as $m) {
+            $allMemoriesText .= "- " . $m['memory_text'] . "\n";
+        }
+
+        $systemPrompt = <<<TEXT
+You are a profile distillation agent. Your task is to take a list of raw user memories and condense them into a highly distilled, core identity profile (the "Golden State").
+This profile will be used as a stable prefix for all future AI turns. It must contain only the most essential, durable facts about the user.
+
+Guidelines:
+- Merge overlapping facts.
+- Remove redundant details.
+- Keep it concise but comprehensive of core identity and constraints.
+- Format as a clean list of declarative sentences.
+- Do not use markdown bullets; just plain text lines.
+TEXT;
+
+        $userPrompt = "Distill the following memories into a stable user profile:\n\n" . $allMemoriesText;
+
+        $messages = [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userPrompt]
+        ];
+
+        $response = trim($this->agent->chat($messages, false, null, 0.1));
+
+        // Update the user_profiles table (assume id=1 for single-user local app)
+        $existingProfile = $this->db->query("SELECT id FROM user_profiles WHERE id = 1");
+        if (!empty($existingProfile)) {
+            $this->db->update('user_profiles', [
+                'profile_text' => $response
+            ], [
+                'id' => 1
+            ]);
+        } else {
+            $this->db->insert('user_profiles', [
+                'id' => 1,
+                'profile_text' => $response
+            ]);
         }
     }
 }

@@ -10,4 +10,5 @@ enum Tool: string
     case DELETE_TODOIST_TASK = 'delete_todoist_task';
     case UPDATE_TODOIST_TASK = 'update_todoist_task';
     case GET_EMAIL_BRIEFING = 'get_email_briefing';
+    case SEARCH_MEMORIES = 'search_memories';
 }

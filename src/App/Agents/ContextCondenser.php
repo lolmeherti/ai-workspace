@@ -47,13 +47,7 @@ class ContextCondenser
 
         $temperature = (float) Config::get('AGENT_CONDENSER_TEMP', 0.4);
         $response = trim($this->agent->chat($messages, false, null, $temperature));
-
-        if (strpos($response, '```') !== false) {
-            $response = preg_replace('/```(?:json)?\s*(.*?)\s*```/s', '$1', $response);
-            $response = trim($response);
-        }
-
-        $data = json_decode($response, true);
+        $data = \App\JsonParser::extractAndDecode($response);
 
         if (!$data || !isset($data['summary'])) {
             throw new Exception("Condensation preview failed: Invalid or non-JSON response from LLM.");

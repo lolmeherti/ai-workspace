@@ -13,51 +13,51 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
 ?>
 
 <style>
-/* Futuristic session items */
+
 .chat-session-item {
     position: relative;
     border-left: 2px solid transparent !important;
 }
 
-/* Subtle cyan HUD glowing bar on the left for starred chats */
+
 .chat-session-item[data-starred="1"] {
     border-left: 2px solid rgba(6, 182, 212, 0.75) !important;
     box-shadow: inset 4px 0 10px -4px rgba(6, 182, 212, 0.15);
 }
 
-/* Star Glow & Hover States */
+
 .star-glow-active {
-    color: #fbbf24 !important; /* Premium Amber */
+    color: #fbbf24 !important; 
     filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.6));
 }
 
 .star-glow-inactive {
-    color: #475569 !important; /* Dark Slate default */
+    color: #475569 !important; 
 }
 
 .star-glow-inactive:hover {
-    color: #22d3ee !important; /* Cyan hover */
+    color: #22d3ee !important; 
     filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.4));
 }
 
-/* Smooth border color transitions */
+
 .in-edit-mode .chat-session-item {
     transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 }
 
-/* Red alert hover states when hovering in edit mode */
+
 .in-edit-mode .chat-session-item:hover {
     border-color: rgba(244, 63, 94, 0.2) !important;
     background-color: rgba(244, 63, 94, 0.05) !important;
 }
 
-/* Prevent inner text links from blocking container click bubbling */
+
 .in-edit-mode .chat-session-item a {
     pointer-events: none !important;
     user-select: none;
 }
 
-/* Hide star action during multi-select operations */
+
 .in-edit-mode .btn-star-session {
     display: none !important;
 }
