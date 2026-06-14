@@ -1,0 +1,144 @@
+# Localsy Project Context
+
+## What this is
+A hybrid desktop application called **Localsy** that bundles a local AI chat experience with persistent memory, email integration, file management, and web search — all running locally on the user's machine. It consists of two parts:
+1. A Go binary launcher (tray icon) that bootstraps llama.cpp inference and Docker containers
+2. A PHP/JS web app served by Apache in Docker for the chat UI
+
+## Tech Stack
+
+### Backend infrastructure (Go - `main.go`)
+- **Package**: `localsy`
+- **Runtime**: Standalone binary with systray integration (`github.com/getlantern/systray`)
+- **Key subpackages** under `internal/`:
+  - `launcher/` — bootstrap flow: detect GPU, download models, start Docker + llama server
+  - `docker/` — WSL2 Docker management and compose file generation
+  - `llama/` — llama.cpp server orchestration (start, stop, health-check)
+  - `models/` — tiered model resolution based on available VRAM
+  - `gpu/detect.go` — GPU vendor detection (NVIDIA/AMD/intel)
+  - `env/merge.go` — merge user config into generated .env for Docker containers
+  - `download/file.go` — progress-tracked HTTP download with systray tooltip updates
+- **Embedded assets** via `//go:embed`: docker-compose.prod.yml, models.json, searxng/settings.yml, icon.ico
+
+### Models configuration (`models.json`)
+Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB). Each tier specifies a GGUF model file + optional multimodal projector (.mmproj), both downloaded from HuggingFace at first run.
+
+### Web application layer (PHP - `src/`)
+- **Runtime**: PHP 8.3 on Apache (Docker, `./Dockerfile`)
+- **Framework**: Bare PHP — no framework, hand-rolled MVC-ish structure under `src/App/`
+- **Dependencies** (`composer.json`):
+  - `vlucas/phpdotenv` for .env parsing
+  - `predis/predis` (Redis client)
+  - `smalot/pdfparser` for PDF content extraction
+  - `webklex/php-imap` / `phpmailer/phpmailer` for email reading and sending
+
+### Web app structure (`src/App/`)
+- **Core**: `AgentManager.php` — wraps llama.cpp API calls (OpenAI-compatible chat endpoint at `http://host.docker.internal:1234/v1`). Supports streaming + non-streaming responses.
+- **Agents** (`src/App/Agents/`): specialized reasoning modules:
+  - `MemoryExtractor.php`, `MemorySelector.php` — persistent memory management
+  - `SearchDecider.php`, `SemanticCacheEvaluator.php`, `TaskMatcher.php` — routing/intent logic
+  - `SchedulingAgent.php`, `ContextCondenser.php`
+- **Controllers** (`src/App/Controllers/`): Chat, Email, File, Cache, AI Settings
+- **Actions** (`src/App/Actions/`): HTTP action handlers (chat stream, email list/send/reply, file search/upload/edit, todoist integration)
+- **Services**: `ToolExecutionService`, `PromptAssemblyService`, `WebSearchService`, `EmailService`
+- **Tools**: Todoist create/delete/update tasks, search files, get email briefings
+- **Database**: MySQL 8.0 via PDO; schema in `src/App/Database/Schema.php`; repositories for chat sessions and memory
+
+### Frontend (JavaScript - `src/js/`)
+- Modular ES modules with bare PHP templating (`views/*.php` includes)
+- Chat: block-based editor, streaming response rendering, file references, clipboard, Todoist UI
+- Email: inbox loading, reply form, AI-assisted replies
+- Tabs system: chats / emails / memories / queries / uploads workspaces
+- Libraries loaded from CDN: Tailwind CSS, franken-ui, marked.js (markdown), KaTeX (math), highlight.js
+
+### Supporting services (Docker Compose)
+| Service | Purpose | Ports |
+|---------|---------|-------|
+| `web` | PHP/Apache app server | 8080:80 |
+| `mysql` | MySQL 8.0 persistence | 3306:3306 |
+| `redis` | Caching layer (7-alpine) | 6379:6379 |
+| `searxng` | Private web search engine | 8888:8080 |
+| `flaresolverr` | Cloudflare/bot bypass for search | 8191:8191 |
+
+## Key files to know
+
+### Entry points
+- **`main.go`** — systray binary entry, embeds compose/models/searxng config
+- **`internal/launcher/bootstrap.go`** — the full startup sequence (GPU detect -> model select -> download if needed -> Docker up -> llama server -> open browser)
+- **`src/index.php`** — PHP app bootstrap, pulls health check status and page data
+
+### Configuration
+- **`models.json`** — VRAM-tiered models with HuggingFace URLs
+- **`docker-compose.yml`** — development compose (bind-mounts `./src`)
+- **`docker-compose.prod.yml`** (embedded in binary) — production compose with built assets
+- **`searxng/settings.yml`** — search engine configuration
+- `.env` at root and `src/.env` — environment variables
+
+### Build & scripts
+- **`setup.bat`**, **`run-dev.bat`** — Windows setup/launch scripts
+- **`build-and-push.bat`** — Docker build + registry push
+- **`clean-localsy.bat`** — cleanup script
+- **`get-diagnostics.bat`** — diagnostic collection
+
+## Architecture patterns
+
+### Boot flow (Go binary)
+```
+main.go
+  -> launcher.Bootstrap()
+     1. Create ~/.localy/{bin, models, searxng} dirs
+     2. GPU detection
+     3. Model tier selection from models.json by VRAM
+     4. Download .gguf model + optional .mmproj if missing
+     5. Ensure Docker WSL backend ready
+     6. Write docker-compose.yml and searxng/settings.yml
+     7. Merge user config into generated .env
+     8. chmod -R 777 in WSL for file sharing
+     9. Start Docker daemon + compose up
+     10. Start llama.cpp server (local inference)
+     11. Open browser to http://localhost:8080
+```
+
+### Request flow (web request)
+```
+Apache -> index.php
+  -> Config::load() + EnvEditor read .env
+  -> HealthCheck check (cached for 10s)
+  -> Database connect
+  -> AgentManager, MemoryExtractor instantiated
+  -> PageDataLoader loads initial data
+  -> Views rendered via PHP includes
+  -> Frontend JS modules handle interactivity
+```
+
+### LLM communication
+The Go launcher starts llama.cpp server on port 1234. PHP's `AgentManager.php` communicates with it over HTTP using the OpenAI-compatible API format (POST /chat/completions). This is the single AI inference endpoint — no other LLM providers are used.
+
+## Memory system architecture
+
+Three mechanisms handle different aspects of persistent knowledge, plus one for search caching:
+
+### SemanticCacheEvaluator (`src/App/Agents/SemanticCacheEvaluator.php`)
+Called on every request before web search. Analyzes current query against last 5 cached search results and makes a nuanced decision: AUTO_USE (cached content fully answers + time is still valid), ASK_USER (content matches but may be stale), or NONE (insufficient/stale). This requires actual LLM reasoning — simple vector similarity or BM25 cannot capture the temporal awareness (comparing current time vs cache age) and sufficiency checking (distinguishing "cached result partially answers query" from "fully answers it") that this call does.
+
+### MemorySelector (`src/App/Agents/MemorySelector.php`)
+Called on every request via PromptAssemblyService.buildSystemPrompt(). Uses MySQL FULLTEXT search against cleaned user prompt + fallback to most recent memories, then sends all candidates (up to 500) through an LLM filter that returns relevant memory IDs. Note: this call happens per-request and may be redundant within a single conversation — consider caching results by recent-messages-hash when optimizing.
+
+### MemoryExtractor (`src/App/Agents/MemoryExtractor.php`)
+Runs automatically when session token count exceeds ~15K tokens (~60K chars). Extracts 3-5 keywords via LLM, uses those for FULLTEXT search to find candidate memories, then runs a consolidation agent that merges overlapping facts and adds new durable user state. The extraction happens mid-conversation — consider whether event-driven triggers (session end) might produce better context than token-count thresholds.
+
+### ContextCondenser (`src/App/Agents/ContextCondenser.php`)
+Triggers when session approaches ~12K tokens (80% of threshold). Slices off old messages, sends archive to LLM for summarization + fact extraction, replaces history with a single "SUMMARY OF PREVIOUS CONVERSATION" system message. Well-scoped and earns its call — keep this logic mostly as-is.
+
+## Coding conventions
+- PHP uses PSR-4 autoloading (`App\` -> `src/App/`)
+- JavaScript modules use `<script type="module">` with explicit src attributes
+- No framework conventions to follow — bare procedural style in controllers/actions
+- Chat actions stream responses via SSE (Server-Sent Events)
+- The PHP app has no ORM — raw PDO queries throughout
+
+## Important constraints
+- **Never read `.env`** — it may contain credentials; use `.env.example` if needed
+- The binary is self-contained: compose, models config, and searxng settings are embedded in the Go binary via `//go:embed`
+- User data lives under `%LOCALAPPDATA%\localsy\` (Windows) or equivalent on other platforms
+- File uploads stored at `src/uploads/`, indexed by filename hash

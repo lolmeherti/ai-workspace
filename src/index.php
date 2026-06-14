@@ -3,6 +3,11 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+set_error_handler(function($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) return;
+    throw new \ErrorException($message, 0, $severity, $file, $line);
+});
+
 require_once __DIR__ . '/vendor/autoload.php';
 
 use App\Config;
@@ -18,35 +23,49 @@ use App\Bootstrap\PageDataLoader;
 
 Config::load(__DIR__);
 
-$envEditor = new EnvEditor(__DIR__ . '/.env');
-$sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : 0;
-$activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'chats';
-
-$envVars = $envEditor->read();
-
-$status = null;
 try {
-    $cached = Cache::get('system_health_status');
-    if ($cached) {
-        $status = json_decode($cached);
-    }
-} catch (\Exception $e) {}
+    $envEditor = new EnvEditor(__DIR__ . '/.env');
+    $sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : 0;
+    $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'chats';
 
-if ($status === null) {
-    $status = (new HealthCheck())->check();
+    $envVars = $envEditor->read();
+
+    $status = null;
     try {
-        Cache::set('system_health_status', json_encode($status), 10);
+        $cached = Cache::get('system_health_status');
+        if ($cached) {
+            $status = json_decode($cached);
+        }
     } catch (\Exception $e) {}
+
+    if ($status === null) {
+        $status = (new HealthCheck())->check();
+        try {
+            Cache::set('system_health_status', json_encode($status), 10);
+        } catch (\Exception $e) {}
+    }
+
+    $db = $status->database ? new Database() : null;
+    $agentManager = new AgentManager();
+    $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
+
+    require_once __DIR__ . '/actions.php';
+
+    $pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
+    extract($pageData);
+} catch (\Throwable $e) {
+    \App\Logger::critical("Bootstrap failure in index.php", [
+        'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+        'get' => $_GET
+    ], $e);
+    
+    if (ini_get('display_errors')) {
+        echo "<h1>Fatal Bootstrap Error</h1>";
+        echo "<p>" . htmlspecialchars($e->getMessage()) . "</p>";
+        echo "<pre>" . htmlspecialchars($e->getTraceAsString()) . "</pre>";
+        exit;
+    }
 }
-
-$db = $status->database ? new Database() : null;
-$agentManager = new AgentManager();
-$memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
-
-require_once __DIR__ . '/actions.php';
-
-$pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
-extract($pageData);
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -41,7 +41,7 @@ class AgentManager
             'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
         ]);
 
-        curl_setopt($ch, CURLOPT_TIMEOUT, 600); // 10 minutes
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
 
         $fullResponse = '';
         $lastUsage = null;
@@ -80,6 +80,7 @@ class AgentManager
             if ($result !== false) {
                 $json = json_decode($result, true);
                 if (isset($json['error'])) {
+                    \App\Logger::error("LLM API returned an error", ['response' => $json['error']]);
                     throw new Exception("LLM API Error: " . json_encode($json['error']));
                 }
                 $fullResponse = $json['choices'][0]['message']['content'] ?? '';
@@ -92,6 +93,7 @@ class AgentManager
         if ($result === false) {
             $error = curl_error($ch);
             curl_close($ch);
+            \App\Logger::critical("cURL Error connecting to LLM at {$endpoint}", ['error' => $error]);
             throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
         }
 

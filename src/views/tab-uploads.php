@@ -1,5 +1,4 @@
 <?php
-// Retrieve real-time metrics safely from the database wrapper
 $totalFilesCount = 0;
 $latestFileName = 'None';
 
@@ -13,7 +12,6 @@ if ($db) {
             $latestFileName = $latestFile[0]['original_name'];
         }
     } catch (\Exception $e) {
-        // Fallback gracefully in case of any database read issues
     }
 }
 ?>
