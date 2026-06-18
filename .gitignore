@@ -7,3 +7,4 @@ uploads/
 db_errors.log
 App/db_errors.log
 env
+json_parser_errors.log
