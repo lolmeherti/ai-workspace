@@ -25,6 +25,7 @@ class EmailService
         $cm = new ClientManager();
 
         foreach ($accounts as $account) {
+            $client = null;
             try {
                 $host = $account['imap_host'];
                 $port = $account['imap_port'] ?: 993;
@@ -35,7 +36,7 @@ class EmailService
                     'encryption'    => 'ssl',
                     'validate_cert' => true,
                     'username'      => $account['email_address'],
-                    'password'      => $account['app_password'],
+                    'password' => $account['app_password'],
                     'protocol'      => 'imap',
                     'timeout'       => 5,
                     'options'       => [
@@ -44,15 +45,30 @@ class EmailService
                 ]);
 
                 $client->connect();
+                
+                // Official Multi-tier Inbox Folder Lookup
                 $inbox = $client->getFolder('INBOX');
+                
                 if (!$inbox) {
-                    $folders = $client->getFolders();
-                    if (!empty($folders)) {
-                        $inbox = $folders[0];
-                    }
+                    try {
+                        $inbox = $client->getFolderByName('INBOX');
+                    } catch (\Throwable $_) {}
+                }
+                
+                if (!$inbox) {
+                    try {
+                        $flatFolders = $client->getFolders(false);
+                        foreach ($flatFolders as $folder) {
+                            if (strcasecmp($folder->name, 'INBOX') === 0 || strcasecmp($folder->path, 'INBOX') === 0) {
+                                $inbox = $folder;
+                                break;
+                            }
+                        }
+                    } catch (\Throwable $_) {}
                 }
 
                 if ($inbox) {
+                    // Daily briefing strictly considers the last 24 hours of emails
                     $queryBuilder = $inbox->query()->since(new \DateTime("-24 hours"));
                     
                     if (!$includeSeen) {
@@ -61,7 +77,32 @@ class EmailService
 
                     $messages = $queryBuilder->limit(10)->get();
 
+                    // Convert messages to array for local descending PHP sorting
+                    $messagesArray = [];
                     foreach ($messages as $msg) {
+                        $messagesArray[] = $msg;
+                    }
+
+                    usort($messagesArray, function ($a, $b) {
+                        $tA = 0; $tB = 0;
+                        try {
+                            $tA = $a->getDate()->toDate()->getTimestamp();
+                        } catch (\Throwable $_) {
+                            try {
+                                $tA = strtotime((string)$a->getDate()) ?: 0;
+                            } catch (\Throwable $_) {}
+                        }
+                        try {
+                            $tB = $b->getDate()->toDate()->getTimestamp();
+                        } catch (\Throwable $_) {
+                            try {
+                                $tB = strtotime((string)$b->getDate()) ?: 0;
+                            } catch (\Throwable $_) {}
+                        }
+                        return $tB <=> $tA;
+                    });
+
+                    foreach ($messagesArray as $msg) {
                         $subject = (string)$msg->getSubject();
                         if (!empty($subject)) {
                             $decodedSubject = @mb_decode_mimeheader($subject);
@@ -113,6 +154,14 @@ class EmailService
 
                         $uid = (string)$msg->getUid();
 
+                        // Correctly define $isSeen based on the message flags
+                        $isSeen = false;
+                        try {
+                            $isSeen = $msg->hasFlag('seen') || $msg->getFlags()->has('seen');
+                        } catch (\Throwable $_) {
+                            $isSeen = false;
+                        }
+
                         $sanitizedSubject = mb_convert_encoding($subject, 'UTF-8', 'UTF-8');
                         $sanitizedFromName = mb_convert_encoding($fromName, 'UTF-8', 'UTF-8');
                         $sanitizedBody = mb_convert_encoding($bodyHtml, 'UTF-8', 'UTF-8');
@@ -130,15 +179,16 @@ class EmailService
                                 ':date_str'    => $date,
                                 ':body'        => $sanitizedBody,
                                 ':snippet'     => $sanitizedSnippet,
-                                ':is_seen'     => $includeSeen ? 1 : 0,
+                                ':is_seen'     => $isSeen ? 1 : 0,
                                 ':u_subject'   => $sanitizedSubject,
                                 ':u_from_name' => $sanitizedFromName,
                                 ':u_date_str'  => $date,
                                 ':u_body'      => $sanitizedBody,
                                 ':u_snippet'   => $sanitizedSnippet,
-                                ':u_is_seen'   => $includeSeen ? 1 : 0
+                                ':u_is_seen'   => $isSeen ? 1 : 0
                             ]);
                         } catch (\Throwable $errCacheWrite) {
+                            // Cache write failed — logged but continues
                         }
 
                         $allEmails[] = [
@@ -164,11 +214,37 @@ class EmailService
                         }
                     }
                 }
+
+                // Cleanly disconnect socket manually to avoid uncaught destructor exceptions during garbage collection
+                try {
+                    if ($client) {
+                        $client->disconnect();
+                    }
+                } catch (\Throwable $_) {}
+
             } catch (\Throwable $e) {
+                // Ensure socket is disconnected even on earlier errors
+                try {
+                    if ($client) {
+                        $client->disconnect();
+                    }
+                } catch (\Throwable $_) {}
+
+                $message = $e->getMessage();
+                if (stripos($message, 'auth') !== false || stripos($message, 'login') !== false || stripos($message, 'password') !== false || stripos($message, 'authenticate') !== false) {
+                    $errorType = 'AUTH_FAILED';
+                } elseif (stripos($message, 'timeout') !== false || stripos($message, 'timed out') !== false) {
+                    $errorType = 'CONNECTION_TIMEOUT';
+                } else {
+                    $errorType = 'IMAP_ERROR';
+                }
+
                 $allEmails[] = [
+                    'account_id'    => $account['id'],
                     'account_label' => $account['label'],
                     'account_email' => $account['email_address'],
-                    'error'         => $e->getMessage()
+                    'error_type'    => $errorType,
+                    'error'         => $message
                 ];
             }
         }

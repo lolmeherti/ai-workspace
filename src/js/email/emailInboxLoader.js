@@ -92,10 +92,18 @@ export function loadInbox(accountId, page, targetUid = null) {
                     });
                 }
             } else {
+                let displayMessage = data.message;
+                if (data.type === 'AUTH_FAILED') {
+                    displayMessage = 'Authentication failed — check your email credentials or app password.';
+                } else if (data.type === 'CONNECTION_TIMEOUT') {
+                    displayMessage = 'Connection timed out — the server may be unreachable or slow to respond.';
+                }
+
                 listContainer.innerHTML = `
                     <div class="text-center py-20 text-rose-400 flex flex-col items-center justify-center gap-2 select-none">
                         <uk-icon icon="alert-triangle" class="w-8 h-8 opacity-40"></uk-icon>
-                        <p class="text-[10px] font-bold tracking-wider uppercase">Link Failure: ${data.message}</p>
+                        <p class="text-[10px] font-bold tracking-wider uppercase">${displayMessage}</p>
+                        ${data.message !== displayMessage ? `<p class="text-[9px] text-slate-500 mt-2 break-all max-w-xs mx-auto">${data.message}</p>` : ''}
                     </div>
                 `;
             }

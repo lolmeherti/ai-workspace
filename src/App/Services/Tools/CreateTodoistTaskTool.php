@@ -34,7 +34,7 @@ class CreateTodoistTaskTool
                 $analysis = $schedulingAgent->analyzeTask($content, $dueString, $tasks);
 
                 if (is_array($analysis) && isset($analysis['status']) && $analysis['status'] !== 'clear') {
-                    $aiCommentary = "\n\n### âš ï¸ Calendar " . ucfirst($analysis['status']) . " Detected\n\n";
+                    $aiCommentary = "\n\n### ⚠️ Calendar " . ucfirst($analysis['status']) . " Detected\n\n";
                     $aiCommentary .= $analysis['analysis'] . "\n\n";
                     $aiCommentary .= "Please tell me how you would like to proceed (e.g., reschedule, skip, or create it anyway)!";
 
@@ -52,11 +52,13 @@ class CreateTodoistTaskTool
 
                 $dueFormatted = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : 'No due date');
                 
+                $taskUrl = $task['url'] ?? (isset($task['id']) ? "https://todoist.com/showTask?id=" . $task['id'] : "https://todoist.com");
+
                 $instructions = "System successfully created the task in Todoist:\n";
                 $instructions .= "- Task: \"{$task['content']}\"\n";
                 $instructions .= "- ID: {$task['id']}\n";
                 $instructions .= "- Due: {$dueFormatted}\n";
-                $instructions .= "- Link: {$task['url']}\n\n";
+                $instructions .= "- Link: {$taskUrl}\n\n";
                 $instructions .= "[SYSTEM NOTE]: Present a short, friendly confirmation message to the user confirming the task details. Keep it brief.";
 
                 $messages[] = ['role' => 'assistant', 'content' => $cleanJson];

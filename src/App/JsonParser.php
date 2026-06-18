@@ -4,6 +4,43 @@ namespace App;
 
 class JsonParser
 {
+    public static function extractAllAndDecode(string $text): array
+    {
+        $results = [];
+        $len = strlen($text);
+        $braceCount = 0;
+        $start = -1;
+
+        for ($i = 0; $i < $len; $i++) {
+            if ($text[$i] === '{') {
+                if ($braceCount === 0) {
+                    $start = $i;
+                }
+                $braceCount++;
+            } elseif ($text[$i] === '}') {
+                if ($braceCount > 0) {
+                    $braceCount--;
+                    if ($braceCount === 0 && $start !== -1) {
+                        $substring = substr($text, $start, $i - $start + 1);
+                        $decoded = @json_decode($substring, true);
+                        if (is_array($decoded)) {
+                            $results[] = self::normalizeOutput($decoded);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (empty($results)) {
+            $single = self::extractAndDecode($text);
+            if ($single !== null) {
+                $results[] = $single;
+            }
+        }
+
+        return $results;
+    }
+
     public static function extractAndDecode(string $text): ?array
     {
         if (preg_match('/(?:call|tool_call):([a-zA-Z0-9_\-]+)\s*(\{.*\})/is', $text, $matches)) {
