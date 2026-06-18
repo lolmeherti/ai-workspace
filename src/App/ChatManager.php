@@ -129,48 +129,120 @@ class ChatManager
         }
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
-        $messages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
 
         $emit('generating', []);
 
-        $aiRawResponse = $this->streamAgentResponse($messages, $emit);
-        $decodedTools = \App\JsonParser::extractAllAndDecode($aiRawResponse);
-        $isToolCall = !empty($decodedTools);
+        $aiResponse = '';
+        $executionCount = 0;
+        $maxExecutions = 5;
 
-        if ($isToolCall) {
-            $this->db->insert('chat_history', [
-                'session_id' => $sessionId,
-                'role' => 'assistant',
-                'message' => $aiRawResponse,
-                'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
-            ]);
-
-            $combinedResults = [];
-            foreach ($decodedTools as $toolParams) {
-                $singleJson = json_encode($toolParams);
-                $toolOutput = $this->toolExecutionService->processToolCall($singleJson, $sessionId, $messages, $emit);
-                $toolName = $toolParams['tool'] ?? 'unknown_tool';
-                $combinedResults[] = "=== Tool [{$toolName}] output ===\n" . $toolOutput;
+        while ($executionCount < $maxExecutions) {
+            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+            $rawTools = \App\JsonParser::extractAllAndDecode($aiRawResponse);
+            
+            $decodedTools = [];
+            $seenHashes = [];
+            foreach ($rawTools as $toolParams) {
+                $hash = md5(json_encode($toolParams));
+                if (!in_array($hash, $seenHashes)) {
+                    $seenHashes[] = $hash;
+                    $decodedTools[] = $toolParams;
+                }
             }
 
-            $emit('token', ['chunk' => "\n\n*(System: Parallel tool outputs loaded, compiling final response...)*\n\n"]);
+            $isToolCall = !empty($decodedTools);
 
-            $combinedResultText = implode("\n\n", $combinedResults);
+            if ($isToolCall) {
+                $this->db->insert('chat_history', [
+                    'session_id' => $sessionId,
+                    'role' => 'assistant',
+                    'message' => $aiRawResponse,
+                    'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
+                ]);
 
-            $this->db->insert('chat_history', [
-                'session_id' => $sessionId,
-                'role' => 'system',
-                'message' => $combinedResultText,
-                'token_estimate' => (int)(mb_strlen($combinedResultText) / 4)
-            ]);
+                $emit('token', ['chunk' => "\n\n"]);
 
-            $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-            $repromptMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
+                $silentEmit = function(string $event, array $data = []) use ($emit) {
+                    if ($event !== 'token') {
+                        $emit($event, $data);
+                    }
+                };
 
-            $finalResponse = $this->streamAgentResponse($repromptMessages, $emit);
-            $aiResponse = $finalResponse;
-        } else {
-            $aiResponse = $aiRawResponse;
+                $combinedResults = [];
+                foreach ($decodedTools as $toolParams) {
+                    $toolName = $toolParams['tool'] ?? 'unknown_tool';
+                    
+                    $runningPhrase = '';
+                    $completedPhrase = '';
+                    
+                    switch ($toolName) {
+                        case 'search_files':
+                            $q = $toolParams['query'] ?? '';
+                            $runningPhrase = "Looking for \"{$q}\"...";
+                            $completedPhrase = "Files checked.";
+                            break;
+                        case 'search_memories':
+                            $q = $toolParams['query'] ?? '';
+                            $runningPhrase = "Recalling \"{$q}\"...";
+                            $completedPhrase = "Recalled.";
+                            break;
+                        case 'get_todoist_tasks':
+                            $runningPhrase = "Checking agenda...";
+                            $completedPhrase = "Agenda loaded.";
+                            break;
+                        case 'create_todoist_task':
+                            $c = $toolParams['content'] ?? '';
+                            $runningPhrase = "Scheduling \"{$c}\"...";
+                            $completedPhrase = "Scheduled.";
+                            break;
+                        case 'update_todoist_task':
+                            $runningPhrase = "Updating task...";
+                            $completedPhrase = "Updated.";
+                            break;
+                        case 'delete_todoist_task':
+                            $runningPhrase = "Removing task...";
+                            $completedPhrase = "Removed.";
+                            break;
+                        case 'get_email_briefing':
+                            $runningPhrase = "Checking emails...";
+                            $completedPhrase = "Briefing compiled.";
+                            break;
+                        default:
+                            $runningPhrase = "Processing...";
+                            $completedPhrase = "Done.";
+                            break;
+                    }
+
+                    $emit('token', ['chunk' => "• {$runningPhrase}\n"]);
+
+                    $singleJson = json_encode($toolParams);
+                    $toolOutput = $this->toolExecutionService->processToolCall($singleJson, $sessionId, $currentMessages, $silentEmit);
+                    
+                    $emit('token', ['chunk' => "✓ {$completedPhrase}\n"]);
+                    
+                    $combinedResults[] = "=== Tool [{$toolName}] output ===\n" . $toolOutput;
+                }
+
+                $emit('token', ['chunk' => "\n"]);
+
+                $combinedResultText = implode("\n\n", $combinedResults);
+
+                $this->db->insert('chat_history', [
+                    'session_id' => $sessionId,
+                    'role' => 'system',
+                    'message' => $combinedResultText,
+                    'token_estimate' => (int)(mb_strlen($combinedResultText) / 4)
+                ]);
+
+                $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
+                
+                $executionCount++;
+            } else {
+                $aiResponse = $aiRawResponse;
+                break;
+            }
         }
 
         $usage = $this->agent->lastUsage;
