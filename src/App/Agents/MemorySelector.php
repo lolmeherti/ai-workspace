@@ -4,7 +4,7 @@ namespace App\Agents;
 
 use App\Database;
 use App\AgentManager;
-use App\Config;
+use App\Repositories\MemoryRepository;
 
 class MemorySelector
 {
@@ -17,99 +17,63 @@ class MemorySelector
         $this->agent = $agent;
     }
 
+    /**
+     * Performs direct, database-only memory lookup without triggering secondary LLM calls.
+     */
     public function selectRelevantMemory(string $userPrompt): ?string
     {
-        $limit = (int) Config::get('MAX_MEMORIES_LIMIT', 500);
-
         $cleanPrompt = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $userPrompt);
         $words = array_filter(preg_split('/\s+/', $cleanPrompt));
         
-        if (count($words) > 100) {
-            $searchString = implode(' ', array_merge(array_slice($words, 0, 50), array_slice($words, -50)));
-        } else {
-            $searchString = implode(' ', $words);
-        }
-
-        $memories = [];
-
-        if (!empty($searchString)) {
-            $sql = <<<TEXT
-SELECT id, memory_text 
-FROM memories 
-WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
-LIMIT :limit
-TEXT;
-
-            $memories = $this->db->query($sql, [
-                ':prompt' => $searchString,
-                ':limit'  => $limit
-            ]);
-        }
-
-        if (empty($memories)) {
-            $sqlFallback = <<<TEXT
-SELECT id, memory_text 
-FROM memories 
-ORDER BY id DESC 
-LIMIT :limit
-TEXT;
-            
-            $memories = $this->db->query($sqlFallback, [
-                ':limit' => $limit
-            ]);
-        }
-
-        if (empty($memories)) {
+        if (empty($words)) {
             return null;
         }
 
-        $memoryContext = "";
-        foreach ($memories as $memory) {
-            $memoryContext .= "ID: {$memory['id']} | Memory: {$memory['memory_text']}\n";
-        }
+        $searchString = implode(' ', $words);
+        $memories = [];
 
-        $systemPrompt = <<<TEXT
-Return ONLY JSON matching this schema:
-{
-  "relevant_memory_ids": [integer]
-}
-
-You will be provided with a list of past user memories and the current user prompt. Identify the IDs of the memories that are highly relevant to answering the prompt. Return an empty array if no memories are relevant.
+        $sqlFulltext = <<<TEXT
+SELECT id, memory_text 
+FROM memories 
+WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
+LIMIT 20
 TEXT;
 
-        $userMessage = <<<TEXT
-Memories:
-{$memoryContext}
-
-Current User Prompt:
-{$userPrompt}
-TEXT;
-
-        $messages = [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $userMessage]
-        ];
-
-        $temperature = (float) Config::get('AGENT_MEMORY_SELECTOR_TEMP', 0.1);
-        $response = trim($this->agent->chat($messages, false, null, $temperature));
-        $data = \App\JsonParser::extractAndDecode($response);
-        $selectedIds = [];
-
-        if (is_array($data) && isset($data['relevant_memory_ids']) && is_array($data['relevant_memory_ids'])) {
-            $selectedIds = array_map('intval', $data['relevant_memory_ids']);
+        try {
+            $memories = $this->db->query($sqlFulltext, [
+                ':prompt' => $searchString
+            ]);
+        } catch (\Throwable $e) {
+            $memories = [];
         }
 
-        if (empty($selectedIds)) {
+        if (empty($memories)) {
+            $conditions = [];
+            $params = [];
+            foreach (array_values($words) as $index => $word) {
+                if (strlen($word) < 2) {
+                    continue; 
+                }
+                $paramName = ":word_" . $index;
+                $conditions[] = "memory_text LIKE " . $paramName;
+                $params[$paramName] = "%" . $word . "%";
+            }
+
+            if (!empty($conditions)) {
+                $sqlLike = "SELECT id, memory_text FROM memories WHERE " . implode(" OR ", $conditions) . " ORDER BY id DESC LIMIT 20";
+                $memories = $this->db->query($sqlLike, $params);
+            }
+        }
+
+        if (empty($memories)) {
             return null;
         }
 
         $selectedMemories = [];
         foreach ($memories as $memory) {
-            if (in_array((int)$memory['id'], $selectedIds, true)) {
-                $selectedMemories[] = "- " . $memory['memory_text'];
-            }
+            $selectedMemories[] = "- " . $memory['memory_text'];
         }
 
-        return !empty($selectedMemories) ? implode("\n", $selectedMemories) : null;
+        return implode("\n", $selectedMemories);
     }
 }

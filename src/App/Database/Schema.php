@@ -110,6 +110,14 @@ class Schema
             }
         } catch (PDOException $e) {
         }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM email_cache LIKE 'fetched_at'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE email_cache ADD COLUMN fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER created_at");
+            }
+        } catch (PDOException $e) {
+        }
     }
 
     public function nukeAndRebuild(): void

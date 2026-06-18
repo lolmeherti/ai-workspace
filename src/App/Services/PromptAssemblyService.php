@@ -43,7 +43,6 @@ TEXT;
 
     public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query): string
     {
-        // 1. ABSOLUTE ANCHOR: Stable Profile from DB (Most stable)
         $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
         $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
 
@@ -52,7 +51,6 @@ TEXT;
             $systemPrompt .= "USER IDENTITY AND CORE CONSTRAINTS:\n{$stableProfile}\n\n";
         }
 
-        // 2. STATIC INSTRUCTIONS: Tool definitions and core behavior (Very stable)
         $systemPrompt .= <<<TEXT
 You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
@@ -84,23 +82,16 @@ INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
 TEXT;
 
-        // 3. TEMPORAL CONTEXT: Changes every turn (Volatile)
         $currentDate = date('l, F j, Y (H:i)');
         $cutoffDate = 'early 2024';
         $systemPrompt .= "\n\nToday's date and exact current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
 
-        // 4. DYNAMIC DATA: Web Search (Highly Volatile)
         if (!empty($condensedContext)) {
             $systemPrompt .= "\n\nLIVE WEB SEARCH CONTEXT:\n{$condensedContext}\n";
             if ($usedCache) {
                 $systemPrompt .= "\n(Note: This context was retrieved from your recent semantic memory cache).\n";
             }
         }
-
-        // 5. DYNAMIC DATA: Recalled Memories (Highly Volatile)
-        // Note: This is no longer automatically injected to prevent mandatory latency tax.
-        // The AI must now explicitly call the 'search_memories' tool if needed.
-        // (Left empty for future transition or manual overrides)
 
         return $systemPrompt;
     }

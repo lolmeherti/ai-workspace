@@ -133,8 +133,45 @@ class ChatManager
 
         $emit('generating', []);
 
-        $aiResponse = $this->streamAgentResponse($messages, $emit);
-        $aiResponse = $this->toolExecutionService->processToolCall($aiResponse, $sessionId, $messages, $emit);
+        $aiRawResponse = $this->streamAgentResponse($messages, $emit);
+        $decodedTools = \App\JsonParser::extractAllAndDecode($aiRawResponse);
+        $isToolCall = !empty($decodedTools);
+
+        if ($isToolCall) {
+            $this->db->insert('chat_history', [
+                'session_id' => $sessionId,
+                'role' => 'assistant',
+                'message' => $aiRawResponse,
+                'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
+            ]);
+
+            $combinedResults = [];
+            foreach ($decodedTools as $toolParams) {
+                $singleJson = json_encode($toolParams);
+                $toolOutput = $this->toolExecutionService->processToolCall($singleJson, $sessionId, $messages, $emit);
+                $toolName = $toolParams['tool'] ?? 'unknown_tool';
+                $combinedResults[] = "=== Tool [{$toolName}] output ===\n" . $toolOutput;
+            }
+
+            $emit('token', ['chunk' => "\n\n*(System: Parallel tool outputs loaded, compiling final response...)*\n\n"]);
+
+            $combinedResultText = implode("\n\n", $combinedResults);
+
+            $this->db->insert('chat_history', [
+                'session_id' => $sessionId,
+                'role' => 'system',
+                'message' => $combinedResultText,
+                'token_estimate' => (int)(mb_strlen($combinedResultText) / 4)
+            ]);
+
+            $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+            $repromptMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
+
+            $finalResponse = $this->streamAgentResponse($repromptMessages, $emit);
+            $aiResponse = $finalResponse;
+        } else {
+            $aiResponse = $aiRawResponse;
+        }
 
         $usage = $this->agent->lastUsage;
         $assistantTokens = (int)(mb_strlen($aiResponse) / 4);
