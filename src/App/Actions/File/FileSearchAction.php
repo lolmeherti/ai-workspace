@@ -24,8 +24,21 @@ class FileSearchAction extends BaseAction
         $source = $_GET['source'] ?? '';
         $isGallery = ($source === 'gallery');
 
-        $toolQuery = $_GET['query'] ?? '';
-        $keywords = array_filter(explode(' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $toolQuery)));
+        $toolQuery = $_GET['query'] ?? $toolData['query'] ?? '';
+        $cleanQuery = str_replace([',', ';', '/', '-', '_'], ' ', $toolQuery);
+        $cleanQuery = preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanQuery);
+        $rawKeywords = array_filter(explode(' ', $cleanQuery));
+
+        $stopwords = ['of', 'for', 'the', 'and', 'to', 'in', 'my', 'your', 'with', 'on', 'at', 'by', 'an', 'is', 'it', 'or', 'as', 'list', 'search', 'words', 'example', 'keywords', 'comma', 'separated'];
+
+        $keywords = [];
+        foreach ($rawKeywords as $word) {
+            $lowerWord = mb_strtolower($word);
+            if (mb_strlen($word) < 2 || in_array($lowerWord, $stopwords)) {
+                continue;
+            }
+            $keywords[] = $word;
+        }
 
         $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
         $conditions = [];

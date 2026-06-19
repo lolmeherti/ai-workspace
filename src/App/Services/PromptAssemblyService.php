@@ -37,7 +37,7 @@ TEXT;
         if (!$suppressTools) {
             $systemPrompt .= <<<TEXT
 If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
-{"tool": "search_files", "query": "search words here"}
+{"tool": "search_files", "query": "cv, resume"}
 
 If the user wants to schedule a reminder, set a task, plan an appointment, create a task or see their upcoming calendar/schedule, you can help the user easily.
 In this scenario your reply MUST BE only one of the following JSON blocks.
@@ -67,9 +67,11 @@ INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
 TEXT;
 
-        $currentDate = date('l, F j, Y (H:i)');
+        $now = time();
+        $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;
+        $currentDate = date('l, F j, Y', $now) . sprintf(' (%02d:%02d)', (int)date('H', $now), $roundedMinute);
         $cutoffDate = 'early 2024';
-        $systemPrompt .= "\n\nToday's date and exact current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+        $systemPrompt .= "\n\nToday's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
 
         if (!empty($condensedContext)) {
             $systemPrompt .= "\n\nLIVE WEB SEARCH CONTEXT:\n{$condensedContext}\n";

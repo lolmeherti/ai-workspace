@@ -123,11 +123,15 @@ class ChatManager
         $searchQuery = null;
         $intent = 'none';
 
-        $emit('status', ['text' => 'Analyzing intent...']);
+       $emit('status', ['text' => 'Analyzing intent...']);
         if ($this->searchDecider) {
             $decisionResult = $this->searchDecider->decideSearchAndIntent($query, $history);
             $searchQuery = $decisionResult['search_query'] ?? null;
             $intent = $decisionResult['intents'] ?? 'none';
+
+            if ($intent !== 'none' && $intent !== 'none,none' && !empty($intent)) {
+                $searchQuery = null; 
+            }
         }
 
         $emit('intent_result', [
@@ -135,20 +139,94 @@ class ChatManager
             'intents' => $intent
         ]);
 
-        $condensedContext = $this->webSearchService->executeDecision(
-            $query,
-            $history,
-            $cacheAction,
-            $cacheKeyToUse,
-            $emit,
-            $usedCache,
-            $scrapedUrls,
-            $searchQuery
-        );
+        // =========================================================================
+        // TIERED TOOL PIPELINE (SHORT-CIRCUITING EXECUTOR)
+        // =========================================================================
+        $tier1Found = false;
+        $tier2Found = false;
 
-        if ($condensedContext === 'ASK_USER') {
-            return [];
+        $intentList = array_filter(array_map('trim', explode(',', $intent)));
+        $searchTargetQuery = !empty($searchQuery) ? $searchQuery : $query;
+
+        // ----------------- TIER 1: LOCAL DISK SEARCH (Lowest Risk) -----------------
+        if (in_array('search_files', $intentList) || in_array('search_memories', $intentList)) {
+            $emit('status', ['text' => 'Checking local storage...']);
+
+            if (in_array('search_files', $intentList)) {
+                $toolParams = ['tool' => 'search_files', 'query' => $searchTargetQuery];
+                $emit('tool_start', ['tool' => 'search_files', 'label' => 'Searching local disk...']);
+                
+                $toolOutput = $this->toolExecutionService->processToolCall(json_encode($toolParams), $sessionId, $history, $emit);
+                
+                $emit('tool_done', ['tool' => 'search_files', 'label' => 'Files checked.']);
+
+                // If actual results were returned (not a standard error or "No matching files" placeholder)
+                if (stripos($toolOutput, 'No matching files') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
+                    $tier1Found = true;
+
+                    $this->db->insert('chat_history', [
+                        'session_id' => $sessionId,
+                        'role' => 'system',
+                        'message' => $toolOutput,
+                        'message_type' => 'data_fetching',
+                        'tool_name' => 'search_files',
+                        'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
+                    ]);
+                }
+            }
         }
+
+        // ----------------- TIER 2: PERSONAL ACCOUNTS (Medium Risk) -----------------
+        // We only proceed to Tier 2 if Tier 1 found nothing (or wasn't requested)
+        if (!$tier1Found && (in_array('todoist_get', $intentList) || in_array('email_briefing', $intentList))) {
+            $emit('status', ['text' => 'Checking personal agenda...']);
+
+            if (in_array('todoist_get', $intentList)) {
+                $toolParams = ['tool' => 'get_todoist_tasks'];
+                $emit('tool_start', ['tool' => 'get_todoist_tasks', 'label' => 'Checking agenda...']);
+                
+                $toolOutput = $this->toolExecutionService->processToolCall(json_encode($toolParams), $sessionId, $history, $emit);
+                
+                $emit('tool_done', ['tool' => 'get_todoist_tasks', 'label' => 'Agenda loaded.']);
+
+                if (stripos($toolOutput, 'No upcoming tasks') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
+                    $tier2Found = true;
+
+                    $this->db->insert('chat_history', [
+                        'session_id' => $sessionId,
+                        'role' => 'system',
+                        'message' => $toolOutput,
+                        'message_type' => 'data_fetching',
+                        'tool_name' => 'get_todoist_tasks',
+                        'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
+                    ]);
+                }
+            }
+        }
+
+        // ----------------- TIER 3: LIVE WEB SEARCH (Highest Risk) -----------------
+        // We ONLY execute the web search if neither Tier 1 nor Tier 2 yielded a positive local match
+        $condensedContext = '';
+        if (!$tier1Found && !$tier2Found && !empty($searchQuery)) {
+            $emit('status', ['text' => 'Consulting external sources...']);
+            $condensedContext = $this->webSearchService->executeDecision(
+                $query,
+                $history,
+                $cacheAction,
+                $cacheKeyToUse,
+                $emit,
+                $usedCache,
+                $scrapedUrls,
+                $searchQuery
+            );
+
+            if ($condensedContext === 'ASK_USER') {
+                return [];
+            }
+        }
+
+        // Re-read updated history (including any pre-emptively inserted tool outputs)
+        $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
         $emit('status', ['text' => 'Assembling context...']);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
@@ -169,8 +247,28 @@ class ChatManager
         $maxExecutions = 5;
         $calledTools = [];
 
+        // If a tool has already been run pre-emptively on the backend, register it to prevent double calls
+        if ($tier1Found) {
+            $calledTools[] = in_array('search_files', $intentList) ? 'search_files' : 'search_memories';
+        }
+        if ($tier2Found) {
+            $calledTools[] = in_array('todoist_get', $intentList) ? 'get_todoist_tasks' : 'get_email_briefing';
+        }
+
         while ($executionCount < $maxExecutions) {
             $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+
+            // Translate Gemma 4 / Qwen native tokenizer tool calls to standard JSON blocks on the fly
+            $aiRawResponse = preg_replace_callback(
+                '/<\|tool_call|>call:(?:[a-zA-Z0-9_-]+\.)?([a-zA-Z0-9_-]+)({.*?})(?:<\|tool_call|>)?/is',
+                function($matches) {
+                    $toolName = $matches[1];
+                    $args = json_decode($matches[2], true) ?: [];
+                    return json_encode(array_merge(['tool' => $toolName], $args));
+                },
+                $aiRawResponse
+            );
+
             $rawTools = \App\JsonParser::extractAllAndDecode($aiRawResponse);
             
             $decodedTools = [];
@@ -324,7 +422,8 @@ class ChatManager
             }
         }
 
-        $cleanResponse = $this->stripThinkingTags($aiResponse);
+        // Keep the raw response (with thinking tags) in the database to prevent KV cache invalidation
+        $cleanResponse = $aiResponse; 
         $usage = $this->agent->lastUsage;
         $assistantTokens = (int)(mb_strlen($cleanResponse) / 4);
 
@@ -362,7 +461,7 @@ class ChatManager
         }
 
         $emit('done', [
-            'message' => $cleanResponse,
+            'message' => $this->stripThinkingTags($cleanResponse), // Strips tags only for the final browser display
             'title' => $updatedTitle,
             'total_session_tokens' => $totalSessionTokens,
             'session_id' => $sessionId
@@ -451,8 +550,9 @@ class ChatManager
         $inJsonTool = false;
         $jsonBraceDepth = 0;
         $inThoughtTag = false;
+        $isStartOfResponse = true; // Tracks the absolute start of the textual response
 
-        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThoughtTag) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThoughtTag, &$isStartOfResponse) {
             if ($type === 'reasoning') {
                 $emit('reasoning', ['chunk' => $chunk]);
                 return;
@@ -476,8 +576,18 @@ class ChatManager
                 return;
             }
 
+            // Suppress native tokenizer tool-call blocks (Gemma 4 / Qwen) from streaming to screen
+            if (str_contains($chunk, '<|tool_call|>') || str_contains($chunk, '<tool_call>')) {
+                $inJsonTool = true;
+                return;
+            }
+            if ($inJsonTool && (str_contains($chunk, '<|tool_call|>') || str_contains($chunk, '</tool_call>'))) {
+                $inJsonTool = false;
+                return;
+            }
+
             if ($inJsonTool) {
-                // Track brace depth to detect end of JSON
+                // Track brace depth to detect end of JSON standard tool calls
                 $jsonBraceDepth += substr_count($chunk, '{') - substr_count($chunk, '}');
                 if ($jsonBraceDepth <= 0) {
                     $inJsonTool = false;
@@ -491,13 +601,13 @@ class ChatManager
             if (mb_check_encoding($utf8_buffer, 'UTF-8')) {
                 // Strip [System Routing Hint: ...] from output
                 $clean = preg_replace('/\[System Routing Hint:[^\]]*\]/s', '', $utf8_buffer);
-                if (empty(trim($clean))) {
+                if ($clean === '') { 
                     $utf8_buffer = '';
                     return;
                 }
 
                 // If the clean buffer contains an opening brace '{', we might be starting a tool call.
-                // We should defer emitting this buffer until we see either '"tool":' or confirm it's not a tool.
+                // We should defer emitting this buffer until we see either '"tool"\s*:' or confirm it's not a tool.
                 if (str_contains($clean, '{')) {
                     if (preg_match('/"tool"\s*:/', $clean)) {
                         $inJsonTool = true;
@@ -534,6 +644,23 @@ class ChatManager
 
                     // Wait for more chunks to verify tool presence
                     return;
+                }
+
+                // If this is the absolute start of the textual response, strip accidental backticks
+                if ($isStartOfResponse && !empty(trim($clean))) {
+                    $trimmedClean = ltrim($clean);
+                    if (str_starts_with($trimmedClean, '`')) {
+                        // Strip leading backticks (e.g. ``` or `)
+                        $clean = preg_replace('/^`+/s', '', $trimmedClean);
+                        // Strip optional language specifiers (e.g. 'markdown', 'text', 'html')
+                        $clean = preg_replace('/^(markdown|text|html|txt)?\s+/si', '', $clean);
+                    }
+                    
+                    // ONLY set isStartOfResponse to false if we have finally outputted actual text.
+                    // If the chunk was just backticks or is empty, we keep isStartOfResponse as true.
+                    if (trim($clean) !== '' && !str_starts_with(trim($clean), '`')) {
+                        $isStartOfResponse = false;
+                    }
                 }
 
                 $emit('token', ['chunk' => $clean]);

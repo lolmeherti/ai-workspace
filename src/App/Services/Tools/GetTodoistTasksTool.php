@@ -27,7 +27,7 @@ class GetTodoistTasksTool
                     $userPrompt = '';
                     for ($i = count($messages) - 1; $i >= 0; $i--) {
                         if ($messages[$i]['role'] === 'user') {
-                            $userPrompt = $messages[$i]['content'];
+                            $userPrompt = $messages[$i]['content'] ?? $messages[$i]['message'] ?? '';
                             break;
                         }
                     }

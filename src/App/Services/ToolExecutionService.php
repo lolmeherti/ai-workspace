@@ -71,7 +71,7 @@ class ToolExecutionService
             };
         } catch (\Throwable $e) {
             $emit('token', ['chunk' => "\n\n**System Error executing tool:** " . $e->getMessage()]);
-            return $aiResponse;
+            return "System tool execution error: " . $e->getMessage();
         }
     }
 
