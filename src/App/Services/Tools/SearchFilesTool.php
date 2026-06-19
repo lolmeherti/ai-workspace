@@ -18,7 +18,9 @@ class SearchFilesTool
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
                 $toolQuery = $toolData['query'] ?? '';
-                $keywords = array_filter(explode(' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $toolQuery)));
+                $cleanQuery = str_replace([',', ';', '/', '-', '_'], ' ', $toolQuery);
+                $cleanQuery = preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanQuery);
+                $keywords = array_filter(explode(' ', $cleanQuery));
                 
                 $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
                 $conditions = [];
@@ -49,11 +51,12 @@ class SearchFilesTool
                 if (empty($matchingFiles)) {
                     $resultsTxt .= "- No matching files found.\n";
                 } else {
-                    // FIX: Emit file list event to the frontend to trigger the interactive file list render
-                    $emit('file_choices', [
-                        'query' => $toolQuery,
-                        'files' => $matchingFiles
-                    ]);
+                    if (count($matchingFiles) > 1) {
+                        $emit('file_choices', [
+                            'query' => $toolQuery,
+                            'files' => $matchingFiles
+                        ]);
+                    }
 
                     foreach ($matchingFiles as &$f) {
                         $f['preview'] = '';

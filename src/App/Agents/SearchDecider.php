@@ -45,21 +45,48 @@ class SearchDecider
         $currentDate = date('l, F j, Y g:i A');
         
         $historyText = "";
-        $slicedHistory = array_slice($history, -8); 
+        
+        // Filter history to ONLY include concise, conversational user and assistant turns.
+        // We strictly exclude massive system payloads (like database results or extracted file contents)
+        // to prevent saturating the decider model's attention window.
+        $cleanHistory = [];
+        foreach ($history as $msg) {
+            $role = $msg['role'] ?? '';
+            $type = $msg['message_type'] ?? 'text';
+            
+            if ($role === 'system' || $type === 'data_fetching' || $type === 'tool_call') {
+                continue; // Skip non-conversational context completely
+            }
+            
+            $cleanHistory[] = $msg;
+        }
+
+        $slicedHistory = array_slice($cleanHistory, -6); // Take the last 6 clean conversational turns
         foreach ($slicedHistory as $msg) {
             if ($msg['message'] !== $userPrompt) {
-                $historyText .= ucfirst($msg['role']) . ": " . $msg['message'] . "\n";
+                $roleLabel = ucfirst($msg['role']);
+                $content = $msg['message'];
+                
+                // Truncate past long messages (like summaries) so they don't distract the decider
+                if (mb_strlen($content) > 200) {
+                    $content = mb_substr($content, 0, 200) . '... [truncated]';
+                }
+                
+                $historyText .= "{$roleLabel}: {$content}\n";
             }
         }
 
         $systemPrompt = <<<TEXT
 Today is {$currentDate}.
 
-You are a combined Search Decision + Intent Router agent. Analyze the user's request and output a single JSON object with two decisions.
+You are an Intent Router agent. Analyze the user's request and output a single JSON object.
 
-SEARCH DECISION: Does this request need live web search for up-to-date facts, news, weather, or real-time info? If the user is asking about local files or general conversation, no web search is needed.
+SEARCH DECISION RULES:
+- Set "requires_search" to true ONLY if the request asks for real-time information (e.g., current news, weather, stock prices, or general web facts).
+- Set "requires_search" to false if the user is asking about their personal calendar, their personal files (like their resume, documents, or photos), their personal emails, or general conversation.
 
-INTENT ROUTING: Identify ALL tool categories the user wants to use:
+INTENT ROUTING RULES:
+Identify ALL tool categories the user wants to utilize:
 - "search_files": User wants to find, view, or check files/docs/images on disk.
 - "todoist_create": User wants to create, add, plan, or schedule a task/reminder/appointment.
 - "todoist_get": User wants to see, read, fetch, or list their tasks/calendar/schedule.

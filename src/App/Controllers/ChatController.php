@@ -137,6 +137,7 @@ class ChatController extends BaseController
         }
 
         $cleanQuery = trim($query);
+        
         if (str_starts_with($cleanQuery, "[TRIGGER_BRIEFING_PIPELINE]")) {
             $includeSeen = str_contains($cleanQuery, ":include_read");
             (new ChatBriefingStreamAction($this->db, $this->agentManager))->execute($sessionId, $includeSeen);
