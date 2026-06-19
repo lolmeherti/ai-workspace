@@ -4,6 +4,7 @@ type Tier struct {
 	Name       string `json:"name"`
 	File       string `json:"file"`
 	URL        string `json:"url"`
+	CtxSize    int    `json:"ctx_size"`
 	MMProjFile string `json:"mmproj_file,omitempty"`
 	MMProjURL  string `json:"mmproj_url,omitempty"`
 }

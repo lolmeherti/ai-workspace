@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,22 +22,41 @@ func StartServer(binDir string, modelPath string, mmprojPath string, modelName s
 		return nil
 	}
 
+	reasoningFormat := "none"
+	targetModel := strings.ToLower(modelPath + " " + modelName)
+
+	if strings.Contains(targetModel, "qwen") {
+		reasoningFormat = "deepseek"
+	}
+
 	args := []string{
 		"-m", modelPath,
 		"--alias", modelName,
 		"--ctx-size", strconv.Itoa(ctxSize),
-		"-ngl", "99",
-		"--parallel", "1",
-		"--flash-attn", "on",
-		"--cache-type-k", "q8_0",
-		"--cache-type-v", "q8_0",
+		"-ngl", "999", 
+		"--parallel", "1", 
+		"--flash-attn", "on", 
+		"--cache-type-k", "q8_0", 
+		"--cache-type-v", "q8_0", 
 		"--host", "0.0.0.0",
 		"--port", "1234",
-		"--mlock",
+		"--reasoning-format", reasoningFormat, 
+	}
+
+	if strings.Contains(targetModel, "qwen") {
+		args = append(args, "--jinja")
+		
+		args = append(args, "--chat-template-kwargs", `{"enable_thinking": true}`)
+		
+		args = append(args, "--swa-full")
+		args = append(args, "--ctx-checkpoints", "512")
+		args = append(args, "--cache-reuse", "256")
 	}
 
 	if mmprojPath != "" {
-		args = append(args, "--mmproj", mmprojPath)
+		if _, err := os.Stat(mmprojPath); err == nil {
+			args = append(args, "--mmproj", mmprojPath)
+		}
 	}
 
 	cmd := util.RunSilentCommand(serverPath, args...)

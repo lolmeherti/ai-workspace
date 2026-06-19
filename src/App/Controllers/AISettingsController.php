@@ -35,12 +35,16 @@ class AISettingsController extends BaseController
     {
         $sessionId = (int)($_POST['session_id'] ?? $_GET['session_id'] ?? 0);
         $activeTab = Tab::tryFrom($_POST['tab'] ?? $_GET['tab'] ?? '') ?? Tab::CHATS;
-        $action = $this->resolvePostAction();
 
-        if ($action === Action::SAVE_SETTINGS) {
-            $this->saveSettings($sessionId, $activeTab);
-        } elseif ($action === Action::CLEAR_ALL) {
-            $this->clearAllData();
+        if (isset($_POST['switch_model'])) {
+            $this->switchModel($sessionId, $activeTab);
+        } else {
+            $action = $this->resolvePostAction();
+            if ($action === Action::SAVE_SETTINGS) {
+                $this->saveSettings($sessionId, $activeTab);
+            } elseif ($action === Action::CLEAR_ALL) {
+                $this->clearAllData();
+            }
         }
     }
 
@@ -73,6 +77,55 @@ class AISettingsController extends BaseController
             $this->chatSessionRepository->truncateAll();
         }
         $this->redirect("index.php?new_chat=1");
+    }
+
+    private function switchModel(int $sessionId, Tab $activeTab): void
+    {
+        // FIX: Trim any outer quotes submitted in form strings
+        $modelName = trim($_POST['model_name'] ?? '', '"\' ');
+        $ctxSize   = (int)($_POST['ctx_size'] ?? 0);
+
+        if ($modelName === '') {
+            $this->redirect($this->buildUrl($sessionId, $activeTab));
+            return;
+        }
+
+        $goApiUrl = \App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
+        $goApiUrl = str_replace('/v1', '', rtrim($goApiUrl, '/'));
+        $goApiUrl = preg_replace('#:\d{1,5}/?$#', ':9876/api/model-switch', $goApiUrl);
+        if ($goApiUrl === '' || $goApiUrl === \App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1')) {
+            $goApiUrl = 'http://host.docker.internal:9876/api/model-switch';
+        }
+
+        $payload  = json_encode([
+            'model_name' => $modelName,
+            'ctx_size'   => max($ctxSize, 512),
+        ]);
+
+        $ch = curl_init($goApiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 120,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200 && !empty($response)) {
+            $data = json_decode($response, true);
+            if (isset($data['status']) && $data['status'] === 'ok') {
+                $envUpdates = ['LLM_MODEL_NAME' => $modelName];
+                if ($ctxSize > 0) {
+                    $envUpdates['LLM_CTX_SIZE'] = (string)$ctxSize;
+                }
+                $this->envEditor->write($envUpdates);
+            }
+        }
+
+        $this->redirect($this->buildUrl($sessionId, $activeTab));
     }
 
     private function handleTokenLimit(): void

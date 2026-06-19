@@ -50,7 +50,7 @@ func Bootstrap() {
 	vendor, vram := gpu.Detect()
 	util.LogPrint("[+] Detected GPU: %s with %.2f GB VRAM\n", vendor, vram)
 
-	tiers := models.LoadConfig(embedded.Models)
+	tiers := models.LoadConfig(embedded.Models, workDir)
 	envPath := filepath.Join(workDir, ".env")
 	activeTier := models.ResolveActive(envPath, tiers, vram)
 	util.LogPrint("[+] Assigned AI Intelligence Tier: %s (%s)\n", activeTier.Name, activeTier.File)
@@ -93,18 +93,13 @@ func Bootstrap() {
 			})
 
 			if err != nil {
-				util.LogPrint("[-] Critical Error downloading mmproj: %v\n", err)
+				util.LogPrint("[-] Warning downloading mmproj (continuing without it): %v\n", err)
 				_ = os.Remove(tmpMMPath)
-				systray.Quit()
-				return
+			} else if err = os.Rename(tmpMMPath, mmprojPath); err != nil {
+				util.LogPrint("[-] Warning finalizing mmproj file: %v\n", err)
+			} else {
+				util.LogPrint("[+] Multimodal Projector downloaded successfully!\n")
 			}
-
-			if err = os.Rename(tmpMMPath, mmprojPath); err != nil {
-				util.LogPrint("[-] Critical Error finalizing mmproj file: %v\n", err)
-				systray.Quit()
-				return
-			}
-			util.LogPrint("[+] Multimodal Projector downloaded successfully!\n")
 		}
 	}
 
@@ -115,7 +110,9 @@ func Bootstrap() {
 	util.WriteConfig(filepath.Join(workDir, "docker-compose.yml"), embedded.Compose)
 	util.WriteConfig(filepath.Join(searxngDir, "settings.yml"), embedded.SearXNG)
 
-	registry, ctxSize, useLocal := env.MergeAndWrite(workDir, activeTier.Name, vram, modelPath)
+	registry, ctxSize, useLocal := env.MergeAndWrite(workDir, activeTier, modelPath)
+
+	StartHTTPServer(tiers, binDir, modelDir, searxngDir)
 
 	util.LogPrint("[+] Aligning systemic workspace file rights inside WSL...\n")
 	wslWorkDir := util.ToWslPath(workDir)

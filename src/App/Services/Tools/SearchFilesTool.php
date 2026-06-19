@@ -52,6 +52,12 @@ class SearchFilesTool
                 if (empty($matchingFiles)) {
                     $resultsTxt .= "- No matching files found.\n";
                 } else {
+                    // FIX: Emit file list event to the frontend to trigger the interactive file list render
+                    $emit('file_choices', [
+                        'query' => $toolQuery,
+                        'files' => $matchingFiles
+                    ]);
+
                     foreach ($matchingFiles as &$f) {
                         $f['preview'] = '';
                         $resultsTxt .= "- File: \"{$f['generated_title']}\" (Original Name: {$f['original_name']}, Physical Path: uploads/{$f['physical_name']}, Uploaded at: {$f['uploaded_at']}, Type: {$f['file_type']})\n";

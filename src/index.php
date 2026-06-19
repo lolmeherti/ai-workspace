@@ -51,6 +51,28 @@ try {
 
     require_once __DIR__ . '/actions.php';
 
+    // Fetch available models from Go API for the settings dropdown
+    $modelsList = [];
+    try {
+        $goHost = Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
+        $goHost = str_replace('/v1', '', rtrim($goHost, '/'));
+        // The Go API runs on the same host as llama but uses port 9876 instead of 1234
+        $modelsUrl = preg_replace('#:\d{1,5}/?$#', ':9876/api/models', $goHost);
+        if ($modelsUrl === '' || $modelsUrl === $goHost) {
+            $modelsUrl = 'http://host.docker.internal:9876/api/models';
+        }
+
+        $ch = curl_init($modelsUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 3,
+        ]);
+        if ($response = @curl_exec($ch)) {
+            $modelsList = json_decode($response, true) ?: [];
+        }
+        curl_close($ch);
+    } catch (\Exception $_e) {}
+
     $pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
     extract($pageData);
 } catch (\Throwable $e) {
