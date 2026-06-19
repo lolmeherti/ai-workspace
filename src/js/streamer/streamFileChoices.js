@@ -3,15 +3,19 @@
  * @description Render file choice accordion when multiple files match a search.
  */
 
-export function renderFileChoices(data, textContainer, chatWindow) {
+export function renderFileChoices(data, placeholderContainer, chatWindow) {
     const files = data.files;
     if (!files || files.length === 0) return;
 
-    const bubble = textContainer.closest('.chat-assistant');
+    // FIX: Locate the closest bubble wrapper dynamically to perform cleanup tasks safely
+    const bubble = placeholderContainer.closest('.chat-assistant') || placeholderContainer.closest('.ai-bubble');
     if (bubble) {
         const checkElement = Array.from(bubble.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.includes('Checking files'));
         if (checkElement) checkElement.remove();
     }
+
+    // FIX: Clear the dedicated placeholder container so older renders are safely cleaned out
+    placeholderContainer.innerHTML = '';
 
     const choiceContainer = document.createElement('div');
     choiceContainer.className = "flex flex-col gap-2 p-4 bg-[#0d1321]/85 border border-slate-800/80 rounded-xl mt-4 select-none relative w-full file-accordion-list";
@@ -80,7 +84,7 @@ export function renderFileChoices(data, textContainer, chatWindow) {
         choiceContainer.appendChild(fileItem);
     });
 
-    textContainer.appendChild(choiceContainer);
+    placeholderContainer.appendChild(choiceContainer);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 

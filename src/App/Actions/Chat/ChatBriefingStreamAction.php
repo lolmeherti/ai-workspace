@@ -169,7 +169,7 @@ class ChatBriefingStreamAction extends BaseAction
 
         if (!empty($suggestionsTags)) {
             $finalInput .= "\n\n[RECOMMENDED ACTION CARDS]:\n";
-            $finalInput .= "The following suggested calendar events were extracted and cross-referenced by your background sub-agent. You MUST append these exact tags to the very end of your final briefing response so the user can review and click them:\n";
+            $finalInput .= "The following suggested calendar events were extracted and cross-referenced by your background sub-agent. You MUST append these exact tags to the very end of your final response so the user can review and click them:\n";
             $finalInput .= $suggestionsTags;
         }
 

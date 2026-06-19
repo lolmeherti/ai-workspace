@@ -44,6 +44,22 @@ class ChatManager
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
     }
 
+    /**
+     * Sanitizes the messages array for strict templates (like Qwen).
+     * Any system message found after index 0 is mapped to a user role 
+     * to prevent template compilation exceptions.
+     */
+    private function cleanMessagesArray(array $messages): array
+    {
+        foreach ($messages as $idx => $msg) {
+            if ($idx > 0 && ($msg['role'] ?? '') === 'system') {
+                $messages[$idx]['role'] = 'user';
+                $messages[$idx]['content'] = "[System Context / Tool Output]:\n" . $msg['content'];
+            }
+        }
+        return $messages;
+    }
+
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?callable $streamCallback = null): array
     {
         $emit = function(string $event, array $data = []) use ($streamCallback) {
@@ -79,6 +95,7 @@ class ChatManager
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
         if (empty($cacheAction)) {
+            $emit('status', ['text' => 'Generating title...']);
             $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
         }
 
@@ -86,6 +103,7 @@ class ChatManager
         $scrapedUrls = [];
         $searchQuery = null;
 
+        $emit('status', ['text' => 'Evaluating search intent...']);
         $condensedContext = $this->webSearchService->executeDecision(
             $query,
             $history,
@@ -103,10 +121,14 @@ class ChatManager
 
         $intent = 'none';
         if (empty($cacheAction)) {
+            $emit('status', ['text' => 'Analyzing your request...']);
             $routerPrompt = $this->promptAssemblyService->buildRouterPrompt($query);
+            
             $routerMessages = [
-                ['role' => 'system', 'content' => $routerPrompt]
+                ['role' => 'system', 'content' => 'You are an intent router assistant.'],
+                ['role' => 'user', 'content' => $routerPrompt]
             ];
+            
             $intentRaw = $this->agent->chat($routerMessages, false, null, 0.1);
             
             $validIntents = [
@@ -130,6 +152,8 @@ class ChatManager
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
         $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
+        
+        $currentMessages = $this->cleanMessagesArray($currentMessages);
 
         $emit('generating', []);
 
@@ -237,6 +261,8 @@ class ChatManager
 
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
                 $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
+                
+                $currentMessages = $this->cleanMessagesArray($currentMessages);
                 
                 $executionCount++;
             } else {
@@ -372,7 +398,12 @@ TEXT;
         $aiResponse = '';
         $utf8_buffer = '';
 
-        $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiResponse, &$utf8_buffer) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer) {
+            if ($type === 'reasoning') {
+                $emit('reasoning', ['chunk' => $chunk]);
+                return;
+            }
+
             $aiResponse .= $chunk;
             $utf8_buffer .= $chunk;
 

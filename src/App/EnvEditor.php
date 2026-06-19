@@ -31,6 +31,15 @@ class EnvEditor
         return $vars;
     }
 
+    private function quoteValue(string $value): string
+    {
+        if (ctype_alnum($value) || $value === '') return $value;
+        if (!str_contains($value, ' ') && !str_contains($value, '"') && !str_contains($value, "'")) {
+            return $value;
+        }
+        return '"' . addcslashes($value, "\"\\") . '"';
+    }
+
     public function write(array $newVars): bool
     {
         if (!file_exists($this->filePath)) {
@@ -50,7 +59,7 @@ class EnvEditor
             if (count($parts) === 2) {
                 $key = trim($parts[0]);
                 if (array_key_exists($key, $newVars)) {
-                    $updatedLines[] = "{$key}=" . $newVars[$key];
+                    $updatedLines[] = "{$key}=" . $this->quoteValue($newVars[$key]);
                     $processedKeys[$key] = true;
                 } else {
                     $updatedLines[] = $line;
@@ -62,7 +71,7 @@ class EnvEditor
 
         foreach ($newVars as $key => $value) {
             if (!isset($processedKeys[$key])) {
-                $updatedLines[] = "{$key}={$value}";
+                $updatedLines[] = "{$key}=" . $this->quoteValue($value);
             }
         }
 

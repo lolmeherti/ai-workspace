@@ -57,26 +57,30 @@ class HealthCheck
 
     private function checkAi(): bool
     {
-        $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/') . '/models';
-        $configuredModel = Config::get('LLM_MODEL_NAME', 'local-model');
+        $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
 
-        $response = $this->fetchUrl($host);
-        if ($response === null) {
-            return false;
+        $ch = curl_init("{$host}/props");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        $response = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code === 200 && !empty($response)) {
+            return true;
         }
 
-        $data = json_decode($response, true);
-        if (!isset($data['data']) || !is_array($data['data'])) {
-            return false;
-        }
+        $modelsUrl = "{$host}/models";
+        $ch = curl_init($modelsUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        $response = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        foreach ($data['data'] as $model) {
-            if (isset($model['id']) && $model['id'] === $configuredModel) {
-                return true;
-            }
-        }
-
-        return false;
+        return ($code === 200 && !empty($response));
     }
 
     private function testUrl(string $url): bool

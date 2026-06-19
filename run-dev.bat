@@ -21,6 +21,7 @@ timeout /t 5 /nobreak >nul
 
 echo [+] Syncing network environment parameters...
 copy /y "%LOCALAPPDATA%\localsy\.env" "%~dp0.env" >nul
+if exist "%~dp0env" del /f /q "%~dp0env" >nul 2>&1
 
 set WORKSPACE_DIR=%~dp0
 if "%WORKSPACE_DIR:~-1%"=="\" set WORKSPACE_DIR=%WORKSPACE_DIR:~0,-1%

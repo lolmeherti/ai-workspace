@@ -1,6 +1,6 @@
 /**
  * @file js/streamer/streamResponse.js
- * @description SSE chat response streaming handler.
+ * @description SSE chat response streaming handler with automatic HTML tag-level thought parsing.
  */
 
 import { state } from '../state.js';
@@ -11,7 +11,6 @@ import { renderFileChoices } from './streamFileChoices.js';
 export async function streamResponse(formData, originalMessage) {
     state.isGenerating = true;
     
-    // 1. IMMEDIATELY LOCK THE EDITOR DRAWER AT THE START OF THE THINKING PHASE
     const lockOverlay = document.getElementById('editor-lock-overlay');
     if (lockOverlay) {
         lockOverlay.classList.remove('opacity-0', 'pointer-events-none');
@@ -30,6 +29,7 @@ export async function streamResponse(formData, originalMessage) {
             <span class="uk-spinner uk-spinner-sm animate-spin shrink-0" uk-spinner="ratio: 0.8"></span>
             <span class="loading-text truncate">Initializing...</span>
         </div>
+
         <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group trace-accordion hidden">
             <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
                 <span class="flex items-center gap-2">
@@ -42,17 +42,49 @@ export async function streamResponse(formData, originalMessage) {
                 <div class="scraping-container flex flex-col gap-2 mt-2 hidden w-full"></div>
             </div>
         </details>
+
+        <!-- Collapsible Thinking Process Box -->
+        <details class="w-full mb-4 overflow-hidden group thinking-accordion hidden rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(6,182,212,0.06),inset_0_1px_0_rgba(6,182,212,0.05)] transition-all duration-300" open>
+            <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-cyan-500/5 via-cyan-500/3 to-transparent hover:from-cyan-500/10 hover:via-cyan-500/5 transition-all duration-200">
+                <span class="flex items-center gap-3">
+                    <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 shadow-[0_0_10px_rgba(6,182,212,0.15)]">
+                        <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04Z"/>
+                            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04Z"/>
+                        </svg>
+                        <span class="absolute inset-0 rounded-lg border border-cyan-400/40 animate-ping opacity-0 group-open:opacity-0"></span>
+                    </span>
+                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Thinking Process</span>
+                    <span class="flex h-2 w-2 relative thinking-pulse-dot">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]"></span>
+                    </span>
+                </span>
+                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                    <span class="thinking-status-label">Streaming</span>
+                    <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+            </summary>
+            <div class="px-5 pb-4 pt-3 border-t border-cyan-500/10 bg-[#070b14]/40">
+                <div class="thinking-content text-sm text-slate-300 leading-relaxed markdown-content space-y-3"></div>
+            </div>
+        </details>
+
         <div class="streaming-text-container w-full"></div>
+        <div class="file-choices-placeholder-container w-full"></div>
     `;
     chatWindow.appendChild(aiNode);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
     const traceAccordion = aiWrapper.querySelector('.trace-accordion');
     const traceContent = aiWrapper.querySelector('.trace-content');
+    const thinkingAccordion = aiWrapper.querySelector('.thinking-accordion');
+    const thinkingContent = aiWrapper.querySelector('.thinking-content');
     const loadingIndicator = aiWrapper.querySelector('.loading-indicator');
     const loadingText = aiWrapper.querySelector('.loading-text');
     const scrapingContainer = aiWrapper.querySelector('.scraping-container');
     const textContainer = aiWrapper.querySelector('.streaming-text-container');
+    const fileChoicesContainer = aiWrapper.querySelector('.file-choices-placeholder-container');
     
     let markdownBuffer = "";
     let isFirstToken = true;
@@ -108,7 +140,7 @@ export async function streamResponse(formData, originalMessage) {
                             
                             const truncatedQuery = data.query.length > 50 ? data.query.substring(0, 50) + '...' : data.query;
                             loadingText.textContent = `Searching web for: "${truncatedQuery}"...`;
-                            
+
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
                             badge.innerHTML = '<uk-icon icon="globe" class="w-3 h-3"></uk-icon> Web Search';
@@ -123,7 +155,7 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'cache_used') {
                             traceAccordion.classList.remove('hidden');
                             traceAccordion.open = true;
-                            
+
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
                             badge.innerHTML = '<uk-icon icon="zap" class="w-3 h-3"></uk-icon> Memory Cached';
@@ -138,16 +170,16 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'ask_user') {
                             state.isGenerating = false;
                             aiWrapper.remove();
-                            
+
                             const tplAsk = document.getElementById('tpl-ask-user');
                             const askNode = tplAsk.content.cloneNode(true);
                             const askWrapper = askNode.querySelector('.cache-prompt-bubble');
-                            
+
                             askNode.querySelector('.ask-topic').textContent = `"${data.query_text}"`;
-                            
+
                             const btnUse = askNode.querySelector('.btn-use-cache');
                             const btnForce = askNode.querySelector('.btn-force-live');
-                            
+ 
                             btnUse.onclick = function() {
                                 askWrapper.remove();
                                 const newForm = new FormData();
@@ -157,7 +189,7 @@ export async function streamResponse(formData, originalMessage) {
                                 newForm.append('cache_key', data.cache_key);
                                 streamResponse(newForm, originalMessage);
                             };
-                            
+
                             btnForce.onclick = function() {
                                 askWrapper.remove();
                                 const newForm = new FormData();
@@ -167,7 +199,7 @@ export async function streamResponse(formData, originalMessage) {
                                 newForm.append('cache_key', data.cache_key);
                                 streamResponse(newForm, originalMessage);
                             };
-                            
+
                             chatWindow.appendChild(askNode);
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                             return;
@@ -211,8 +243,21 @@ export async function streamResponse(formData, originalMessage) {
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
+                        if (event === 'status') {
+                            loadingText.textContent = data.text;
+                        }
+
                         if (event === 'file_choices') {
-                            renderFileChoices(data, textContainer, chatWindow);
+                            renderFileChoices(data, fileChoicesContainer, chatWindow);
+                        }
+
+                        if (event === 'reasoning') {
+                            if (loadingIndicator && loadingIndicator.parentNode) {
+                                loadingIndicator.remove();
+                            }
+                            thinkingAccordion.classList.remove('hidden');
+                            renderThinkingContent(thinkingContent, thinkingContent.textContent + data.chunk);
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
                         if (event === 'token') {
@@ -228,67 +273,133 @@ export async function streamResponse(formData, originalMessage) {
                             markdownBuffer += data.chunk;
 
                             let displayBuffer = markdownBuffer;
-                            let hasAppliedEdit = false;
+                            let thinkingText = "";
+                            let finalText = "";
 
-                            // 2. HIGH-SPEED STATE MACHINE PARSER (ZERO BACKTRACKING)
-                            while (true) {
-                                let startIndex = displayBuffer.indexOf('<update id="');
-                                if (startIndex === -1) break;
+                            let thinkStart = -1;
+                            let thinkEnd = -1;
+                            let thinkTagLen = 0;
+                            let closeTagLen = 0;
 
-                                let tagEndIndex = displayBuffer.indexOf('">', startIndex);
-                                if (tagEndIndex === -1) break;
+                            // Try Gemma format first: <|channel>thought ... <channel|>
+                            thinkStart = displayBuffer.indexOf("<|channel>thought");
+                            if (thinkStart !== -1) {
+                                thinkTagLen = 17;
+                                thinkEnd = displayBuffer.indexOf("<channel|>", thinkStart + thinkTagLen);
+                                closeTagLen = 10;
+                            }
 
-                                let blockId = displayBuffer.substring(startIndex + 12, tagEndIndex);
-                                let endIndex = displayBuffer.indexOf('</update>', tagEndIndex);
-
-                                if (endIndex !== -1) {
-                                    // A. COMPLETED UPDATE: Parse final content and commit exactly once to PHP
-                                    let finalContent = displayBuffer.substring(tagEndIndex + 2, endIndex).trim();
-                                    
-                                    if (!window.processedBlockIds.has(blockId)) {
-                                        window.processedBlockIds.add(blockId);
-                                        window.commitBlockEditDirectly(blockId, finalContent);
-                                    }
-                                    hasAppliedEdit = true;
-                                    
-                                    // Remove completed update block from the conversational chat display
-                                    displayBuffer = displayBuffer.substring(0, startIndex) + displayBuffer.substring(endIndex + 9);
-                                } else {
-                                    // B. INCOMPLETE UPDATE: Stream partial tokens directly to editor container
-                                    let partialContent = displayBuffer.substring(tagEndIndex + 2).trim();
-                                    
-                                    // Check if another tag opens inside (self-healing boundary protection)
-                                    let nextTagIndex = partialContent.indexOf('<update id="');
-                                    if (nextTagIndex !== -1) {
-                                        partialContent = partialContent.substring(0, nextTagIndex).trim();
-                                    }
-
-                                    window.streamUpdateBlockContent(blockId, partialContent);
-                                    hasAppliedEdit = true;
-                                    
-                                    // Omit streaming content from conversational chat bubble view
-                                    displayBuffer = displayBuffer.substring(0, startIndex);
-                                    break;
+                            // Fall back to DeepSeek format: <think> ... </think>
+                            if (thinkStart === -1) {
+                                thinkStart = displayBuffer.indexOf("<think>");
+                                if (thinkStart !== -1) {
+                                    thinkTagLen = 7;
+                                    thinkEnd = displayBuffer.indexOf("</think>", thinkStart + thinkTagLen);
+                                    closeTagLen = 8;
                                 }
                             }
 
-                            // 3. Render Clean Conversation Text
-                            let htmlContent = marked.parse(displayBuffer);
-                            htmlContent = cleanAssistantStreamText(htmlContent);
-                            
-                            if (window.parseInlineFiles) {
-                                htmlContent = window.parseInlineFiles(htmlContent);
+                            // Handle partial: close tag arrived before open tag in buffer
+                            if (thinkStart === -1) {
+                                let gemmaEnd = displayBuffer.indexOf("<channel|>");
+                                if (gemmaEnd !== -1) {
+                                    thinkStart = 0;
+                                    thinkTagLen = 0;
+                                    thinkEnd = gemmaEnd;
+                                    closeTagLen = 10;
+                                } else {
+                                    let dsEnd = displayBuffer.indexOf("</think>");
+                                    if (dsEnd !== -1) {
+                                        thinkStart = 0;
+                                        thinkTagLen = 0;
+                                        thinkEnd = dsEnd;
+                                        closeTagLen = 8;
+                                    }
+                                }
                             }
-                            
-                            const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
-                            
-                            textContainer.innerHTML = htmlContent + cursorHtml;
-                            textContainer.querySelectorAll('pre code').forEach((block) => {
-                                hljs.highlightElement(block);
-                            });
-                            
+
+                            if (thinkStart !== -1) {
+                                thinkingAccordion.classList.remove('hidden');
+                                if (thinkEnd !== -1) {
+                                    thinkingText = displayBuffer.substring(thinkStart + thinkTagLen, thinkEnd);
+                                    finalText = displayBuffer.substring(thinkEnd + closeTagLen);
+                                    thinkingAccordion.open = false;
+
+                                    const summaryLabel = thinkingAccordion.querySelector('summary span:first-of-type');
+                                    const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
+                                    const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
+                                    if (summaryLabel && !summaryLabel.innerHTML.includes('Complete')) {
+                                        summaryLabel.className = 'flex items-center gap-2 text-slate-400';
+                                        summaryLabel.innerHTML = '<uk-icon icon="check" class="w-3.5 h-3.5 text-emerald-500"></uk-icon> Thought Process Complete';
+                                    }
+                                    if (pulseDot) pulseDot.classList.add('hidden');
+                                    if (statusLabel) statusLabel.textContent = 'Complete';
+                                } else {
+                                    thinkingText = displayBuffer.substring(thinkStart + thinkTagLen);
+                                    thinkingAccordion.open = true;
+                                }
+
+                                thinkingContent.textContent = thinkingText;
+                                renderThinkingContent(thinkingContent, thinkingText);
+                            } else {
+                                finalText = displayBuffer;
+                            }
+
+                            let hasAppliedEdit = false;
+
+                            if (finalText) {
+                                let parseBuffer = finalText;
+
+                                while (true) {
+                                    let startIndex = parseBuffer.indexOf('<update id="');
+                                    if (startIndex === -1) break;
+
+                                    let tagEndIndex = parseBuffer.indexOf('">', startIndex);
+                                    if (tagEndIndex === -1) break;
+
+                                    let blockId = parseBuffer.substring(startIndex + 12, tagEndIndex);
+                                    let endIndex = parseBuffer.indexOf('</update>', tagEndIndex);
+
+                                    if (endIndex !== -1) {
+                                        let finalContent = parseBuffer.substring(tagEndIndex + 2, endIndex).trim();
+                                        
+                                        if (!window.processedBlockIds.has(blockId)) {
+                                            window.processedBlockIds.add(blockId);
+                                            window.commitBlockEditDirectly(blockId, finalContent);
+                                        }
+                                        hasAppliedEdit = true;
+                                        parseBuffer = parseBuffer.substring(0, startIndex) + parseBuffer.substring(endIndex + 9);
+                                    } else {
+                                        let partialContent = parseBuffer.substring(tagEndIndex + 2).trim();
+                                        let nextTagIndex = partialContent.indexOf('<update id="');
+                                        if (nextTagIndex !== -1) {
+                                            partialContent = partialContent.substring(0, nextTagIndex).trim();
+                                        }
+
+                                        window.streamUpdateBlockContent(blockId, partialContent);
+                                        hasAppliedEdit = true;
+                                        parseBuffer = parseBuffer.substring(0, startIndex);
+                                        break;
+                                    }
+                                }
+
+                                let htmlContent = marked.parse(parseBuffer);
+                                htmlContent = cleanAssistantStreamText(htmlContent);
+
+                                if (window.parseInlineFiles) {
+                                    htmlContent = window.parseInlineFiles(htmlContent);
+                                }
+
+                                const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
+                                
+                                textContainer.innerHTML = htmlContent + cursorHtml;
+                                textContainer.querySelectorAll('pre code').forEach((block) => {
+                                    hljs.highlightElement(block);
+                                });
+                            }
+ 
                             aiBubble.setAttribute('data-raw', markdownBuffer);
-                            
+ 
                             if (payload.done) {
                                 window.evaluateStreamCompletion(hasAppliedEdit, aiBubble, textContainer);
                             }
@@ -299,11 +410,11 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
-                            
+
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
-                            
+
                             if (data.total_session_tokens && typeof maxTokensLimit !== 'undefined') {
                                 updateTokenCounter(data.total_session_tokens, maxTokensLimit);
                             }
@@ -335,7 +446,7 @@ export async function streamResponse(formData, originalMessage) {
                                     }
                                 }
                             }
-                            
+
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
@@ -355,11 +466,16 @@ export async function streamResponse(formData, originalMessage) {
     } finally {
         state.isGenerating = false;
         
-        // 4. ALWAYS RELEASE THE WORKSPACE LOCK WHEN THE STREAM DISCONNECTS OR COMPLETES
         const lockOverlay = document.getElementById('editor-lock-overlay');
         if (lockOverlay) {
             lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
             lockOverlay.classList.add('opacity-0', 'pointer-events-none');
         }
     }
+}
+
+function renderThinkingContent(container, text) {
+    const html = marked.parse(text);
+    container.innerHTML = html;
+    container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
 }

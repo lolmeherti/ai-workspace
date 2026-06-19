@@ -6,6 +6,7 @@ enum Action: string
 {
     case CONDENSE = 'condense';
     case SAVE_SETTINGS = 'save_settings';
+    case SWITCH_MODEL = 'switch_model';
     case MANUAL_CONSOLIDATE = 'manual_consolidate';
     case ADD_MEMORY = 'add_memory';
     case DELETE_MEMORY = 'delete_memory';
