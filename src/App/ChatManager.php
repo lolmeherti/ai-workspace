@@ -5,7 +5,6 @@ namespace App;
 use App\Database;
 use App\AgentManager;
 use App\Agents\MemoryExtractor;
-use App\Agents\MemorySelector;
 use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
@@ -30,7 +29,6 @@ class ChatManager
         Database $db, 
         AgentManager $agent, 
         ?MemoryExtractor $memoryExtractor = null,
-        ?MemorySelector $memorySelector = null,
         ?SearchDecider $searchDecider = null,
         ?SemanticCacheEvaluator $cacheEvaluator = null,
         ?ContextCondenser $contextCondenser = null
@@ -42,7 +40,7 @@ class ChatManager
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
         $this->webSearchService = new WebSearchService($searchDecider, $cacheEvaluator, $contextCondenser);
-        $this->promptAssemblyService = new PromptAssemblyService($this->db, $memorySelector, $this->uploadDir);
+        $this->promptAssemblyService = new PromptAssemblyService($this->db, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
     }
 
@@ -229,8 +227,8 @@ class ChatManager
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
         $emit('status', ['text' => 'Assembling context...']);
-        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query);
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent, $condensedContext, $usedCache);
         
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
@@ -297,7 +295,7 @@ class ChatManager
 
                 // If all tools were repeats, treat as text response
                 if (empty($decodedTools)) {
-                    $aiResponse = $this->stripThinkingTags($aiRawResponse);
+                    $aiResponse = $aiRawResponse;
                     // Strip tool JSON from the response
                     foreach ($rawTools as $toolParams) {
                         $toolJson = json_encode($toolParams);
@@ -307,31 +305,13 @@ class ChatManager
                     break;
                 }
 
-                $preambleMessage = $this->stripThinkingTags($aiRawResponse);
-                foreach ($decodedTools as $toolParams) {
-                    $toolJson = json_encode($toolParams);
-                    $preambleMessage = str_replace($toolJson, '', $preambleMessage);
-                }
-                $preambleMessage = trim($preambleMessage);
-
-                // If there is a text preamble, save it. Otherwise, save the raw tool call as a tool_call type.
-                if (!empty($preambleMessage)) {
-                    $this->db->insert('chat_history', [
-                        'session_id' => $sessionId,
-                        'role' => 'assistant',
-                        'message' => $preambleMessage,
-                        'message_type' => 'text',
-                        'token_estimate' => (int)(mb_strlen($preambleMessage) / 4)
-                    ]);
-                } else {
-                    $this->db->insert('chat_history', [
+                $this->db->insert('chat_history', [
                         'session_id' => $sessionId,
                         'role' => 'assistant',
                         'message' => $aiRawResponse,
                         'message_type' => 'tool_call', // Standardizing on 'tool_call' so it's ignored in plaintext UI views
                         'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
                     ]);
-                }
 
                 $combinedResults = [];
                 foreach ($decodedTools as $toolParams) {
@@ -409,9 +389,7 @@ class ChatManager
                 ]);
 
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                // Rebuild system prompt without tool instructions now that tool data is in context
-                $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query, true);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent, $condensedContext, $usedCache);
                 
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
                 

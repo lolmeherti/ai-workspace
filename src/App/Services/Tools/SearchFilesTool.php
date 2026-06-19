@@ -46,7 +46,6 @@ class SearchFilesTool
 
                 $resultsTxt = "System search completed for '{$toolQuery}'. Matches found on disk:\n";
                 $injectedContexts = [];
-                $imageAttachments = [];
 
                 if (empty($matchingFiles)) {
                     $resultsTxt .= "- No matching files found.\n";
@@ -67,19 +66,7 @@ class SearchFilesTool
                             if (file_exists($txtPath)) {
                                 $docText = file_get_contents($txtPath);
                                 $f['preview'] = mb_substr($docText, 0, 300, 'UTF-8');
-                                $injectedContexts[] = "[Content of Found Document \"{$f['generated_title']}\" (uploads/{$f['physical_name']})]:\n{$docText}\n[End Document Content]";
-                            }
-                        } else {
-                            $imgPath = $this->uploadDir . $f['physical_name'];
-                            if (file_exists($imgPath)) {
-                                $mimeType = @mime_content_type($imgPath) ?: 'image/jpeg';
-                                $base64 = base64_encode(file_get_contents($imgPath));
-                                $imageAttachments[] = [
-                                    'mime_type' => $mimeType,
-                                    'base64' => $base64,
-                                    'physical_name' => $f['physical_name'],
-                                    'title' => $f['generated_title']
-                                ];
+                                $injectedContexts[] = "[Content of Found Document \"{$f['generated_title']}\" (uploads/{$f['physical_name']})]:\n{$docText}\n[End Document Content]\n";
                             }
                         }
                     }
@@ -103,22 +90,13 @@ TEXT;
 TEXT;
                 }
 
-                if (!empty($imageAttachments)) {
-                    $instructions .= <<<TEXT
-
-
-[SYSTEM NOTE]: The matching image files have been projected directly to your vision context. You can see them fully.
-TEXT;
-                }
-
                 $instructions .= <<<TEXT
 
 
 CRITICAL RESPONSE INSTRUCTIONS:
-1. Do not ask the user to upload or reference/attach the files. You already have full access to their contents/images right now in this context.
-2. Analyze the supplied files and answer the user's original query fully and directly.
-3. You MUST refer to the file(s) in your response using the exact bracketed tag format `[File: physical_name]` (e.g., '[File: 1780675239_image.jpeg]'). This tag is caught by the frontend parser to automatically display the actual image or file card inline to the user.
-4. Keep your answer professional, direct, and concise.
+1. For text documents: their full content has been injected above. Read it and answer the user's query directly.
+2. For image files: you can see only the file title and filename — you CANNOT see image content. Tell the user which relevant images you found by their title. The user can click "Append to Chat" to send an image to you for analysis.
+3. Keep your answer professional, direct, and concise.
 TEXT;
 
                 return $instructions;

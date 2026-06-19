@@ -24,7 +24,7 @@ class SearchMemoriesTool
             return "Error: Missing 'query' parameter for search_memories tool.";
         }
 
-        $selector = new MemorySelector($this->db, $this->agent);
+        $selector = new MemorySelector($this->db);
         $results = $selector->selectRelevantMemory($query);
 
         if (!$results) {

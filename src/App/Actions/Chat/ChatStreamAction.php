@@ -7,7 +7,6 @@ use App\ChatManager;
 use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
-use App\Agents\MemorySelector;
 
 class ChatStreamAction extends BaseAction
 {
@@ -38,13 +37,11 @@ class ChatStreamAction extends BaseAction
         $searchDecider = new SearchDecider($this->agentManager);
         $cacheEvaluator = new SemanticCacheEvaluator($this->agentManager);
         $contextCondenser = new ContextCondenser($this->agentManager);
-        $memorySelectorInstance = $this->db ? new MemorySelector($this->db, $this->agentManager) : null;
 
         $chatManager = new ChatManager(
             $this->db,
             $this->agentManager,
             $this->memoryExtractor,
-            $memorySelectorInstance,
             $searchDecider,
             $cacheEvaluator,
             $contextCondenser
