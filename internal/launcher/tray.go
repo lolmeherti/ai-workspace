@@ -114,7 +114,7 @@ func InitLogging(workDir string) {
 	var err error
 	logging.File, err = os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
-		logging.Writer = io.MultiWriter(os.Stdout, logging.File)
+		logging.Writer = io.MultiWriter(logging.File, os.Stdout)
 		if DebugMode {
 			SpawnLogTerminal(logFilePath)
 		}

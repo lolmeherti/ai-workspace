@@ -7,6 +7,7 @@ import { state } from '../state.js';
 import { showCondensationModal, updateTokenCounter } from '../ui.js';
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
+import { extractThinking } from '../markdown.js';
 
 export async function streamResponse(formData, originalMessage) {
     state.isGenerating = true;
@@ -30,16 +31,30 @@ export async function streamResponse(formData, originalMessage) {
             <span class="loading-text truncate">Initializing...</span>
         </div>
 
-        <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group trace-accordion hidden">
-            <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
-                <span class="flex items-center gap-2">
-                    <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
-                    Agent Execution Trace
+        <details class="w-full mb-4 overflow-hidden group trace-accordion rounded-xl border border-emerald-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(16,185,129,0.05),inset_0_1px_0_rgba(16,185,129,0.04)] transition-all duration-300" open>
+            <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200">
+                <span class="flex items-center gap-3">
+                    <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.12)]">
+                        <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 17 10 11 4 5"/>
+                            <line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                    </span>
+                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-emerald-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Execution Trace</span>
+                    <span class="flex h-2 w-2 relative trace-pulse-dot">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
+                    </span>
                 </span>
-                <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
+                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                    <span class="trace-step-counter"></span>
+                    <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
             </summary>
-            <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2 trace-content flex flex-col items-stretch w-full">
-                <div class="scraping-container flex flex-col gap-2 mt-2 hidden w-full"></div>
+            <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
+                <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono">
+                    <div class="scraping-container flex flex-col gap-1 mt-1 hidden w-full"></div>
+                </div>
             </div>
         </details>
 
@@ -86,6 +101,36 @@ export async function streamResponse(formData, originalMessage) {
     const textContainer = aiWrapper.querySelector('.streaming-text-container');
     const fileChoicesContainer = aiWrapper.querySelector('.file-choices-placeholder-container');
     
+    let traceStepCount = 0;
+    const traceStepCounter = aiWrapper.querySelector('.trace-step-counter');
+    const tracePulseDot = aiWrapper.querySelector('.trace-pulse-dot');
+
+    function addTraceEntry(label, color = 'slate') {
+        const colors = {
+            cyan:   { text: 'text-cyan-400',   accent: 'bg-cyan-500/50' },
+            blue:   { text: 'text-blue-400',   accent: 'bg-blue-500/50' },
+            amber:  { text: 'text-amber-400',  accent: 'bg-amber-500/50' },
+            emerald:{ text: 'text-emerald-400',accent: 'bg-emerald-500/50' },
+            indigo: { text: 'text-indigo-400', accent: 'bg-indigo-500/50' },
+            rose:   { text: 'text-rose-400',   accent: 'bg-rose-500/50' },
+            slate:  { text: 'text-slate-300',  accent: 'bg-slate-500/40' },
+        };
+        const c = colors[color] || colors.slate;
+
+        const row = document.createElement('div');
+        row.className = `flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150`;
+        row.innerHTML = `
+            <span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span>
+            <span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u25b8 ${label}</span>
+        `;
+        traceContent.appendChild(row);
+
+        traceStepCount++;
+        if (traceStepCounter) {
+            traceStepCounter.textContent = `${traceStepCount} step${traceStepCount !== 1 ? 's' : ''}`;
+        }
+    }
+
     let markdownBuffer = "";
     let isFirstToken = true;
 
@@ -132,12 +177,10 @@ export async function streamResponse(formData, originalMessage) {
                             if (headerTitle) headerTitle.innerHTML = `<uk-icon icon="message-square" class="w-5 h-5 text-cyan-500"></uk-icon> ${data.title}`;
                             const activeItemTitle = document.querySelector('.group.bg-slate-800\\/80 .session-title');
                             if (activeItemTitle) activeItemTitle.textContent = data.title;
+                            addTraceEntry(`Title assigned: \u201c${data.title}\u201d`, 'cyan');
                         }
 
                         if (event === 'search_decided') {
-                            traceAccordion.classList.remove('hidden');
-                            traceAccordion.open = true;
-                            
                             const truncatedQuery = data.query.length > 50 ? data.query.substring(0, 50) + '...' : data.query;
                             loadingText.textContent = `Searching web for: "${truncatedQuery}"...`;
 
@@ -146,25 +189,124 @@ export async function streamResponse(formData, originalMessage) {
                             badge.innerHTML = '<uk-icon icon="globe" class="w-3 h-3"></uk-icon> Web Search';
                             aiLabelContainer.appendChild(badge);
 
-                            const triggerRow = document.createElement('div');
-                            triggerRow.className = "text-xs text-blue-400 flex items-center gap-1.5 font-medium w-full";
-                            triggerRow.innerHTML = `<uk-icon icon="globe" class="w-3.5 h-3.5 shrink-0"></uk-icon> <span class="truncate">Web Search Triggered: "${truncatedQuery}"</span>`;
-                            traceContent.insertBefore(triggerRow, traceContent.firstChild);
+                            addTraceEntry(`Web search triggered: \u201c${truncatedQuery}\u201d`, 'blue');
+                        }
+
+                        if (event === 'intent_result') {
+                            const intentLabels = {
+                                'none': 'general conversation',
+                                'search_files': 'file search',
+                                'todoist_create': 'task creation',
+                                'todoist_get': 'task retrieval',
+                                'todoist_update': 'task update',
+                                'todoist_delete': 'task deletion',
+                                'email_briefing': 'email briefing'
+                            };
+
+                            const intentList = data.intents === 'none' ? [] : data.intents.split(',');
+                            const intentParts = intentList.map(i => intentLabels[i.trim()] || i.trim());
+
+                            let summary;
+                            if (data.search_query) {
+                                const truncated = data.search_query.length > 50
+                                    ? data.search_query.substring(0, 50) + '...' : data.search_query;
+                                if (intentParts.length > 0) {
+                                    summary = `Classified as ${intentParts.join(', ')} \u2014 web search needed for: \u201c${truncated}\u201d`;
+                                } else {
+                                    summary = `Web search needed for: \u201c${truncated}\u201d`;
+                                }
+                            } else {
+                                if (intentParts.length > 0) {
+                                    summary = `Classified as ${intentParts.join(', ')} \u2014 no web search required`;
+                                } else {
+                                    summary = 'Classified as general conversation \u2014 no tools or web search needed';
+                                }
+                            }
+
+                            addTraceEntry(summary, 'indigo');
+                        }
+
+                        if (event === 'tool_start') {
+                            const toolLabel = data.label || data.tool;
+                            addTraceEntry(`Executing \u2014 ${toolLabel}`, 'slate');
+
+                            const badge = document.createElement('span');
+                            badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
+                            badge.innerHTML = `<uk-icon icon="code" class="w-3 h-3"></uk-icon> ${data.tool}`;
+                            aiLabelContainer.appendChild(badge);
+                        }
+
+                        if (event === 'tool_done') {
+                            const doneLabel = data.label || 'Done.';
+                            addTraceEntry(`Completed \u2014 ${doneLabel}`, 'emerald');
+                        }
+
+                        if (event === 'data_fetching') {
+                            const accordion = document.createElement('details');
+                            accordion.className = 'w-full mb-4 overflow-hidden group data-fetching-accordion rounded-xl border border-amber-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(245,158,11,0.05),inset_0_1px_0_rgba(245,158,11,0.04)] transition-all duration-300';
+                            accordion.open = true;
+                            accordion.innerHTML = `
+                                <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-amber-500/5 via-amber-500/3 to-transparent hover:from-amber-500/10 hover:via-amber-500/5 transition-all duration-200">
+                                    <span class="flex items-center gap-3">
+                                        <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.12)]">
+                                            <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                            </svg>
+                                        </span>
+                                        <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 bg-clip-text text-transparent">Data Fetching</span>
+                                        <span class="flex h-2 w-2 relative data-fetch-pulse-dot">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.8)]"></span>
+                                        </span>
+                                    </span>
+                                    <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                                        <span class="data-fetch-status">Fetching</span>
+                                        <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                                    </span>
+                                </summary>
+                                <div class="px-5 pb-4 pt-3 border-t border-amber-500/10 bg-[#070b14]/40">
+                                    <div class="data-fetch-content text-sm text-slate-300 leading-relaxed markdown-content space-y-3"></div>
+                                </div>
+                            `;
+                            const thinkingEl = aiWrapper.querySelector('.thinking-accordion');
+                            if (thinkingEl && thinkingEl.nextSibling) {
+                                thinkingEl.parentNode.insertBefore(accordion, thinkingEl.nextSibling);
+                            } else {
+                                const placeholder = aiWrapper.querySelector('.file-choices-placeholder-container');
+                                if (placeholder) {
+                                    placeholder.parentNode.insertBefore(accordion, placeholder);
+                                }
+                            }
+                            const contentDiv = accordion.querySelector('.data-fetch-content');
+                            contentDiv.innerHTML = marked.parse(data.payload || data.content || '');
+                            contentDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+                            if (data.status === 'error') {
+                                accordion.className = accordion.className.replace(/amber/g, 'red').replace(/yellow/g, 'rose');
+                                const statusLabel = accordion.querySelector('.data-fetch-status');
+                                if (statusLabel) statusLabel.textContent = 'Error';
+                            } else {
+                                const statusLabel = accordion.querySelector('.data-fetch-status');
+                                if (statusLabel) statusLabel.textContent = data.label || 'Complete';
+                            }
+                            const pulseDot = accordion.querySelector('.data-fetch-pulse-dot');
+                            if (pulseDot) pulseDot.classList.add('hidden');
+                        }
+
+                        if (event === 'search_no_results') {
+                            const truncated = data.query && data.query.length > 50
+                                ? data.query.substring(0, 50) + '...' : (data.query || '');
+                            addTraceEntry(`No usable web results for: \u201c${truncated}\u201d`, 'rose');
                         }
 
                         if (event === 'cache_used') {
-                            traceAccordion.classList.remove('hidden');
-                            traceAccordion.open = true;
-
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
                             badge.innerHTML = '<uk-icon icon="zap" class="w-3 h-3"></uk-icon> Memory Cached';
                             aiLabelContainer.appendChild(badge);
 
-                            const cacheRow = document.createElement('div');
-                            cacheRow.className = "text-xs text-amber-400 flex items-center gap-1.5 font-medium w-full";
-                            cacheRow.innerHTML = '<uk-icon icon="zap" class="w-3.5 h-3.5 shrink-0"></uk-icon> <span>Memory Cache matched successfully</span>';
-                            traceContent.insertBefore(cacheRow, traceContent.firstChild);
+                            addTraceEntry('Memory cache matched \u2014 serving cached results', 'amber');
                         }
 
                         if (event === 'ask_user') {
@@ -212,11 +354,11 @@ export async function streamResponse(formData, originalMessage) {
                             const linkRow = document.createElement('a');
                             linkRow.href = data.url;
                             linkRow.target = "_blank";
-                            linkRow.className = "flex items-center gap-2 text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50 hover:bg-slate-800/50 hover:text-emerald-400 transition-colors block w-full";
+                            linkRow.className = "flex items-center gap-2 py-1 px-2 rounded text-xs text-slate-400 bg-slate-900/30 border border-slate-700/30 hover:bg-slate-800/40 hover:text-emerald-400 transition-colors duration-150 font-mono";
                             linkRow.setAttribute('data-url', data.url);
                             linkRow.innerHTML = `
-                                <span class="uk-spinner uk-spinner-xs animate-spin text-cyan-500 shrink-0" uk-spinner="ratio: 0.5"></span>
-                                <span class="truncate max-w-full">${data.url}</span>
+                                <span class="uk-spinner uk-spinner-xs animate-spin text-emerald-500 shrink-0" uk-spinner="ratio: 0.5"></span>
+                                <span class="truncate max-w-full text-[0.7rem]">${data.url}</span>
                             `;
                             scrapingContainer.appendChild(linkRow);
                             chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -243,6 +385,19 @@ export async function streamResponse(formData, originalMessage) {
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
+                        if (event === 'context_assembled') {
+                            let ctxParts = [];
+                            if (data.has_search_context) {
+                                ctxParts.push(data.used_cache ? 'cached web results' : 'fresh web results');
+                            }
+                            const memoryNote = data.message_count > 0
+                                ? `${data.message_count} prior messages`
+                                : 'new conversation';
+                            ctxParts.push(memoryNote);
+
+                            addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
+                        }
+
                         if (event === 'status') {
                             loadingText.textContent = data.text;
                         }
@@ -264,6 +419,8 @@ export async function streamResponse(formData, originalMessage) {
                             if (isFirstToken) {
                                 isFirstToken = false;
                                 traceAccordion.open = false;
+                                if (tracePulseDot) tracePulseDot.classList.add('hidden');
+                                aiWrapper.querySelectorAll('.data-fetching-accordion').forEach(el => el.open = false);
                                 if (loadingIndicator && loadingIndicator.parentNode) {
                                     loadingIndicator.remove();
                                 }
@@ -272,59 +429,14 @@ export async function streamResponse(formData, originalMessage) {
 
                             markdownBuffer += data.chunk;
 
-                            let displayBuffer = markdownBuffer;
-                            let thinkingText = "";
-                            let finalText = "";
+                            const { thinking, response, format } = extractThinking(markdownBuffer);
+                            let thinkingText = thinking;
+                            let finalText = response;
 
-                            let thinkStart = -1;
-                            let thinkEnd = -1;
-                            let thinkTagLen = 0;
-                            let closeTagLen = 0;
-
-                            // Try Gemma format first: <|channel>thought ... <channel|>
-                            thinkStart = displayBuffer.indexOf("<|channel>thought");
-                            if (thinkStart !== -1) {
-                                thinkTagLen = 17;
-                                thinkEnd = displayBuffer.indexOf("<channel|>", thinkStart + thinkTagLen);
-                                closeTagLen = 10;
-                            }
-
-                            // Fall back to DeepSeek format: <think> ... </think>
-                            if (thinkStart === -1) {
-                                thinkStart = displayBuffer.indexOf("<think>");
-                                if (thinkStart !== -1) {
-                                    thinkTagLen = 7;
-                                    thinkEnd = displayBuffer.indexOf("</think>", thinkStart + thinkTagLen);
-                                    closeTagLen = 8;
-                                }
-                            }
-
-                            // Handle partial: close tag arrived before open tag in buffer
-                            if (thinkStart === -1) {
-                                let gemmaEnd = displayBuffer.indexOf("<channel|>");
-                                if (gemmaEnd !== -1) {
-                                    thinkStart = 0;
-                                    thinkTagLen = 0;
-                                    thinkEnd = gemmaEnd;
-                                    closeTagLen = 10;
-                                } else {
-                                    let dsEnd = displayBuffer.indexOf("</think>");
-                                    if (dsEnd !== -1) {
-                                        thinkStart = 0;
-                                        thinkTagLen = 0;
-                                        thinkEnd = dsEnd;
-                                        closeTagLen = 8;
-                                    }
-                                }
-                            }
-
-                            if (thinkStart !== -1) {
+                            if (thinking) {
                                 thinkingAccordion.classList.remove('hidden');
-                                if (thinkEnd !== -1) {
-                                    thinkingText = displayBuffer.substring(thinkStart + thinkTagLen, thinkEnd);
-                                    finalText = displayBuffer.substring(thinkEnd + closeTagLen);
+                                if (response) {
                                     thinkingAccordion.open = false;
-
                                     const summaryLabel = thinkingAccordion.querySelector('summary span:first-of-type');
                                     const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
                                     const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
@@ -335,14 +447,11 @@ export async function streamResponse(formData, originalMessage) {
                                     if (pulseDot) pulseDot.classList.add('hidden');
                                     if (statusLabel) statusLabel.textContent = 'Complete';
                                 } else {
-                                    thinkingText = displayBuffer.substring(thinkStart + thinkTagLen);
                                     thinkingAccordion.open = true;
                                 }
 
                                 thinkingContent.textContent = thinkingText;
                                 renderThinkingContent(thinkingContent, thinkingText);
-                            } else {
-                                finalText = displayBuffer;
                             }
 
                             let hasAppliedEdit = false;

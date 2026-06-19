@@ -207,3 +207,28 @@ select.input-futuristic option {
 .thinking-accordion[open] .thinking-pulse-dot {
     display: none;
 }
+
+/* Data Fetching Accordion */
+.data-fetching-accordion[open] > summary svg:last-child {
+    transform: rotate(180deg);
+}
+.data-fetching-accordion summary {
+    transition: background 0.3s ease;
+}
+.data-fetching-accordion[open] .data-fetch-pulse-dot {
+    display: none;
+}
+.data-fetch-content.markdown-content p {
+    margin-bottom: 0.75rem;
+}
+.data-fetch-content.markdown-content pre {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    overflow-x: auto;
+}
+.data-fetch-content.markdown-content code {
+    font-size: 0.75rem;
+    color: #e2e8f0;
+}

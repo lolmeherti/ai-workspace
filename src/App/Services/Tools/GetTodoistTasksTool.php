@@ -7,8 +7,6 @@ use App\Agents\TaskMatcher;
 
 class GetTodoistTasksTool
 {
-    use ToolStreamHelper;
-
     public function __construct(
         private \App\Database $db,
         private \App\AgentManager $agent,
@@ -19,8 +17,6 @@ class GetTodoistTasksTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $emit('token', ['chunk' => "\n\nRetrieving tasks from Todoist..."]);
-
                 $response = $this->todoist->request('GET', '/tasks');
                 $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
 
@@ -77,29 +73,6 @@ class GetTodoistTasksTool
                 
                 $instructions .= "\n[SYSTEM NOTE]: Present the search/list results to the user clearly. Keep your response professional, precise, and direct to their query.";
 
-                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => $instructions
-                ];
-
-                $aiCommentary = '';
-                $commentaryBuffer = '';
-
-                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
-                    $aiCommentary .= $chunk;
-                    $commentaryBuffer .= $chunk;
-
-                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
-                        $emit('token', ['chunk' => $commentaryBuffer]);
-                        $commentaryBuffer = '';
-                    }
-                });
-
-                if (!empty($commentaryBuffer)) {
-                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
-                }
-
-                return $cleanJson . "\n\n" . $aiCommentary;
+                return $instructions;
     }
 }

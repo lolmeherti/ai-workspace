@@ -118,6 +118,22 @@ class Schema
             }
         } catch (PDOException $e) {
         }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'message_type'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN message_type VARCHAR(50) DEFAULT 'text' AFTER message");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'tool_name'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN tool_name VARCHAR(100) NULL AFTER message_type");
+            }
+        } catch (PDOException $e) {
+        }
     }
 
     public function nukeAndRebuild(): void

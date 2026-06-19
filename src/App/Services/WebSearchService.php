@@ -41,7 +41,7 @@ class WebSearchService
         }
 
         $isForced = false;
-        if (preg_match('/force\s+(?:the\s+)?(?:web\s+)?search/i', $query) || preg_match('/search\s+for/i', $query)) {
+        if (preg_match('/force\s+(?:the\s+)?(?:web\s+)?search/i', $query)) {
             $isForced = true;
         }
 
@@ -49,7 +49,10 @@ class WebSearchService
             $cacheAction = 'force_live';
         }
 
-        $searchQuery = $this->searchDecider->requiresSearch($query, $history);
+        // Only call search decider if searchQuery wasn't already resolved externally
+        if ($searchQuery === null) {
+            $searchQuery = $this->searchDecider->requiresSearch($query, $history);
+        }
         if (!$searchQuery) {
             return '';
         }
@@ -93,11 +96,19 @@ class WebSearchService
         $limit = (int) Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
         $scrapedUrls = Search::query($searchQuery, $limit);
 
+        if (empty($scrapedUrls)) {
+            $emit('search_no_results', ['query' => $searchQuery]);
+            return '';
+        }
+
         $scrapedPages = [];
         foreach ($scrapedUrls as $url) {
             $emit('scraping_start', ['url' => $url]);
-            $scrapedPages[] = Scraper::fetchAndClean($url);
+            $pageText = Scraper::fetchAndClean($url);
             $emit('scraping_done', ['url' => $url]);
+            if (!empty(trim($pageText))) {
+                $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
+            }
         }
 
         if (!empty($scrapedPages)) {
@@ -110,6 +121,7 @@ class WebSearchService
             return $condensedContext;
         }
 
+        $emit('search_no_results', ['query' => $searchQuery]);
         return '';
     }
 }

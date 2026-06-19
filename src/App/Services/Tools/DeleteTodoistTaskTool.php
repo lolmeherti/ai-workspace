@@ -6,7 +6,6 @@ use App\Agents\TaskMatcher;
 
 class DeleteTodoistTaskTool
 {
-    use ToolStreamHelper;
 
     public function __construct(
         private \App\Database $db,
@@ -18,7 +17,6 @@ class DeleteTodoistTaskTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $emit('token', ['chunk' => "\n\nSearching for matching tasks to delete..."]);
 
                 $query = $toolData['query'] ?? '';
                 if (empty($query)) {
@@ -56,8 +54,6 @@ class DeleteTodoistTaskTool
                     }
                 }
 
-                $emit('token', ['chunk' => $replyText]);
-
-                return $cleanJson . $replyText;
+                return $replyText;
     }
 }

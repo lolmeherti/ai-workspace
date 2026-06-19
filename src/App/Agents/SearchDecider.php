@@ -16,14 +16,17 @@ class SearchDecider
 
     public function requiresSearch(string $userPrompt, array $history = []): ?string
     {
+        $result = $this->decideSearchAndIntent($userPrompt, $history);
+        return $result['search_query'] ?? null;
+    }
+
+    public function decideSearchAndIntent(string $userPrompt, array $history = []): array
+    {
         $cleanPrompt = trim(strtolower($userPrompt));
 
+        // Fast-path regex for explicit search commands
         if (preg_match('/^(?:force\s+)?(?:the\s+)?(?:web\s+)?search\s+(.+)$/i', $userPrompt, $matches)) {
-            return trim($matches[1]);
-        }
-
-        if (preg_match('/^search\s+for\s+(.+)$/i', $userPrompt, $matches)) {
-            return trim($matches[1]);
+            return ['search_query' => trim($matches[1]), 'intents' => 'none'];
         }
 
         if (preg_match('/^force\s+(?:the\s+)?(?:web\s+)?search$/i', $userPrompt)) {
@@ -35,7 +38,7 @@ class SearchDecider
                 }
             }
             if ($lastUserQuery) {
-                return $lastUserQuery;
+                return ['search_query' => $lastUserQuery, 'intents' => 'none'];
             }
         }
 
@@ -52,19 +55,27 @@ class SearchDecider
         $systemPrompt = <<<TEXT
 Today is {$currentDate}.
 
-You are a Search Decision Agent. Your job is to analyze the recent conversation history and the user's latest message to determine if a live web search is necessary to answer the user's request.
+You are a combined Search Decision + Intent Router agent. Analyze the user's request and output a single JSON object with two decisions.
 
-A live web search is necessary if the user's request requires up-to-date facts, news, weather, or real-time information. 
+SEARCH DECISION: Does this request need live web search for up-to-date facts, news, weather, or real-time info? If the user is asking about local files or general conversation, no web search is needed.
 
-Be aware that there is a local file system. If the user is asking something that is likely from the local file system such as their personal files, then it is not an online web search.
+INTENT ROUTING: Identify ALL tool categories the user wants to use:
+- "search_files": User wants to find, view, or check files/docs/images on disk.
+- "todoist_create": User wants to create, add, plan, or schedule a task/reminder/appointment.
+- "todoist_get": User wants to see, read, fetch, or list their tasks/calendar/schedule.
+- "todoist_update": User wants to edit, update, reschedule, or change an existing task.
+- "todoist_delete": User wants to delete, remove, or clear a task/reminder.
+- "email_briefing": User wants to check, read, or get a briefing of their emails.
+- "none": Standard conversation or general question with no tool intent.
 
-Format your output STRICTLY as a JSON object matching this schema:
+Format your output STRICTLY as:
 {
   "requires_search": boolean,
-  "search_query": string or null
+  "search_query": string or null,
+  "intents": "comma,separated,list" or "none"
 }
 
-If requires_search is true, the "search_query" MUST be a standalone, fully rephrased search query. 
+If requires_search is true, "search_query" MUST be a standalone search query. For intents, output ALL categories that apply.
 
 CONVERSATION HISTORY:
 {$historyText}
@@ -80,10 +91,17 @@ TEXT;
 
         $data = \App\JsonParser::extractAndDecode($response);
 
-        if (is_array($data) && isset($data['requires_search']) && $data['requires_search'] === true) {
-            return !empty($data['search_query']) ? trim($data['search_query']) : null;
+        $result = ['search_query' => null, 'intents' => 'none'];
+
+        if (is_array($data)) {
+            if (isset($data['requires_search']) && $data['requires_search'] === true) {
+                $result['search_query'] = !empty($data['search_query']) ? trim($data['search_query']) : null;
+            }
+            if (isset($data['intents'])) {
+                $result['intents'] = trim($data['intents']);
+            }
         }
 
-        return null;
+        return $result;
     }
 }

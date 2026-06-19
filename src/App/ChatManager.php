@@ -19,6 +19,7 @@ class ChatManager
 {
     private Database $db;
     private AgentManager $agent;
+    private ?SearchDecider $searchDecider;
     private FileAttachmentService $fileAttachmentService;
     private WebSearchService $webSearchService;
     private PromptAssemblyService $promptAssemblyService;
@@ -36,6 +37,7 @@ class ChatManager
     ) {
         $this->db = $db;
         $this->agent = $agent;
+        $this->searchDecider = $searchDecider;
         $this->uploadDir = __DIR__ . '/../uploads/';
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
@@ -52,12 +54,24 @@ class ChatManager
     private function cleanMessagesArray(array $messages): array
     {
         foreach ($messages as $idx => $msg) {
-            if ($idx > 0 && ($msg['role'] ?? '') === 'system') {
+            $role = $msg['role'] ?? '';
+            $content = $msg['content'] ?? '';
+            
+            if ($idx > 0 && $role === 'system') {
                 $messages[$idx]['role'] = 'user';
-                $messages[$idx]['content'] = "[System Context / Tool Output]:\n" . $msg['content'];
+                $messages[$idx]['content'] = "[System Context / Tool Output]:\n" . $content;
             }
         }
         return $messages;
+    }
+
+    private function stripThinkingTags(string $text): string
+    {
+        // Gemma format: <|channel>thought ... <channel|>
+        $text = preg_replace('/<\|channel>thought.*?<channel\|>/s', '', $text);
+        // DeepSeek format: <think> ... </think>
+        $text = preg_replace('/<think>.*?<\/think>/s', '', $text);
+        return trim($text);
     }
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?callable $streamCallback = null): array
@@ -67,6 +81,8 @@ class ChatManager
                 $streamCallback($event, $data);
             }
         };
+
+        $emit('status', ['text' => 'Initializing...']);
 
         $bypassWarning = (int)($_POST['bypass_warning'] ?? 0);
         if (empty($cacheAction)) {
@@ -82,6 +98,9 @@ class ChatManager
 
         $imagePath = null;
         if (empty($cacheAction)) {
+            if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
+                $emit('status', ['text' => 'Processing attachment...']);
+            }
             $imagePath = $this->fileAttachmentService->handleUpload($sessionId, $imageFile);
             $this->db->insert('chat_history', [
                 'session_id' => $sessionId,
@@ -102,8 +121,20 @@ class ChatManager
         $usedCache = false;
         $scrapedUrls = [];
         $searchQuery = null;
+        $intent = 'none';
 
-        $emit('status', ['text' => 'Evaluating search intent...']);
+        $emit('status', ['text' => 'Analyzing intent...']);
+        if ($this->searchDecider) {
+            $decisionResult = $this->searchDecider->decideSearchAndIntent($query, $history);
+            $searchQuery = $decisionResult['search_query'] ?? null;
+            $intent = $decisionResult['intents'] ?? 'none';
+        }
+
+        $emit('intent_result', [
+            'search_query' => $searchQuery,
+            'intents' => $intent
+        ]);
+
         $condensedContext = $this->webSearchService->executeDecision(
             $query,
             $history,
@@ -119,47 +150,24 @@ class ChatManager
             return [];
         }
 
-        $intent = 'none';
-        if (empty($cacheAction)) {
-            $emit('status', ['text' => 'Analyzing your request...']);
-            $routerPrompt = $this->promptAssemblyService->buildRouterPrompt($query);
-            
-            $routerMessages = [
-                ['role' => 'system', 'content' => 'You are an intent router assistant.'],
-                ['role' => 'user', 'content' => $routerPrompt]
-            ];
-            
-            $intentRaw = $this->agent->chat($routerMessages, false, null, 0.1);
-            
-            $validIntents = [
-                'search_files',
-                'todoist_create',
-                'todoist_get',
-                'todoist_update',
-                'todoist_delete',
-                'email_briefing'
-            ];
-            
-            $foundIntents = [];
-            foreach ($validIntents as $vi) {
-                if (stripos($intentRaw, $vi) !== false) {
-                    $foundIntents[] = $vi;
-                }
-            }
-            
-            $intent = empty($foundIntents) ? 'none' : implode(',', $foundIntents);
-        }
-
+        $emit('status', ['text' => 'Assembling context...']);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query);
         $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent);
         
         $currentMessages = $this->cleanMessagesArray($currentMessages);
+
+        $emit('context_assembled', [
+            'message_count' => count($history),
+            'has_search_context' => !empty($condensedContext),
+            'used_cache' => $usedCache
+        ]);
 
         $emit('generating', []);
 
         $aiResponse = '';
         $executionCount = 0;
         $maxExecutions = 5;
+        $calledTools = [];
 
         while ($executionCount < $maxExecutions) {
             $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
@@ -178,20 +186,54 @@ class ChatManager
             $isToolCall = !empty($decodedTools);
 
             if ($isToolCall) {
-                $this->db->insert('chat_history', [
-                    'session_id' => $sessionId,
-                    'role' => 'assistant',
-                    'message' => $aiRawResponse,
-                    'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
-                ]);
-
-                $emit('token', ['chunk' => "\n\n"]);
-
-                $silentEmit = function(string $event, array $data = []) use ($emit) {
-                    if ($event !== 'token') {
-                        $emit($event, $data);
+                // Filter out tools already called in this turn
+                $newTools = [];
+                foreach ($decodedTools as $toolParams) {
+                    $toolName = $toolParams['tool'] ?? 'unknown_tool';
+                    if (!in_array($toolName, $calledTools)) {
+                        $newTools[] = $toolParams;
+                        $calledTools[] = $toolName;
                     }
-                };
+                }
+                $decodedTools = $newTools;
+
+                // If all tools were repeats, treat as text response
+                if (empty($decodedTools)) {
+                    $aiResponse = $this->stripThinkingTags($aiRawResponse);
+                    // Strip tool JSON from the response
+                    foreach ($rawTools as $toolParams) {
+                        $toolJson = json_encode($toolParams);
+                        $aiResponse = str_replace($toolJson, '', $aiResponse);
+                    }
+                    $aiResponse = trim($aiResponse);
+                    break;
+                }
+
+                $preambleMessage = $this->stripThinkingTags($aiRawResponse);
+                foreach ($decodedTools as $toolParams) {
+                    $toolJson = json_encode($toolParams);
+                    $preambleMessage = str_replace($toolJson, '', $preambleMessage);
+                }
+                $preambleMessage = trim($preambleMessage);
+
+                // If there is a text preamble, save it. Otherwise, save the raw tool call as a tool_call type.
+                if (!empty($preambleMessage)) {
+                    $this->db->insert('chat_history', [
+                        'session_id' => $sessionId,
+                        'role' => 'assistant',
+                        'message' => $preambleMessage,
+                        'message_type' => 'text',
+                        'token_estimate' => (int)(mb_strlen($preambleMessage) / 4)
+                    ]);
+                } else {
+                    $this->db->insert('chat_history', [
+                        'session_id' => $sessionId,
+                        'role' => 'assistant',
+                        'message' => $aiRawResponse,
+                        'message_type' => 'tool_call', // Standardizing on 'tool_call' so it's ignored in plaintext UI views
+                        'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
+                    ]);
+                }
 
                 $combinedResults = [];
                 foreach ($decodedTools as $toolParams) {
@@ -238,17 +280,24 @@ class ChatManager
                             break;
                     }
 
-                    $emit('token', ['chunk' => "• {$runningPhrase}\n"]);
+                    $emit('tool_start', ['tool' => $toolName, 'label' => $runningPhrase]);
 
                     $singleJson = json_encode($toolParams);
-                    $toolOutput = $this->toolExecutionService->processToolCall($singleJson, $sessionId, $currentMessages, $silentEmit);
+                    $toolOutput = $this->toolExecutionService->processToolCall($singleJson, $sessionId, $currentMessages, $emit);
                     
-                    $emit('token', ['chunk' => "✓ {$completedPhrase}\n"]);
+                    $emit('tool_done', ['tool' => $toolName, 'label' => $completedPhrase]);
                     
-                    $combinedResults[] = "=== Tool [{$toolName}] output ===\n" . $toolOutput;
-                }
+                    $sanitized = preg_replace('/"tool"\s*:\s*"[^"]*",?\s*/', '', $toolOutput);
+                    $sanitized = preg_replace('/,\s*"tool"\s*:\s*"[^"]*"/', '', $sanitized);
+                    $combinedResults[] = $sanitized;
 
-                $emit('token', ['chunk' => "\n"]);
+                    $emit('data_fetching', [
+                        'tool' => $toolName,
+                        'status' => 'success',
+                        'label' => $completedPhrase,
+                        'payload' => $sanitized
+                    ]);
+                }
 
                 $combinedResultText = implode("\n\n", $combinedResults);
 
@@ -256,10 +305,14 @@ class ChatManager
                     'session_id' => $sessionId,
                     'role' => 'system',
                     'message' => $combinedResultText,
+                    'message_type' => 'data_fetching',
+                    'tool_name' => $toolName,
                     'token_estimate' => (int)(mb_strlen($combinedResultText) / 4)
                 ]);
 
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+                // Rebuild system prompt without tool instructions now that tool data is in context
+                $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($condensedContext, $usedCache, $query, true);
                 $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent);
                 
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
@@ -271,8 +324,9 @@ class ChatManager
             }
         }
 
+        $cleanResponse = $this->stripThinkingTags($aiResponse);
         $usage = $this->agent->lastUsage;
-        $assistantTokens = (int)(mb_strlen($aiResponse) / 4);
+        $assistantTokens = (int)(mb_strlen($cleanResponse) / 4);
 
         if ($usage) {
             if (isset($usage['prompt_tokens'])) {
@@ -293,7 +347,7 @@ class ChatManager
         $this->db->insert('chat_history', [
             'session_id' => $sessionId,
             'role' => 'assistant',
-            'message' => $aiResponse,
+            'message' => $cleanResponse,
             'image_path' => null,
             'token_estimate' => $assistantTokens,
             'search_query' => $searchQuery,
@@ -308,7 +362,7 @@ class ChatManager
         }
 
         $emit('done', [
-            'message' => $aiResponse,
+            'message' => $cleanResponse,
             'title' => $updatedTitle,
             'total_session_tokens' => $totalSessionTokens,
             'session_id' => $sessionId
@@ -372,19 +426,16 @@ class ChatManager
             return null;
         }
 
-        $titlePromptText = <<<TEXT
-You are a title generator. Generate an extremely short 2-3 word title representing the user query. Do not use quotes, markdown, punctuation, or explanations. Keep it under 20 characters.
-TEXT;
+        // Daily briefing gets a templated title
+        if (preg_match('/\b(?:daily\s+)?brief(?:ing)?\b/i', $query) || stripos($query, 'email') !== false) {
+            $newTitle = 'Daily Briefing - ' . date('l d/m/Y');
+        } else {
+            $query = trim(preg_replace('/^(force\s+(the\s+)?(web\s+)?search|search\s+for)\s+/i', '', $query));
+            $newTitle = mb_substr($query, 0, 30);
+            if (mb_strlen($query) > 30) $newTitle .= '...';
+        }
 
-        $titlePrompt = [
-            ['role' => 'system', 'content' => $titlePromptText],
-            ['role' => 'user', 'content' => $query]
-        ];
-
-        $temperature = (float) Config::get('AGENT_TITLE_TEMP', 0.4);
-        $newTitle = trim($this->agent->chat($titlePrompt, false, null, $temperature));
-
-        if (!empty($newTitle) && strlen($newTitle) < 50) {
+        if (!empty($newTitle)) {
             $this->db->update('chat_sessions', ['title' => $newTitle], ['id' => $sessionId]);
             $emit('title_updated', ['title' => $newTitle]);
             return $newTitle;
@@ -397,23 +448,100 @@ TEXT;
     {
         $aiResponse = '';
         $utf8_buffer = '';
+        $inJsonTool = false;
+        $jsonBraceDepth = 0;
+        $inThoughtTag = false;
 
-        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThoughtTag) {
             if ($type === 'reasoning') {
                 $emit('reasoning', ['chunk' => $chunk]);
                 return;
             }
 
             $aiResponse .= $chunk;
+
+            // Suppress Gemma thought tags and DeepSeek think tags
+            if ($inThoughtTag) {
+                if (str_contains($chunk, '<channel|>') || str_contains($chunk, '</think>')) {
+                    $inThoughtTag = false;
+                }
+                return;
+            }
+            if (str_contains($chunk, '<|channel>thought') || str_contains($chunk, '<think>')) {
+                $inThoughtTag = true;
+                // Check if the tag closes in the same chunk
+                if (str_contains($chunk, '<channel|>') || str_contains($chunk, '</think>')) {
+                    $inThoughtTag = false;
+                }
+                return;
+            }
+
+            if ($inJsonTool) {
+                // Track brace depth to detect end of JSON
+                $jsonBraceDepth += substr_count($chunk, '{') - substr_count($chunk, '}');
+                if ($jsonBraceDepth <= 0) {
+                    $inJsonTool = false;
+                    $jsonBraceDepth = 0;
+                }
+                return;
+            }
+
             $utf8_buffer .= $chunk;
 
             if (mb_check_encoding($utf8_buffer, 'UTF-8')) {
-                $emit('token', ['chunk' => $utf8_buffer]);
+                // Strip [System Routing Hint: ...] from output
+                $clean = preg_replace('/\[System Routing Hint:[^\]]*\]/s', '', $utf8_buffer);
+                if (empty(trim($clean))) {
+                    $utf8_buffer = '';
+                    return;
+                }
+
+                // If the clean buffer contains an opening brace '{', we might be starting a tool call.
+                // We should defer emitting this buffer until we see either '"tool":' or confirm it's not a tool.
+                if (str_contains($clean, '{')) {
+                    if (preg_match('/"tool"\s*:/', $clean)) {
+                        $inJsonTool = true;
+                        // Find the opening { for the JSON object
+                        $jsonStart = strrpos($clean, '{');
+                        if ($jsonStart !== false) {
+                            // Emit text before the JSON
+                            $beforeJson = trim(substr($clean, 0, $jsonStart));
+                            if (!empty($beforeJson)) {
+                                $emit('token', ['chunk' => $beforeJson]);
+                            }
+                            $jsonPart = substr($clean, $jsonStart);
+                            $jsonBraceDepth = substr_count($jsonPart, '{') - substr_count($jsonPart, '}');
+                            // If JSON is fully contained, emit any text after the closing brace
+                            if ($jsonBraceDepth <= 0) {
+                                $lastBrace = strrpos($jsonPart, '}');
+                                $afterJson = trim(substr($jsonPart, $lastBrace + 1));
+                                if (!empty($afterJson)) {
+                                    $emit('token', ['chunk' => $afterJson]);
+                                }
+                            }
+                        } else {
+                            $jsonBraceDepth = 1;
+                        }
+                        $utf8_buffer = '';
+                        return;
+                    }
+
+                    // If the buffer grows large and hasn't matched '"tool":', it is standard text.
+                    if (mb_strlen($clean) > 150) {
+                        $emit('token', ['chunk' => $clean]);
+                        $utf8_buffer = '';
+                    }
+
+                    // Wait for more chunks to verify tool presence
+                    return;
+                }
+
+                $emit('token', ['chunk' => $clean]);
                 $utf8_buffer = '';
             }
         });
 
-        if (!empty($utf8_buffer)) {
+        if (!empty($utf8_buffer) && !$inJsonTool) {
             $emit('token', ['chunk' => mb_convert_encoding($utf8_buffer, 'UTF-8', 'UTF-8')]);
         }
 
