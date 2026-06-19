@@ -197,7 +197,7 @@ class ChatBriefingStreamAction extends BaseAction
             $emit('token', ['chunk' => $token]);
         });
 
-        $briefingTitle = "Daily Briefing - " . date('F j, Y');
+        $briefingTitle = 'Daily Briefing - ' . date('l d/m/Y');
         if ($this->db) {
             $this->db->update('chat_sessions', ['title' => $briefingTitle], ['id' => $sessionId]);
             $this->db->insert('chat_history', [

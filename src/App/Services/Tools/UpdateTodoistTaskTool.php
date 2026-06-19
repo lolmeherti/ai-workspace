@@ -6,8 +6,6 @@ use App\Agents\TaskMatcher;
 
 class UpdateTodoistTaskTool
 {
-    use ToolStreamHelper;
-
     public function __construct(
         private \App\Database $db,
         private \App\AgentManager $agent,
@@ -18,7 +16,6 @@ class UpdateTodoistTaskTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $emit('token', ['chunk' => "\n\nSearching for the task to edit..."]);
 
                 $query = $toolData['query'] ?? '';
                 $newContent = $toolData['new_content'] ?? null;
@@ -55,7 +52,7 @@ class UpdateTodoistTaskTool
                                 $updateData['due_string'] = $newDueString;
                             }
 
-                            $emit('token', ['chunk' => "\n\nUpdating task details..."]);
+            
                             $updatedTask = $this->todoist->request('POST', '/tasks/' . $taskId, $updateData);
 
                             $dueFormatted = isset($updatedTask['due']['datetime']) ? $updatedTask['due']['datetime'] : (isset($updatedTask['due']['date']) ? $updatedTask['due']['date'] : 'No due date');
@@ -79,29 +76,6 @@ class UpdateTodoistTaskTool
                     }
                 }
 
-                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => $instructions
-                ];
-
-                $aiCommentary = '';
-                $commentaryBuffer = '';
-
-                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
-                    $aiCommentary .= $chunk;
-                    $commentaryBuffer .= $chunk;
-
-                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
-                        $emit('token', ['chunk' => $commentaryBuffer]);
-                        $commentaryBuffer = '';
-                    }
-                });
-
-                if (!empty($commentaryBuffer)) {
-                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
-                }
-
-                return $cleanJson . "\n\n" . $aiCommentary;
+                return $instructions;
     }
 }

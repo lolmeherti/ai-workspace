@@ -7,8 +7,6 @@ use App\Services\EmailService;
 
 class GetEmailBriefingTool
 {
-    use ToolStreamHelper;
-
     public function __construct(
         private \App\Database $db,
         private \App\AgentManager $agent,
@@ -19,7 +17,6 @@ class GetEmailBriefingTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $emit('token', ['chunk' => "\n\nSyncing inboxes..."]);
 
                 $emailService = new \App\Services\EmailService($this->db);
                 $emails = $emailService->fetchRecentEmails(true);
@@ -27,7 +24,7 @@ class GetEmailBriefingTool
                 $todoistResponse = $this->todoist->request('GET', '/tasks');
                 $tasks = isset($todoistResponse['results']) ? $todoistResponse['results'] : (is_array($todoistResponse) ? $todoistResponse : []);
 
-                $emit('token', ['chunk' => "\n\nExtracting scheduled appointments and resolving conflicts..."]);
+
 
                 $schedulingAgent = new SchedulingAgent($this->agent);
                 $suggestionsArray = $schedulingAgent->extractBriefingSuggestions($emails, $tasks);
@@ -98,29 +95,6 @@ class GetEmailBriefingTool
 
                 $instructions .= "\n[SYSTEM NOTE]: Summarize these emails and present a beautiful daily briefing. Mention each account's status. Keep your response professional, precise, and highly readable. If any accounts had connection errors, mention them gracefully.";
 
-                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => $instructions
-                ];
-
-                $aiCommentary = '';
-                $commentaryBuffer = '';
-
-                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
-                    $aiCommentary .= $chunk;
-                    $commentaryBuffer .= $chunk;
-
-                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
-                        $emit('token', ['chunk' => $commentaryBuffer]);
-                        $commentaryBuffer = '';
-                    }
-                });
-
-                if (!empty($commentaryBuffer)) {
-                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
-                }
-
-                return $cleanJson . "\n\n" . $aiCommentary;
+                return $instructions;
     }
 }

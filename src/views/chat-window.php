@@ -60,6 +60,33 @@
                     </div>
                 <?php else: ?>
                     <?php foreach ($history as $msg): ?>
+                        <?php 
+                        $msgType = $msg['message_type'] ?? 'text';
+                        if ($msgType === 'data_fetching'): 
+                        ?>
+                        <details class="w-full max-w-[92%] mx-auto mb-4 overflow-hidden group data-fetching-accordion rounded-xl border border-amber-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(245,158,11,0.05),inset_0_1px_0_rgba(245,158,11,0.04)] transition-all duration-300">
+                            <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-amber-500/5 via-amber-500/3 to-transparent hover:from-amber-500/10 hover:via-amber-500/5 transition-all duration-200">
+                                <span class="flex items-center gap-3">
+                                    <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.12)]">
+                                        <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                        </svg>
+                                    </span>
+                                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 bg-clip-text text-transparent">Data Fetching</span>
+                                </span>
+                                <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                            </summary>
+                            <div class="px-5 pb-4 pt-3 border-t border-amber-500/10 bg-[#070b14]/40">
+                                <div class="data-fetch-content text-sm text-slate-300 leading-relaxed markdown-content space-y-3"><?php echo htmlspecialchars($msg['message']); ?></div>
+                            </div>
+                        </details>
+                        <?php
+                        continue;
+                        endif;
+                        if (($msg['role'] ?? '') === 'system') continue;
+                        ?>
                         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
                             
                             <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">

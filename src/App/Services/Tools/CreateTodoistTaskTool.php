@@ -6,7 +6,6 @@ use App\Agents\SchedulingAgent;
 
 class CreateTodoistTaskTool
 {
-    use ToolStreamHelper;
 
     public function __construct(
         private \App\Database $db,
@@ -18,7 +17,7 @@ class CreateTodoistTaskTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $emit('token', ['chunk' => "\n\nAnalyzing calendar schedule..."]);
+
                 
                 $content = $toolData['content'] ?? '';
                 $dueString = $toolData['due_string'] ?? null;
@@ -34,13 +33,11 @@ class CreateTodoistTaskTool
                 $analysis = $schedulingAgent->analyzeTask($content, $dueString, $tasks);
 
                 if (is_array($analysis) && isset($analysis['status']) && $analysis['status'] !== 'clear') {
-                    $aiCommentary = "\n\n### ⚠️ Calendar " . ucfirst($analysis['status']) . " Detected\n\n";
-                    $aiCommentary .= $analysis['analysis'] . "\n\n";
-                    $aiCommentary .= "Please tell me how you would like to proceed (e.g., reschedule, skip, or create it anyway)!";
-
-                    $emit('token', ['chunk' => $aiCommentary]);
-
-                    return $cleanJson . "\n\n" . $aiCommentary;
+                    $instructions = "System scheduling analysis:\n";
+                    $instructions .= "Status: " . $analysis['status'] . "\n";
+                    $instructions .= $analysis['analysis'] . "\n\n";
+                    $instructions .= "[SYSTEM NOTE]: The scheduling agent detected a conflict. Present this analysis to the user and ask how they'd like to proceed (reschedule, skip, or create anyway).";
+                    return $instructions;
                 }
 
                 $postData = ['content' => $content];
@@ -61,29 +58,6 @@ class CreateTodoistTaskTool
                 $instructions .= "- Link: {$taskUrl}\n\n";
                 $instructions .= "[SYSTEM NOTE]: Present a short, friendly confirmation message to the user confirming the task details. Keep it brief.";
 
-                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
-                $messages[] = [
-                    'role' => 'system',
-                    'content' => $instructions
-                ];
-
-                $aiCommentary = '';
-                $commentaryBuffer = '';
-
-                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
-                    $aiCommentary .= $chunk;
-                    $commentaryBuffer .= $chunk;
-
-                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
-                        $emit('token', ['chunk' => $commentaryBuffer]);
-                        $commentaryBuffer = '';
-                    }
-                });
-
-                if (!empty($commentaryBuffer)) {
-                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
-                }
-
-                return $cleanJson . "\n\n" . $aiCommentary;
+                return $instructions;
     }
 }

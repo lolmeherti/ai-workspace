@@ -6,7 +6,6 @@ use App\AgentManager;
 
 class SearchFilesTool
 {
-    use ToolStreamHelper;
 
     public function __construct(
         private \App\Database $db,
@@ -19,8 +18,6 @@ class SearchFilesTool
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
                 $toolQuery = $toolData['query'] ?? '';
-                $emit('token', ['chunk' => "\n\nChecking files..."]);
-
                 $keywords = array_filter(explode(' ', preg_replace('/[^\p{L}\p{N}\s]/u', '', $toolQuery)));
                 
                 $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
@@ -121,48 +118,6 @@ CRITICAL RESPONSE INSTRUCTIONS:
 4. Keep your answer professional, direct, and concise.
 TEXT;
 
-                $messages[] = ['role' => 'assistant', 'content' => $cleanJson];
-
-                if (!empty($imageAttachments)) {
-                    $contentItems = [
-                        ['type' => 'text', 'text' => $instructions]
-                    ];
-                    foreach ($imageAttachments as $img) {
-                        $contentItems[] = [
-                            'type' => 'image_url',
-                            'image_url' => [
-                                'url' => "data:{$img['mime_type']};base64,{$img['base64']}"
-                            ]
-                        ];
-                    }
-                    $messages[] = [
-                        'role' => 'system',
-                        'content' => $contentItems
-                    ];
-                } else {
-                    $messages[] = [
-                        'role' => 'system',
-                        'content' => $instructions
-                    ];
-                }
-
-                $aiCommentary = '';
-                $commentaryBuffer = '';
-
-                $this->agent->chat($messages, true, function($chunk) use ($emit, &$aiCommentary, &$commentaryBuffer) {
-                    $aiCommentary .= $chunk;
-                    $commentaryBuffer .= $chunk;
-
-                    if (mb_check_encoding($commentaryBuffer, 'UTF-8')) {
-                        $emit('token', ['chunk' => $commentaryBuffer]);
-                        $commentaryBuffer = '';
-                    }
-                });
-
-                if (!empty($commentaryBuffer)) {
-                    $emit('token', ['chunk' => mb_convert_encoding($commentaryBuffer, 'UTF-8', 'UTF-8')]);
-                }
-
-                return $cleanJson . "\n\n" . $aiCommentary;
+                return $instructions;
     }
 }

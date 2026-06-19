@@ -18,30 +18,7 @@ class PromptAssemblyService
         $this->uploadDir = $uploadDir;
     }
 
-    public function buildRouterPrompt(string $query): string
-    {
-        return <<<TEXT
-You are a highly accurate task router. Analyze the user's input and identify ALL categories of actions they want to take.
-
-Categories:
-- "search_files": User wants to find, look up, view, or check files/documents/images on disk.
-- "todoist_create": User wants to create, add, plan, or schedule a task/reminder/appointment.
-- "todoist_get": User wants to see, read, fetch, or list their tasks/calendar/schedule.
-- "todoist_update": User wants to edit, update, reschedule, or change an existing task/appointment.
-- "todoist_delete": User wants to delete, remove, or clear a task/reminder.
-- "none": The input is standard conversation or a general question.
-
-Rules:
-1. Output a comma-separated list of ALL categories that apply (e.g., "todoist_create, search_files").
-2. If the input is just normal conversation, output "none".
-3. Do NOT write explanations, markdown, or punctuation other than commas.
-
-User Input: "{$query}"
-Categories:
-TEXT;
-    }
-
-    public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query): string
+    public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query, bool $suppressTools = false): string
     {
         $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
         $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
@@ -55,6 +32,10 @@ TEXT;
 You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
 
+TEXT;
+
+        if (!$suppressTools) {
+            $systemPrompt .= <<<TEXT
 If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
 {"tool": "search_files", "query": "search words here"}
 
@@ -78,6 +59,10 @@ If you need to retrieve specific information from your long-term memories about 
 
 Do not confirm that you've done a tool call. Only do the tool call and nothing else.
 
+TEXT;
+        }
+
+        $systemPrompt .= <<<TEXT
 INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
 TEXT;
@@ -96,8 +81,65 @@ TEXT;
         return $systemPrompt;
     }
 
+    public function preprocessHistory(array $history): array
+    {
+        $merged = [];
+        $pendingData = '';
+
+        // Pass 1: Collect and strip data_fetching messages, and filter out intermediate tool calls
+        foreach ($history as $msg) {
+            if (($msg['message_type'] ?? 'text') === 'data_fetching') {
+                $pendingData .= "\n\n[SYSTEM DATA FETCHED]\n"
+                              . "Tool Executed: " . ($msg['tool_name'] ?? 'unknown_tool') . "()\n"
+                              . "Status: Success\n"
+                              . "Result Payload:\n"
+                              . "-----------------\n"
+                              . $msg['message'] . "\n"
+                              . "-----------------";
+                continue;
+            }
+
+            // Skip intermediate assistant tool calls to prevent them from terminating the dialogue chain
+            if ($msg['role'] === 'assistant' && 
+                (($msg['message_type'] ?? '') === 'tool_call' || 
+                 stripos($msg['message'], '"tool"') !== false)) {
+                continue;
+            }
+
+            $merged[] = $msg;
+        }
+
+        // Pass 2: Append collected data to the LAST user message
+        if (!empty($pendingData)) {
+            for ($i = count($merged) - 1; $i >= 0; $i--) {
+                if ($merged[$i]['role'] === 'user') {
+                    $merged[$i]['message'] .= "\n\n" . $pendingData
+                        . "\n\nRespond to the user's query using the above retrieved information.";
+                    break;
+                }
+            }
+        }
+
+        // Pass 3: Collapse consecutive assistant messages (strict template alternation)
+        $collapsed = [];
+        foreach ($merged as $msg) {
+            $lastIdx = count($collapsed) - 1;
+            if ($lastIdx >= 0
+                && $collapsed[$lastIdx]['role'] === 'assistant'
+                && $msg['role'] === 'assistant') {
+                $collapsed[$lastIdx]['message'] .= "\n\n" . $msg['message'];
+            } else {
+                $collapsed[] = $msg;
+            }
+        }
+
+        return $collapsed;
+    }
+
     public function buildMessagesArray(string $systemPrompt, array $history, string $intent = 'none'): array
     {
+        $history = $this->preprocessHistory($history);
+
         $messages = [];
         $messages[] = [
             'role' => 'system',
