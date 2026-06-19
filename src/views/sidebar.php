@@ -21,7 +21,7 @@
                 <uk-icon icon="mail" class="w-3.5 h-3.5"></uk-icon> Mails
             </button>
             <button onclick="switchSidebarTab('queries')" id="tab-btn-queries" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
-                <uk-icon icon="search" class="w-3.5 h-3.5"></uk-icon> Find
+                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web
             </button>
         </div>
     </div>

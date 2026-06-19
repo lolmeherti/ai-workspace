@@ -2,23 +2,20 @@
 
 namespace App\Services;
 
-use App\Agents\MemorySelector;
 use App\Config;
 
 class PromptAssemblyService
 {
-    private ?MemorySelector $memorySelector;
     private string $uploadDir;
     private \App\Database $db;
 
-    public function __construct(\App\Database $db, ?MemorySelector $memorySelector, string $uploadDir)
+    public function __construct(\App\Database $db, string $uploadDir)
     {
         $this->db = $db;
-        $this->memorySelector = $memorySelector;
         $this->uploadDir = $uploadDir;
     }
 
-    public function buildSystemPrompt(string $condensedContext, bool $usedCache, string $query, bool $suppressTools = false): string
+    public function buildSystemPrompt(string $query): string
     {
         $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
         $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
@@ -34,33 +31,31 @@ This is what keeps you up to date. If you see data from what you perceive to be 
 
 TEXT;
 
-        if (!$suppressTools) {
-            $systemPrompt .= <<<TEXT
-If the user asks for a file, asks to recall a document/image, or asks if you have a file on disk, do not make assumptions. You can search the database of uploaded files by outputting a JSON block with the following exact format as your ONLY output:
+        $systemPrompt .= <<<TEXT
+TOOL USAGE:
+You have access to tools that can search files, manage tasks, check email, and retrieve memories. To use a tool, output ONLY the JSON block for that tool — no other text. If no tool is needed, respond normally in plain text.
+
+search_files — Search uploaded files and documents on disk:
 {"tool": "search_files", "query": "cv, resume"}
 
-If the user wants to schedule a reminder, set a task, plan an appointment, create a task or see their upcoming calendar/schedule, you can help the user easily.
-In this scenario your reply MUST BE only one of the following JSON blocks.
+create_todoist_task — Schedule a task or reminder:
+{"tool": "create_todoist_task", "content": "clean task summary", "due_string": "tomorrow at 3pm"}
 
-To create a task:
-{"tool": "create_todoist_task", "content": "clean task summary here", "due_string": "tomorrow at 3pm"}
-
-To fetch upcoming tasks or search for a specific scheduled appointment/reminder:
+get_todoist_tasks — Fetch your upcoming tasks and agenda:
 {"tool": "get_todoist_tasks"}
 
-To update or edit an existing task's title, date, or time:
-{"tool": "update_todoist_task", "query": "search words here", "new_content": "new title", "new_due_string": "new date/time"}
+update_todoist_task — Edit an existing task's title, date, or time:
+{"tool": "update_todoist_task", "query": "search words", "new_content": "new title", "new_due_string": "new date/time"}
 
-To delete or remove a task/reminder:
-{"tool": "delete_todoist_task", "query": "search words here"}
+delete_todoist_task — Remove a task or reminder:
+{"tool": "delete_todoist_task", "query": "search words"}
 
-If you need to retrieve specific information from your long-term memories about the user that is NOT already present in the "USER IDENTITY" section at the top of this prompt, use the following tool:
-{"tool": "search_memories", "query": "specific search query for memories"}
+search_memories — Search long-term memories for specific information:
+{"tool": "search_memories", "query": "specific query"}
 
-Do not confirm that you've done a tool call. Only do the tool call and nothing else.
+After a tool's results appear in the conversation, respond naturally with a plain text answer. Do not call the same tool more than once for the same request.
 
 TEXT;
-        }
 
         $systemPrompt .= <<<TEXT
 INSTRUCTIONS FOR PRE-VETTED REMINDERS:
@@ -73,13 +68,6 @@ TEXT;
         $cutoffDate = 'early 2024';
         $systemPrompt .= "\n\nToday's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
 
-        if (!empty($condensedContext)) {
-            $systemPrompt .= "\n\nLIVE WEB SEARCH CONTEXT:\n{$condensedContext}\n";
-            if ($usedCache) {
-                $systemPrompt .= "\n(Note: This context was retrieved from your recent semantic memory cache).\n";
-            }
-        }
-
         return $systemPrompt;
     }
 
@@ -88,16 +76,27 @@ TEXT;
         $merged = [];
         $pendingData = '';
 
+        // Find the last user message index to only collect data_fetching from the current request
+        $lastUserIdx = -1;
+        foreach ($history as $idx => $msg) {
+            if ($msg['role'] === 'user') {
+                $lastUserIdx = $idx;
+            }
+        }
+
         // Pass 1: Collect and strip data_fetching messages, and filter out intermediate tool calls
-        foreach ($history as $msg) {
+        foreach ($history as $idx => $msg) {
             if (($msg['message_type'] ?? 'text') === 'data_fetching') {
-                $pendingData .= "\n\n[SYSTEM DATA FETCHED]\n"
-                              . "Tool Executed: " . ($msg['tool_name'] ?? 'unknown_tool') . "()\n"
-                              . "Status: Success\n"
-                              . "Result Payload:\n"
-                              . "-----------------\n"
-                              . $msg['message'] . "\n"
-                              . "-----------------";
+                // Only collect data_fetching rows from the current request (after last user message)
+                if ($idx > $lastUserIdx) {
+                    $pendingData .= "\n\n[SYSTEM DATA FETCHED]\n"
+                                  . "Tool Executed: " . ($msg['tool_name'] ?? 'unknown_tool') . "()\n"
+                                  . "Status: Success\n"
+                                  . "Result Payload:\n"
+                                  . "-----------------\n"
+                                  . $msg['message'] . "\n"
+                                  . "-----------------";
+                }
                 continue;
             }
 
@@ -122,23 +121,10 @@ TEXT;
             }
         }
 
-        // Pass 3: Collapse consecutive assistant messages (strict template alternation)
-        $collapsed = [];
-        foreach ($merged as $msg) {
-            $lastIdx = count($collapsed) - 1;
-            if ($lastIdx >= 0
-                && $collapsed[$lastIdx]['role'] === 'assistant'
-                && $msg['role'] === 'assistant') {
-                $collapsed[$lastIdx]['message'] .= "\n\n" . $msg['message'];
-            } else {
-                $collapsed[] = $msg;
-            }
-        }
-
-        return $collapsed;
+        return $merged;
     }
 
-    public function buildMessagesArray(string $systemPrompt, array $history, string $intent = 'none'): array
+    public function buildMessagesArray(string $systemPrompt, array $history, string $intent = 'none', string $condensedContext = '', bool $usedCache = false): array
     {
         $history = $this->preprocessHistory($history);
 
@@ -151,18 +137,11 @@ TEXT;
         $rollingLimit = (int) Config::get('CHAT_ROLLING_WINDOW_LIMIT', 15);
         $recentHistory = array_slice($history, -$rollingLimit);
 
-        $lastUserIdx = -1;
-        foreach ($recentHistory as $idx => $row) {
-            if ($row['role'] === 'user') {
-                $lastUserIdx = $idx;
-            }
-        }
-
         foreach ($recentHistory as $idx => $row) {
             $hasImage = false;
             $messageContent = $row['message'];
 
-            if (preg_match_all('/\[File:\s*([a-zA-Z0-9._\-]+)\]/', $messageContent, $matches)) {
+            if (preg_match_all('/\\[File:\\s*([a-zA-Z0-9._\\-]+)\\]/', $messageContent, $matches)) {
                 foreach ($matches[1] as $matchIdx => $matchedFilename) {
                     $fullFilePath = $this->uploadDir . $matchedFilename;
                     $txtPath = $fullFilePath . '.txt';
@@ -176,7 +155,6 @@ TEXT;
                             $hasImage = true;
                             $base64 = base64_encode(file_get_contents($fullFilePath));
                             
-                            $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
                             $messages[] = [
                                 'role' => $row['role'],
                                 'content' => [
@@ -198,7 +176,6 @@ TEXT;
                         $hasImage = true;
                         $base64 = base64_encode(file_get_contents($fullFilePath));
                         
-                        $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
                         $messages[] = [
                             'role' => $row['role'],
                             'content' => [
@@ -220,8 +197,6 @@ TEXT;
             }
 
             if (!$hasImage) {
-                $this->maybeAddRoutingHint($messages, $idx, $lastUserIdx, $intent);
-                
                 $messages[] = [
                     'role' => $row['role'],
                     'content' => $messageContent
@@ -229,16 +204,33 @@ TEXT;
             }
         }
 
-        return $messages;
-    }
-
-    private function maybeAddRoutingHint(array &$messages, int $idx, int $lastUserIdx, string $intent): void
-    {
-        if ($idx === $lastUserIdx && $intent !== 'none') {
-            $messages[] = [
-                'role' => 'system',
-                'content' => "[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]"
-            ];
+        // Append routing hint and web search context to the last user message (preserves KV cache)
+        if ($intent !== 'none' || !empty($condensedContext)) {
+            for ($i = count($messages) - 1; $i >= 0; $i--) {
+                if ($messages[$i]['role'] === 'user') {
+                    $append = '';
+                    if ($intent !== 'none') {
+                        $append .= "\n\n[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]";
+                    }
+                    if (!empty($condensedContext)) {
+                        $append .= "\n\n[LIVE WEB SEARCH CONTEXT]:\n{$condensedContext}";
+                        if ($usedCache) {
+                            $append .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
+                        }
+                        $append .= "\n\nRespond to the user's query using the above retrieved information.";
+                    }
+                    if ($append !== '') {
+                        if (is_array($messages[$i]['content'])) {
+                            $messages[$i]['content'][0]['text'] .= $append;
+                        } else {
+                            $messages[$i]['content'] .= $append;
+                        }
+                    }
+                    break;
+                }
+            }
         }
+
+        return $messages;
     }
 }

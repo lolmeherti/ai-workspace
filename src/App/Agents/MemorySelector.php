@@ -3,18 +3,15 @@
 namespace App\Agents;
 
 use App\Database;
-use App\AgentManager;
 use App\Repositories\MemoryRepository;
 
 class MemorySelector
 {
     private Database $db;
-    private AgentManager $agent;
 
-    public function __construct(Database $db, AgentManager $agent)
+    public function __construct(Database $db)
     {
         $this->db = $db;
-        $this->agent = $agent;
     }
 
     /**

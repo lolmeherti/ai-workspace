@@ -85,6 +85,15 @@ SEARCH DECISION RULES:
 - Set "requires_search" to true ONLY if the request asks for real-time information (e.g., current news, weather, stock prices, or general web facts).
 - Set "requires_search" to false if the user is asking about their personal calendar, their personal files (like their resume, documents, or photos), their personal emails, or general conversation.
 
+PERSONAL OWNERSHIP OVERRIDE:
+The words "my", "mine", "I have a", or "I booked" indicate PERSONAL data — NOT a web search. These queries should route to email and file tools, even if they sound like they could be real-time:
+- "my flight details" / "my booking" / "my ticket" / "my reservation" / "my itinerary" → personal email/files, NOT web search
+- "my bank statement" / "my invoice" / "my receipt" / "my bill" → personal email/files, NOT web search
+- "my order" / "my package" / "my delivery" / "my shipment" → personal email, NOT web search
+- "my account" / "my subscription" / "my membership" → personal email/files, NOT web search
+
+Only trigger web search for queries about PUBLIC facts — where the answer is the same for everyone. If the answer depends on who the user is, the information is in their email, files, or memories.
+
 INTENT ROUTING RULES:
 Identify ALL tool categories the user wants to utilize:
 - "search_files": User wants to find, view, or check files/docs/images on disk.
