@@ -129,6 +129,27 @@ export function initChatDom() {
             openEditorDrawer(savedActiveFile);
         }
 
+        document.querySelectorAll('.chat-user').forEach(el => {
+            const raw = el.getAttribute('data-raw') || '';
+            const match = raw.match(/^The user has highlighted these sections from '([^']+)'[\s\S]*?user prompt:\s*\n"([\s\S]*?)"\s*EDIT RULE:/);
+            if (match) {
+                const filename = match[1];
+                const actualPrompt = match[2];
+                const blockCount = (raw.match(/- \[b-(\d+)\]:/g) || []).length;
+
+                el.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3">
+                        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer shadow-md"
+                                onclick="window.openEditorDrawer('${filename.replace(/'/g, "\\'")}', this)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            ${blockCount} block${blockCount !== 1 ? 's' : ''} · ${filename}
+                        </button>
+                    </div>
+                    <span class="msg-text">${actualPrompt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+                `;
+            }
+        });
+
         const closeBtn = document.getElementById('editor-close-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', closeEditorDrawer);

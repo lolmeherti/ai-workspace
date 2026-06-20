@@ -45,12 +45,11 @@ class SearchFilesTool
                 $matchingFiles = $this->db->query($sql, $params);
 
                 $resultsTxt = "System search completed for '{$toolQuery}'. Matches found on disk:\n";
-                $injectedContexts = [];
 
                 if (empty($matchingFiles)) {
                     $resultsTxt .= "- No matching files found.\n";
                 } else {
-                    if (count($matchingFiles) > 1) {
+                    if (count($matchingFiles) >= 1) {
                         $emit('file_choices', [
                             'query' => $toolQuery,
                             'files' => $matchingFiles
@@ -59,16 +58,7 @@ class SearchFilesTool
 
                     foreach ($matchingFiles as &$f) {
                         $f['preview'] = '';
-                        $resultsTxt .= "- File: \"{$f['generated_title']}\" (Original Name: {$f['original_name']}, Physical Path: uploads/{$f['physical_name']}, Uploaded at: {$f['uploaded_at']}, Type: {$f['file_type']})\n";
-
-                        if ($f['file_type'] !== 'image') {
-                            $txtPath = $this->uploadDir . $f['physical_name'] . '.txt';
-                            if (file_exists($txtPath)) {
-                                $docText = file_get_contents($txtPath);
-                                $f['preview'] = mb_substr($docText, 0, 300, 'UTF-8');
-                                $injectedContexts[] = "[Content of Found Document \"{$f['generated_title']}\" (uploads/{$f['physical_name']})]:\n{$docText}\n[End Document Content]\n";
-                            }
-                        }
+                        $resultsTxt .= "- File: \"{$f['generated_title']}\" (Original Name: {$f['original_name']}, Type: {$f['file_type']})\n";
                     }
                     unset($f);
                 }
@@ -79,23 +69,12 @@ Below are the results of the file search you just requested.
 {$resultsTxt}
 TEXT;
 
-                if (!empty($injectedContexts)) {
-                    $injectedContextsStr = implode("\n\n", $injectedContexts);
-                    $instructions .= <<<TEXT
-
-
-[SYSTEM NOTE]: The content of matching text documents has been extracted and supplied below:
-{$injectedContextsStr}
-[End Document Content]
-TEXT;
-                }
-
                 $instructions .= <<<TEXT
 
 
-CRITICAL RESPONSE INSTRUCTIONS:
-1. For text documents: their full content has been injected above. Read it and answer the user's query directly.
-2. For image files: you can see only the file title and filename — you CANNOT see image content. Tell the user which relevant images you found by their title. The user can click "Append to Chat" to send an image to you for analysis.
+INSTRUCTIONS:
+1. Tell the user which files you found by their title.
+2. If the user asked a specific question that the file could answer, tell them to click "Append to Chat" on the relevant file so you can read its contents.
 3. Keep your answer professional, direct, and concise.
 TEXT;
 

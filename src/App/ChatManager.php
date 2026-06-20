@@ -72,7 +72,7 @@ class ChatManager
         return trim($text);
     }
 
-    public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?callable $streamCallback = null): array
+    public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?string $activeEditFile = null, ?callable $streamCallback = null): array
     {
         $emit = function(string $event, array $data = []) use ($streamCallback) {
             if ($streamCallback !== null) {
@@ -122,7 +122,10 @@ class ChatManager
         $intent = 'none';
 
        $emit('status', ['text' => 'Analyzing intent...']);
-        if ($this->searchDecider) {
+        if (!empty($activeEditFile)) {
+            $intent = 'none';
+            $searchQuery = null;
+        } elseif ($this->searchDecider) {
             $decisionResult = $this->searchDecider->decideSearchAndIntent($query, $history);
             $searchQuery = $decisionResult['search_query'] ?? null;
             $intent = $decisionResult['intents'] ?? 'none';
@@ -158,7 +161,6 @@ class ChatManager
                 
                 $emit('tool_done', ['tool' => 'search_files', 'label' => 'Files checked.']);
 
-                // If actual results were returned (not a standard error or "No matching files" placeholder)
                 if (stripos($toolOutput, 'No matching files') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
                     $tier1Found = true;
 
@@ -168,6 +170,28 @@ class ChatManager
                         'message' => $toolOutput,
                         'message_type' => 'data_fetching',
                         'tool_name' => 'search_files',
+                        'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
+                    ]);
+                }
+            }
+
+            if (in_array('search_memories', $intentList)) {
+                $toolParams = ['tool' => 'search_memories', 'query' => $searchTargetQuery];
+                $emit('tool_start', ['tool' => 'search_memories', 'label' => 'Searching memories...']);
+                
+                $toolOutput = $this->toolExecutionService->processToolCall(json_encode($toolParams), $sessionId, $history, $emit);
+                
+                $emit('tool_done', ['tool' => 'search_memories', 'label' => 'Memories checked.']);
+
+                if (stripos($toolOutput, 'No specific relevant memories') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
+                    $tier1Found = true;
+
+                    $this->db->insert('chat_history', [
+                        'session_id' => $sessionId,
+                        'role' => 'system',
+                        'message' => $toolOutput,
+                        'message_type' => 'data_fetching',
+                        'tool_name' => 'search_memories',
                         'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
                     ]);
                 }
@@ -227,7 +251,7 @@ class ChatManager
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
         $emit('status', ['text' => 'Assembling context...']);
-        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
         $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent, $condensedContext, $usedCache);
         
         $currentMessages = $this->cleanMessagesArray($currentMessages);
@@ -247,7 +271,12 @@ class ChatManager
 
         // If a tool has already been run pre-emptively on the backend, register it to prevent double calls
         if ($tier1Found) {
-            $calledTools[] = in_array('search_files', $intentList) ? 'search_files' : 'search_memories';
+            if (in_array('search_files', $intentList)) {
+                $calledTools[] = 'search_files';
+            }
+            if (in_array('search_memories', $intentList)) {
+                $calledTools[] = 'search_memories';
+            }
         }
         if ($tier2Found) {
             $calledTools[] = in_array('todoist_get', $intentList) ? 'get_todoist_tasks' : 'get_email_briefing';
