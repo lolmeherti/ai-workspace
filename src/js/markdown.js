@@ -72,6 +72,11 @@ export function parseMarkdownElements() {
         if (typeof marked !== 'undefined') {
             el.innerHTML = marked.parse(displayText);
         }
+
+        if (typeof window.parseInlineFiles === 'function') {
+            el.innerHTML = window.parseInlineFiles(el.innerHTML);
+        }
+
         el.classList.add('parsed', 'markdown-content');
 
         if (thinking && !el.parentNode.querySelector('.thinking-accordion')) {

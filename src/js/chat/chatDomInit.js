@@ -28,7 +28,13 @@ export function initChatDom() {
                     el.innerHTML = parseInlineFiles(marked.parse(displayText));
                 }
 
-                el.classList.add('markdown-content');
+                if (typeof hljs !== 'undefined') {
+                    el.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightElement(block);
+                    });
+                }
+
+                el.classList.add('parsed', 'markdown-content');
 
                 if (thinking && !el.parentNode.querySelector('.thinking-accordion')) {
                     const accordion = createThinkingAccordion(thinking);

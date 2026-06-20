@@ -38,6 +38,7 @@ class ChatBriefingStreamAction extends BaseAction
         };
 
         $emit('status', ['text' => "Connecting to inbox services..."]);
+        $emit('tool_start', ['tool' => 'email_fetch', 'label' => 'Checking connected inboxes...']);
 
         $emailService = new \App\Services\EmailService($this->db);
         $emails = $emailService->fetchRecentEmails($includeUnseen, function ($emailAddress, $label) use ($emit) {
@@ -49,13 +50,13 @@ class ChatBriefingStreamAction extends BaseAction
         $sampleSubjects = [];
         foreach ($emails as $email) {
             if (isset($email['error'])) {
-                $label = $email['account_label'] ?? 'Unknown';
-                $accountErrors[$label] = $email['error'];
+                $addr = $email['account_email'] ?? 'Unknown';
+                $accountErrors[$addr] = $email['error'];
             } else {
-                $label = $email['account_label'] ?? 'Unknown';
-                $accountCounts[$label] = ($accountCounts[$label] ?? 0) + 1;
+                $addr = $email['account_email'] ?? 'Unknown';
+                $accountCounts[$addr] = ($accountCounts[$addr] ?? 0) + 1;
                 if (count($sampleSubjects) < 5 && !empty($email['subject'])) {
-                    $sampleSubjects[] = '[' . $label . '] ' . $email['subject'];
+                    $sampleSubjects[] = '[' . $addr . '] ' . $email['subject'];
                 }
             }
         }
@@ -68,9 +69,32 @@ class ChatBriefingStreamAction extends BaseAction
         }
         $statsLine = !empty($statsParts) ? implode(' | ', $statsParts) : 'no accounts configured';
         $fetchSummary = 'Fetched ' . count($emails) . ' emails — ' . $statsLine;
+
+        foreach ($accountCounts as $addr => $count) {
+            $emit('trace', ['label' => "Fetched {$count} email" . ($count !== 1 ? 's' : '') . " from {$addr}", 'color' => 'emerald']);
+        }
+        foreach ($accountErrors as $addr => $err) {
+            $emit('trace', ['label' => "Failed to fetch from {$addr}: {$err}", 'color' => 'rose']);
+        }
+        if (empty($accountCounts) && empty($accountErrors)) {
+            $emit('trace', ['label' => 'No email accounts configured', 'color' => 'amber']);
+        }
+
+        $emit('tool_done', ['tool' => 'email_fetch', 'label' => 'Inboxes checked.']);
         
         $emit('data_fetching', ['tool' => 'email_fetch', 'status' => 'success', 'label' => 'Email fetch complete', 'payload' => $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects)]);
         \App\Logger::info('Briefing email fetch: ' . $fetchSummary);
+
+        if ($this->db) {
+            $this->db->insert('chat_history', [
+                'session_id'    => $sessionId,
+                'role'          => 'system',
+                'message'       => $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects),
+                'message_type'  => 'data_fetching',
+                'tool_name'     => 'email_fetch',
+                'token_estimate' => (int)(mb_strlen($fetchSummary) / 4)
+            ]);
+        }
 
         $emailSummaries = [];
         if (empty($emails)) {
@@ -78,18 +102,24 @@ class ChatBriefingStreamAction extends BaseAction
         } else {
             $chunks = array_chunk($emails, 5);
             $totalChunks = count($chunks);
+            $emit('tool_start', ['tool' => 'email_summarize', 'label' => 'Summarizing fetched emails...']);
             foreach ($chunks as $idx => $chunk) {
                 $chunkNum = $idx + 1;
                 $emit('status', ['text' => "Summarizing email chunk {$chunkNum} of {$totalChunks}..."]);
 
+                $chunkSubjects = [];
                 $emailsTxt = "";
                 foreach ($chunk as $email) {
                     if (isset($email['error'])) {
                         $emailsTxt .= "Connection Error: " . $email['error'] . "\n";
                     } else {
+                        $chunkSubjects[] = $email['subject'] ?: '[no subject]';
                         $emailsTxt .= "Email Reference tag: [Email: {$email['account_id']}:{$email['uid']}]\nFrom: " . $email['from'] . "\nSubject: " . $email['subject'] . "\nDate: " . $email['date'] . "\nSnippet: " . $email['snippet'] . "\n\n";
                     }
                 }
+
+                $subjectList = implode(', ', $chunkSubjects);
+                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: parsing " . count($chunkSubjects) . " email" . (count($chunkSubjects) !== 1 ? 's' : '') . ($subjectList ? " ({$subjectList})" : ''), 'color' => 'slate']);
 
                 $prompt = "Summarize the following emails briefly, listing sender, subject, and key points. You must keep the exact \"Email Reference tag\" (e.g., [Email: X:Y]) intact for each email summary:\n\n" . $emailsTxt;
                 $messages = [
@@ -109,13 +139,28 @@ class ChatBriefingStreamAction extends BaseAction
                 $cleanSummary = trim($cleanSummary);
 
                 $emit('data_fetching', ['tool' => 'email_summarize', 'status' => 'success', 'label' => "Chunk {$chunkNum}/{$totalChunks} summary", 'payload' => $cleanSummary]);
+                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: summarized (" . mb_strlen($cleanSummary) . " chars)", 'color' => 'emerald']);
 
                 \App\Logger::info("Briefing chunk {$chunkNum}/{$totalChunks}: " . mb_strlen($cleanSummary) . ' chars (raw: ' . mb_strlen($summary) . ')');
+
+                if ($this->db) {
+                    $this->db->insert('chat_history', [
+                        'session_id'    => $sessionId,
+                        'role'          => 'system',
+                        'message'       => $cleanSummary,
+                        'message_type'  => 'data_fetching',
+                        'tool_name'     => 'email_summarize',
+                        'token_estimate' => (int)(mb_strlen($cleanSummary) / 4)
+                    ]);
+                }
+
                 $emailSummaries[] = $cleanSummary;
             }
+            $emit('tool_done', ['tool' => 'email_summarize', 'label' => 'Email summaries complete.']);
         }
 
         $emit('status', ['text' => "Retrieving calendar schedules..."]);
+        $emit('tool_start', ['tool' => 'get_todoist_tasks', 'label' => 'Checking calendar...']);
 
         $todoistSummary = "";
         $tasks = [];
@@ -125,6 +170,8 @@ class ChatBriefingStreamAction extends BaseAction
             $toolService = new \App\Services\ToolExecutionService($this->db, $this->agentManager, $uploadDir);
             $response = $toolService->makeTodoistRequest('GET', '/tasks');
             $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
+
+            $emit('trace', ['label' => 'Calendar returned ' . count($tasks) . ' task' . (count($tasks) !== 1 ? 's' : ''), 'color' => 'slate']);
 
             if (empty($tasks)) {
                 $todoistSummary = "No active tasks found in the calendar.";
@@ -173,9 +220,12 @@ class ChatBriefingStreamAction extends BaseAction
             }
         } catch (\Throwable $e) {
             $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
+            $emit('trace', ['label' => 'Calendar fetch failed: ' . $e->getMessage(), 'color' => 'rose']);
         }
+        $emit('tool_done', ['tool' => 'get_todoist_tasks', 'label' => 'Calendar loaded.']);
 
         $emit('status', ['text' => "Analyzing inbox and calendar data..."]);
+        $emit('tool_start', ['tool' => 'scheduling_agent', 'label' => 'Cross-referencing emails and calendar...']);
 
         $suggestionsTags = "";
         try {
@@ -188,8 +238,11 @@ class ChatBriefingStreamAction extends BaseAction
                     }
                 }
             }
+            $emit('trace', ['label' => 'Cross-reference found ' . count($suggestionsArray) . ' suggested action' . (count($suggestionsArray) !== 1 ? 's' : ''), 'color' => 'slate']);
         } catch (\Throwable $e) {
+            $emit('trace', ['label' => 'Cross-reference failed: ' . $e->getMessage(), 'color' => 'rose']);
         }
+        $emit('tool_done', ['tool' => 'scheduling_agent', 'label' => 'Cross-reference complete.']);
 
         $emit('status', ['text' => "Generating executive briefing..."]);
 

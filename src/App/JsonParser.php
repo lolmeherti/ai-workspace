@@ -51,17 +51,16 @@ class JsonParser
                 $decoded['tool'] = $toolName;
                 return self::normalizeOutput($decoded);
             }
-            self::logError($text, "Tool call JSON failed: " . json_last_error_msg());
         }
 
         $startIndex = strpos($text, '{');
         $isObject = true;
-        
+
         $bracketIndex = strpos($text, '[');
         if ($startIndex === false && $bracketIndex === false) {
-            return self::fallbackDecode($text);
+            return self::decodeWithFallback($text);
         }
-        
+
         if ($startIndex === false || ($bracketIndex !== false && $bracketIndex < $startIndex)) {
             $startIndex = $bracketIndex;
             $isObject = false;
@@ -83,7 +82,6 @@ class JsonParser
                                 if (is_array($decoded)) {
                                     return self::normalizeOutput($decoded);
                                 }
-                                self::logError($text, "Object extraction failed: " . json_last_error_msg());
                             }
                         }
                     }
@@ -97,11 +95,19 @@ class JsonParser
                 if (is_array($decoded)) {
                     return self::normalizeOutput($decoded);
                 }
-                self::logError($text, "Array extraction failed: " . json_last_error_msg());
             }
         }
 
-        return self::fallbackDecode($text);
+        return self::decodeWithFallback($text);
+    }
+
+    private static function decodeWithFallback(string $text): ?array
+    {
+        $result = self::fallbackDecode($text);
+        if ($result === null && $text !== '' && $text !== 'null') {
+            self::logError($text, "All JSON decoding methods failed: " . json_last_error_msg());
+        }
+        return $result;
     }
 
     private static function normalizeOutput(array $decoded): array
@@ -147,16 +153,11 @@ TEXT;
             if (is_array($decoded)) {
                 return self::normalizeOutput($decoded);
             }
-            self::logError($text, "Markdown JSON failed: " . json_last_error_msg());
         }
 
         $decoded = @json_decode(trim($text), true);
         if (is_array($decoded)) {
             return self::normalizeOutput($decoded);
-        }
-        
-        if ($text !== '' && $text !== 'null') {
-             self::logError($text, "Final fallback failed: " . json_last_error_msg());
         }
 
         return null;
