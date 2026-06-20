@@ -122,18 +122,20 @@ class EmailListAction extends BaseAction
                 return;
             }
 
-            // Client inbox list consistently queries the past 7 days across all pages
-            $sinceDate = new DateTime("-7 days");
-            try {
-                $total = (int)$inbox->query()->since($sinceDate)->count();
-            } catch (\Throwable $_countErr) {
-                error_log('IMAP count failed for account ' . $accountId . ': ' . $_countErr->getMessage());
+            // Use cache count as primary (instant, no IMAP round-trip).
+            // Only fall back to IMAP SEARCH count on cold caches.
+            $cacheTotalRow = $this->db->query(
+                "SELECT COUNT(*) as count FROM email_cache WHERE account_id = :account_id",
+                [':account_id' => $accountId]
+            );
+            $total = (int)($cacheTotalRow[0]['count'] ?? 0);
+
+            if ($total === 0) {
                 try {
-                    $cacheTotalRow = $this->db->query("SELECT COUNT(*) as count FROM email_cache WHERE account_id = :account_id", [':account_id' => $accountId]);
-                    $total = (int)($cacheTotalRow[0]['count'] ?? 0);
-                } catch (\Throwable $_estErr) {
-                    error_log('Cache fallback failed too: ' . $_estErr->getMessage());
-                    throw new \RuntimeException("Failed to count emails in date window. Check IMAP connectivity and credentials.");
+                    $total = (int)$inbox->query()->since(new DateTime("-7 days"))->count();
+                } catch (\Throwable $_countErr) {
+                    error_log('IMAP count failed for account ' . $accountId . ': ' . $_countErr->getMessage());
+                    $total = 0;
                 }
             }
 
@@ -155,10 +157,13 @@ class EmailListAction extends BaseAction
 
             // Fetch messages for the requested page — strictly bounded to the 7-day date window
             try {
+                $sinceDate = new DateTime("-7 days");
                 $queryBuilder = $inbox->query()->since($sinceDate);
                 try {
                     $queryBuilder->setFetchOrder('desc');
                 } catch (\Throwable $_sortErr) {}
+                $queryBuilder->setFetchBody(false);
+                $queryBuilder->leaveUnread();
                 
                 // Note: limit() accepts page number directly, NOT fetchOffset
                 $messages = $queryBuilder->limit($limit, $page)->get();

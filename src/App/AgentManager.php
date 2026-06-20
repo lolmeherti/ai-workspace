@@ -60,12 +60,19 @@ class AgentManager
                             $lastUsage = $json['usage'];
                         }
                         
+                        if (isset($json['choices'][0]['delta']['reasoning_content'])) {
+                            $chunk = $json['choices'][0]['delta']['reasoning_content'];
+                            if ($streamCallback !== null) {
+                                $streamCallback($chunk, 'reasoning');
+                            }
+                        }
+
                         if (isset($json['choices'][0]['delta']['content'])) {
                             $chunk = $json['choices'][0]['delta']['content'];
                             $fullResponse .= $chunk;
-                            
+
                             if ($streamCallback !== null) {
-                                $streamCallback($chunk);
+                                $streamCallback($chunk, 'content');
                             }
                         }
                     }
