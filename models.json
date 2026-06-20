@@ -6,7 +6,8 @@
     "url": "",
     "ctx_size": 32768,
     "mmproj_file": "",
-    "mmproj_url": ""
+    "mmproj_url": "",
+    "enable_prompt_caching": true
   },
 
   "gemma-4-26b-qat-t1": {
@@ -16,7 +17,8 @@
     "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
     "ctx_size": 160000,
     "mmproj_file": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+    "enable_prompt_caching": true
   },
 
   "gemma-4-26b-qat-t2": {
@@ -26,7 +28,8 @@
     "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
     "ctx_size": 60000,
     "mmproj_file": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+    "enable_prompt_caching": true
   },
 
   "gemma-4-E4B-Q8-t3": {
@@ -36,7 +39,8 @@
     "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q8_0.gguf",
     "ctx_size": 65000,
     "mmproj_file": "mmproj-gemma-4-E4B-it-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf",
+    "enable_prompt_caching": true
   },
 
   "gemma-4-E4B-Q4-t4": {
@@ -46,7 +50,8 @@
     "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
     "ctx_size": 50000,
     "mmproj_file": "mmproj-gemma-4-E4B-it-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf",
+    "enable_prompt_caching": true
   },
 
   "gemma-4-E2B-Q4-t5": {
@@ -56,7 +61,8 @@
     "url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
     "ctx_size": 45000,
     "mmproj_file": "mmproj-gemma-4-E2B-it-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-BF16.gguf",
+    "enable_prompt_caching": true
   },
   
   "qwen3-5-4b-t5": {
@@ -66,6 +72,7 @@
     "url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q8_0.gguf",
     "ctx_size": 40000,
     "mmproj_file": "mmproj-Qwen3.5-4B-BF16.gguf",
-    "mmproj_url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/mmproj-Qwen3.5-4B-BF16.gguf"
+    "mmproj_url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/mmproj-Qwen3.5-4B-BF16.gguf",
+    "enable_prompt_caching": true
   }
 }

@@ -123,7 +123,7 @@ func Bootstrap() {
 	docker.StartCompose(workDir, binDir, registry)
 
 	if useLocal {
-		LlamaProcess = llama.StartServer(binDir, modelPath, mmprojPath, activeTier.Name, ctxSize)
+		LlamaProcess = llama.StartServer(binDir, modelPath, mmprojPath, activeTier, ctxSize)
 		llama.WaitForReady()
 	}
 

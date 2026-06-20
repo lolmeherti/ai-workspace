@@ -25,7 +25,8 @@ class AgentManager
             'model' => $this->modelName,
             'messages' => $messages,
             'stream' => $stream,
-            'temperature' => $finalTemperature
+            'temperature' => $finalTemperature,
+            'cache_prompt' => true
         ];
 
         if ($stream) {
