@@ -11,7 +11,8 @@ if exist "%~dp0src\json_parser_errors.log" del /f /q "%~dp0src\json_parser_error
 echo.
 
 echo [+] Booting up localsy launcher in background...
-start "" "localsy.exe" -debug
+set "LOCALSY_DEV_ENV=%~dp0.env"
+start "" localsy.exe -debug
 
 echo [+] Waiting for local AI engine to start...
 :wait_port
@@ -77,4 +78,8 @@ pause
 echo.
 echo [-] Shutting down development container...
 wsl -d localsy-docker-backend env WINDOWS_HOST_IP="%WINDOWS_HOST_IP%" docker compose -p localsy --project-directory "%WSL_PATH%" -f "%WSL_PATH%/docker-compose.yml" down >nul 2>&1
+
+echo [+] Syncing environment changes back to launcher...
+copy /y "%~dp0.env" "%LOCALAPPDATA%\localsy\.env" >nul 2>&1
+
 echo [+] Done.

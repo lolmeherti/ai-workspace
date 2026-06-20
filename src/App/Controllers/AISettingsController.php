@@ -59,7 +59,7 @@ class AISettingsController extends BaseController
     private function saveSettings(int $sessionId, Tab $activeTab): void
     {
         $currentEnv = $this->envEditor->read();
-        $newEnv = [];
+        $newEnv = $currentEnv;
 
         foreach (array_keys($currentEnv) as $key) {
             if (isset($_POST[$key])) {

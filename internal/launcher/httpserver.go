@@ -163,7 +163,7 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 		mmprojPath = h.modelDir + "/" + tier.MMProjFile
 	}
 
-	LlamaProcess = llama.StartServer(h.binDir, modelPath, mmprojPath, tier.Name, ctxSize)
+	LlamaProcess = llama.StartServer(h.binDir, modelPath, mmprojPath, tier, ctxSize)
 
 	// Wait for llama to be ready before responding
 	waitLlamaReady()

@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"localsy/internal/logging"
+	"localsy/internal/models"
 	"localsy/internal/util"
 )
 
-func StartServer(binDir string, modelPath string, mmprojPath string, modelName string, ctxSize int) *exec.Cmd {
+func StartServer(binDir string, modelPath string, mmprojPath string, tier models.Tier, ctxSize int) *exec.Cmd {
 	serverPath := filepath.Join(binDir, "llama-server.exe")
 
 	if _, err := os.Stat(serverPath); os.IsNotExist(err) {
@@ -23,7 +24,7 @@ func StartServer(binDir string, modelPath string, mmprojPath string, modelName s
 	}
 
 	reasoningFormat := "none"
-	targetModel := strings.ToLower(modelPath + " " + modelName)
+	targetModel := strings.ToLower(modelPath + " " + tier.Name)
 
 	if strings.Contains(targetModel, "qwen") {
 		reasoningFormat = "deepseek"
@@ -31,26 +32,31 @@ func StartServer(binDir string, modelPath string, mmprojPath string, modelName s
 
 	args := []string{
 		"-m", modelPath,
-		"--alias", modelName,
+		"--alias", tier.Name,
 		"--ctx-size", strconv.Itoa(ctxSize),
-		"-ngl", "999", 
-		"--parallel", "1", 
-		"--flash-attn", "on", 
-		"--cache-type-k", "q8_0", 
-		"--cache-type-v", "q8_0", 
+		"-ngl", "999",
+		"--parallel", "1",
+		"--flash-attn", "on",
+		"--cache-type-k", "q8_0",
+		"--cache-type-v", "q8_0",
 		"--host", "0.0.0.0",
 		"--port", "1234",
-		"--reasoning-format", reasoningFormat, 
+		"--reasoning-format", reasoningFormat,
+	}
+
+	if tier.EnablePromptCaching {
+		args = append(args, "--cache-prompt", "--cache-reuse", "256")
+	} else {
+		args = append(args, "--no-cache-prompt")
 	}
 
 	if strings.Contains(targetModel, "qwen") {
 		args = append(args, "--jinja")
-		
+
 		args = append(args, "--chat-template-kwargs", `{"enable_thinking": true}`)
-		
+
 		args = append(args, "--swa-full")
 		args = append(args, "--ctx-checkpoints", "512")
-		args = append(args, "--cache-reuse", "256")
 	}
 
 	if mmprojPath != "" {
