@@ -244,7 +244,7 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'data_fetching') {
                             const accordion = document.createElement('details');
                             accordion.className = 'w-full mb-4 overflow-hidden group data-fetching-accordion rounded-xl border border-amber-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(245,158,11,0.05),inset_0_1px_0_rgba(245,158,11,0.04)] transition-all duration-300';
-                            accordion.open = true;
+                            accordion.open = false;
                             accordion.innerHTML = `
                                 <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-amber-500/5 via-amber-500/3 to-transparent hover:from-amber-500/10 hover:via-amber-500/5 transition-all duration-200">
                                     <span class="flex items-center gap-3">

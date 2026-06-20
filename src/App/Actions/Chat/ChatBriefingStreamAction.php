@@ -37,10 +37,40 @@ class ChatBriefingStreamAction extends BaseAction
             @flush();
         };
 
-        $emit('token', ['chunk' => "Syncing connected inboxes (Last 24 Hours Only)...\n\n"]);
+        $emit('status', ['text' => "Connecting to inbox services..."]);
 
         $emailService = new \App\Services\EmailService($this->db);
-        $emails = $emailService->fetchRecentEmails($includeUnseen);
+        $emails = $emailService->fetchRecentEmails($includeUnseen, function ($emailAddress, $label) use ($emit) {
+            $emit('status', ['text' => "Gathering emails from {$emailAddress}..."]);
+        });
+
+        $accountCounts = [];
+        $accountErrors = [];
+        $sampleSubjects = [];
+        foreach ($emails as $email) {
+            if (isset($email['error'])) {
+                $label = $email['account_label'] ?? 'Unknown';
+                $accountErrors[$label] = $email['error'];
+            } else {
+                $label = $email['account_label'] ?? 'Unknown';
+                $accountCounts[$label] = ($accountCounts[$label] ?? 0) + 1;
+                if (count($sampleSubjects) < 5 && !empty($email['subject'])) {
+                    $sampleSubjects[] = '[' . $label . '] ' . $email['subject'];
+                }
+            }
+        }
+        $statsParts = [];
+        foreach ($accountCounts as $label => $count) {
+            $statsParts[] = "{$label}: {$count}";
+        }
+        foreach ($accountErrors as $label => $err) {
+            $statsParts[] = "{$label}: ERROR";
+        }
+        $statsLine = !empty($statsParts) ? implode(' | ', $statsParts) : 'no accounts configured';
+        $fetchSummary = 'Fetched ' . count($emails) . ' emails — ' . $statsLine;
+        
+        $emit('data_fetching', ['tool' => 'email_fetch', 'status' => 'success', 'label' => 'Email fetch complete', 'payload' => $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects)]);
+        \App\Logger::info('Briefing email fetch: ' . $fetchSummary);
 
         $emailSummaries = [];
         if (empty($emails)) {
@@ -50,7 +80,7 @@ class ChatBriefingStreamAction extends BaseAction
             $totalChunks = count($chunks);
             foreach ($chunks as $idx => $chunk) {
                 $chunkNum = $idx + 1;
-                $emit('token', ['chunk' => "Summarizing email chunk {$chunkNum} of {$totalChunks}...\n\n"]);
+                $emit('status', ['text' => "Summarizing email chunk {$chunkNum} of {$totalChunks}..."]);
 
                 $emailsTxt = "";
                 foreach ($chunk as $email) {
@@ -61,7 +91,7 @@ class ChatBriefingStreamAction extends BaseAction
                     }
                 }
 
-                $prompt = "Summarize the following emails briefly, listing sender, subject, and key points:\n\n" . $emailsTxt;
+                $prompt = "Summarize the following emails briefly, listing sender, subject, and key points. You must keep the exact \"Email Reference tag\" (e.g., [Email: X:Y]) intact for each email summary:\n\n" . $emailsTxt;
                 $messages = [
                     ['role' => 'system', 'content' => 'You are an AI assistant.'],
                     ['role' => 'user', 'content' => $prompt]
@@ -71,11 +101,21 @@ class ChatBriefingStreamAction extends BaseAction
                 $this->agentManager->chat($messages, true, function ($token) use (&$summary) {
                     $summary .= $token;
                 });
-                $emailSummaries[] = $summary;
+
+                $summary = trim($summary);
+
+                $cleanSummary = preg_replace('/<\|channel>thought.*?<channel\|>/s', '', $summary);
+                $cleanSummary = preg_replace('/<think>.*?<\/think>/s', '', $cleanSummary);
+                $cleanSummary = trim($cleanSummary);
+
+                $emit('data_fetching', ['tool' => 'email_summarize', 'status' => 'success', 'label' => "Chunk {$chunkNum}/{$totalChunks} summary", 'payload' => $cleanSummary]);
+
+                \App\Logger::info("Briefing chunk {$chunkNum}/{$totalChunks}: " . mb_strlen($cleanSummary) . ' chars (raw: ' . mb_strlen($summary) . ')');
+                $emailSummaries[] = $cleanSummary;
             }
         }
 
-        $emit('token', ['chunk' => "Retrieving calendar schedules...\n\n"]);
+        $emit('status', ['text' => "Retrieving calendar schedules..."]);
 
         $todoistSummary = "";
         $tasks = [];
@@ -135,7 +175,7 @@ class ChatBriefingStreamAction extends BaseAction
             $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
         }
 
-        $emit('token', ['chunk' => "Cross-referencing inbox data with current schedule... (Sub-Agent executing)\n\n"]);
+        $emit('status', ['text' => "Analyzing inbox and calendar data..."]);
 
         $suggestionsTags = "";
         try {
@@ -151,10 +191,11 @@ class ChatBriefingStreamAction extends BaseAction
         } catch (\Throwable $e) {
         }
 
-        $emit('token', ['chunk' => "Generating final consolidated executive briefing...\n\n"]);
+        $emit('status', ['text' => "Generating executive briefing..."]);
 
-        $finalInput = "Here are the summaries of the user's unread emails:\n\n" . implode("\n\n", $emailSummaries)
-                    . "\n\nHere is the summary of upcoming calendar tasks for the next two weeks:\n\n" . $todoistSummary;
+        $finalInput = "DAILY BRIEFING DATA — you MUST cover BOTH sections below.\n\n"
+                    . "SECTION 1 — CALENDAR (upcoming tasks for the next two weeks):\n\n" . $todoistSummary
+                    . "\n\nSECTION 2 — EMAILS (summaries of recent inbox activity):\n\n" . implode("\n\n", $emailSummaries);
 
         if (!empty($pastTasksToday)) {
             $pastTasksTxt = "";
@@ -183,19 +224,44 @@ class ChatBriefingStreamAction extends BaseAction
                      . "4. Only suggest reminder cards or upcoming scheduling options for genuine future events.\n\n"
                      . "DAILY BRIEFING SUMMARY INSTRUCTIONS:\n"
                      . "When summarizing emails, make sure to highlight any explicit dates, times, invitations, obligations, pickups, or task-like requests mentioned by the senders so the user is fully aware of their commitments. Do not write vague or lazy summaries.\n\n"
-                     . "Visual Card rule: Append `[Email: account_id:uid]` when mentioning any email.\n"
-                     . "Action Card rule: Append any pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your final response.";
+                     . "Visual Card rule: You must preserve and append the exact, literal numeric reference tag (e.g. [Email: 3:26708]) from the source summaries when mentioning any email. Do not modify these numbers or replace them with account names.\n"
+                     . "Action Card rule: Append any pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your response.";
 
         $finalMessages = [
             ['role' => 'system', 'content' => $finalSystem],
             ['role' => 'user', 'content' => $finalInput]
         ];
 
-        $finalBriefingText = "";
-        $this->agentManager->chat($finalMessages, true, function ($token) use ($emit, &$finalBriefingText) {
-            $finalBriefingText .= $token;
-            $emit('token', ['chunk' => $token]);
-        });
+        \App\Logger::info('Briefing final prompt: ' . mb_strlen($finalInput) . ' chars, ' . count($emailSummaries) . ' email summaries, todoist: ' . mb_strlen($todoistSummary) . ' chars');
+        $emit('generating', []);
+
+        $finalBriefingText = $this->agentManager->chat($finalMessages, false);
+
+        $thought = '';
+        $content = $finalBriefingText;
+
+        if (preg_match('/<\|channel>thought(.*?)(?:<channel\|>|$)/s', $finalBriefingText, $matches)) {
+            $thought = trim($matches[1]);
+            $content = trim(preg_replace('/<\|channel>thought.*?<channel\|>/s', '', $finalBriefingText));
+        } elseif (preg_match('/<think>(.*?)(?:<\/think>|$)/s', $finalBriefingText, $matches)) {
+            $thought = trim($matches[1]);
+            $content = trim(preg_replace('/<think>.*?<\/think>/s', '', $finalBriefingText));
+        }
+
+        if (!empty($thought)) {
+            $emit('reasoning', ['chunk' => $thought]);
+        }
+
+        $payload = json_encode([
+            'event' => 'token',
+            'data' => ['chunk' => $content],
+            'done' => true
+        ]);
+        echo "data: {$payload}\n\n";
+        @ob_flush();
+        @flush();
+
+        $emit('done', ['session_id' => $sessionId]);
 
         $briefingTitle = 'Daily Briefing - ' . date('l d/m/Y');
         if ($this->db) {

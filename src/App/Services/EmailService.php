@@ -14,7 +14,7 @@ class EmailService
         $this->db = $db;
     }
 
-    public function fetchRecentEmails(bool $includeSeen): array
+    public function fetchRecentEmails(bool $includeSeen, ?callable $onAccountFetch = null): array
     {
         $accounts = $this->db->query("SELECT * FROM email_accounts");
         if (empty($accounts)) {
@@ -25,6 +25,10 @@ class EmailService
         $cm = new ClientManager();
 
         foreach ($accounts as $account) {
+            if ($onAccountFetch !== null) {
+                $onAccountFetch($account['email_address'], $account['label']);
+            }
+
             $client = null;
             try {
                 $host = $account['imap_host'];
@@ -46,7 +50,6 @@ class EmailService
 
                 $client->connect();
                 
-                // Official Multi-tier Inbox Folder Lookup
                 $inbox = $client->getFolder('INBOX');
                 
                 if (!$inbox) {
@@ -68,7 +71,6 @@ class EmailService
                 }
 
                 if ($inbox) {
-                    // Daily briefing strictly considers the last 24 hours of emails
                     $queryBuilder = $inbox->query()->since(new \DateTime("-24 hours"));
                     
                     if (!$includeSeen) {
@@ -77,7 +79,6 @@ class EmailService
 
                     $messages = $queryBuilder->limit(10)->get();
 
-                    // Convert messages to array for local descending PHP sorting
                     $messagesArray = [];
                     foreach ($messages as $msg) {
                         $messagesArray[] = $msg;
@@ -114,6 +115,26 @@ class EmailService
                         $bodyHtml = $msg->getHTMLBody();
                         if (empty($bodyHtml)) {
                             $bodyHtml = nl2br(htmlspecialchars((string)$msg->getTextBody()));
+                        }
+                        if (empty(strip_tags((string)$bodyHtml))) {
+                            foreach (($msg->bodies ?? []) as $content) {
+                                if (!empty(trim((string)$content))) {
+                                    $bodyHtml = (string)$content;
+                                    break;
+                                }
+                            }
+                        }
+                        if (empty(strip_tags((string)$bodyHtml))) {
+                            $raw = $msg->getRawBody();
+                            if (!empty($raw)) {
+                                $raw = preg_replace('/^.*?\R\R/s', '', $raw);
+                                $raw = preg_replace('/\RContent-.*?\R\R/si', "\n\n", $raw);
+                                $raw = preg_replace('/\R--\w+/s', '', $raw);
+                                $raw = trim($raw);
+                                if (!empty($raw)) {
+                                    $bodyHtml = nl2br(htmlspecialchars($raw));
+                                }
+                            }
                         }
 
                         $bodyText = strip_tags($bodyHtml);
@@ -154,7 +175,6 @@ class EmailService
 
                         $uid = (string)$msg->getUid();
 
-                        // Correctly define $isSeen based on the message flags
                         $isSeen = false;
                         try {
                             $isSeen = $msg->hasFlag('seen') || $msg->getFlags()->has('seen');
@@ -188,7 +208,6 @@ class EmailService
                                 ':u_is_seen'   => $isSeen ? 1 : 0
                             ]);
                         } catch (\Throwable $errCacheWrite) {
-                            // Cache write failed — logged but continues
                         }
 
                         $allEmails[] = [
@@ -215,7 +234,6 @@ class EmailService
                     }
                 }
 
-                // Cleanly disconnect socket manually to avoid uncaught destructor exceptions during garbage collection
                 try {
                     if ($client) {
                         $client->disconnect();
@@ -223,7 +241,6 @@ class EmailService
                 } catch (\Throwable $_) {}
 
             } catch (\Throwable $e) {
-                // Ensure socket is disconnected even on earlier errors
                 try {
                     if ($client) {
                         $client->disconnect();

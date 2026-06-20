@@ -100,6 +100,26 @@ class EmailBodyAction extends BaseAction
             if (empty($html)) {
                 $html = nl2br(htmlspecialchars((string)$msg->getTextBody()));
             }
+            if (empty(strip_tags((string)$html))) {
+                foreach (($msg->bodies ?? []) as $content) {
+                    if (!empty(trim((string)$content))) {
+                        $html = (string)$content;
+                        break;
+                    }
+                }
+            }
+            if (empty(strip_tags((string)$html))) {
+                $raw = $msg->getRawBody();
+                if (!empty($raw)) {
+                    $raw = preg_replace('/^.*?\R\R/s', '', $raw);
+                    $raw = preg_replace('/\RContent-.*?\R\R/si', "\n\n", $raw);
+                    $raw = preg_replace('/\R--\w+/s', '', $raw);
+                    $raw = trim($raw);
+                    if (!empty($raw)) {
+                        $html = nl2br(htmlspecialchars($raw));
+                    }
+                }
+            }
 
             try {
                 $msg->setFlag('Seen');
