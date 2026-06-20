@@ -24,7 +24,7 @@ export function renderFileChoices(data, placeholderContainer, chatWindow) {
     header.className = "text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-left flex items-center gap-1.5 border-b border-slate-850 pb-2";
     header.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>
-        Multiple matching files found for '${data.query}'
+        ${files.length === 1 ? 'Matching file found' : 'Multiple matching files found'} for '${data.query}'
     `;
     choiceContainer.appendChild(header);
 

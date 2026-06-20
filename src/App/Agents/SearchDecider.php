@@ -86,17 +86,17 @@ SEARCH DECISION RULES:
 - Set "requires_search" to false if the user is asking about their personal calendar, their personal files (like their resume, documents, or photos), their personal emails, or general conversation.
 
 PERSONAL OWNERSHIP OVERRIDE:
-The words "my", "mine", "I have a", or "I booked" indicate PERSONAL data — NOT a web search. These queries should route to email and file tools, even if they sound like they could be real-time:
-- "my flight details" / "my booking" / "my ticket" / "my reservation" / "my itinerary" → personal email/files, NOT web search
-- "my bank statement" / "my invoice" / "my receipt" / "my bill" → personal email/files, NOT web search
-- "my order" / "my package" / "my delivery" / "my shipment" → personal email, NOT web search
-- "my account" / "my subscription" / "my membership" → personal email/files, NOT web search
+The words "my", "mine", "I have a", or "I booked" indicate PERSONAL data — NOT a web search. For ALL queries containing "my" + a noun (e.g., "my IBAN", "my flight", "my password"), ALWAYS include both "search_files" and "search_memories" in intents. These are your cheapest, fastest tools and should always be checked first for personal information. Examples:
+- "my flight details" / "my booking" / "my ticket" / "my reservation" → intents MUST include search_files,search_memories,email_briefing
+- "my IBAN" / "my bank account" / "my password" / "my phone number" / "my address" → intents MUST include search_files,search_memories
+- "my invoice" / "my receipt" / "my bill" / "my statement" → intents MUST include search_files,search_memories,email_briefing
 
 Only trigger web search for queries about PUBLIC facts — where the answer is the same for everyone. If the answer depends on who the user is, the information is in their email, files, or memories.
 
 INTENT ROUTING RULES:
 Identify ALL tool categories the user wants to utilize:
 - "search_files": User wants to find, view, or check files/docs/images on disk.
+- "search_memories": User asks to recall, remember, or retrieve saved information about themselves or past conversations. Trigger words: "recall", "remember", "what do you know about", "do you remember", "what did I say about", "my" + personal info (IBAN, address, phone, account number, password).
 - "todoist_create": User wants to create, add, plan, or schedule a task/reminder/appointment.
 - "todoist_get": User wants to see, read, fetch, or list their tasks/calendar/schedule.
 - "todoist_update": User wants to edit, update, reschedule, or change an existing task.

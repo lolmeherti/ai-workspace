@@ -472,20 +472,25 @@ export async function streamResponse(formData, originalMessage) {
                                     if (endIndex !== -1) {
                                         let finalContent = parseBuffer.substring(tagEndIndex + 2, endIndex).trim();
                                         
-                                        if (!window.processedBlockIds.has(blockId)) {
+                                        if (!window.activeEditFile && !window.processedBlockIds.has(blockId)) {
                                             window.processedBlockIds.add(blockId);
                                             window.commitBlockEditDirectly(blockId, finalContent);
                                         }
                                         hasAppliedEdit = true;
-                                        parseBuffer = parseBuffer.substring(0, startIndex) + parseBuffer.substring(endIndex + 9);
-                                    } else {
-                                        let partialContent = parseBuffer.substring(tagEndIndex + 2).trim();
-                                        let nextTagIndex = partialContent.indexOf('<update id="');
-                                        if (nextTagIndex !== -1) {
-                                            partialContent = partialContent.substring(0, nextTagIndex).trim();
+                                        if (window.activeEditFile) {
+                                            parseBuffer = parseBuffer.substring(0, startIndex) + finalContent + parseBuffer.substring(endIndex + 9);
+                                        } else {
+                                            parseBuffer = parseBuffer.substring(0, startIndex) + parseBuffer.substring(endIndex + 9);
                                         }
-
-                                        window.streamUpdateBlockContent(blockId, partialContent);
+                                    } else {
+                                        if (!window.activeEditFile) {
+                                            let partialContent = parseBuffer.substring(tagEndIndex + 2).trim();
+                                            let nextTagIndex = partialContent.indexOf('<update id="');
+                                            if (nextTagIndex !== -1) {
+                                                partialContent = partialContent.substring(0, nextTagIndex).trim();
+                                            }
+                                            window.streamUpdateBlockContent(blockId, partialContent);
+                                        }
                                         hasAppliedEdit = true;
                                         parseBuffer = parseBuffer.substring(0, startIndex);
                                         break;
@@ -519,6 +524,20 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
+
+                            if (window.activeEditFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {
+                                const re = /<update id="([^"]+)">([\s\S]*?)<\/update>/g;
+                                let match;
+                                while ((match = re.exec(markdownBuffer)) !== null) {
+                                    const blockId = match[1];
+                                    const finalContent = match[2].trim();
+                                    const blockExists = window.activeBlocks && window.activeBlocks.some(b => b.id === blockId);
+                                    if (blockId && blockExists && !window.processedBlockIds.has(blockId)) {
+                                        window.processedBlockIds.add(blockId);
+                                        window.commitBlockEditDirectly(blockId, finalContent);
+                                    }
+                                }
+                            }
 
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();

@@ -17,7 +17,7 @@ class ChatStreamAction extends BaseAction
     ) {
     }
 
-    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey): void
+    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile = null): void
     {
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
@@ -47,7 +47,7 @@ class ChatStreamAction extends BaseAction
             $contextCondenser
         );
 
-        $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, function ($event, $data) {
+        $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile, function ($event, $data) {
             $payload = json_encode(['event' => $event, 'data' => $data]);
             echo "data: {$payload}\n\n";
             @ob_flush();

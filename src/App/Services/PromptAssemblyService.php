@@ -15,7 +15,7 @@ class PromptAssemblyService
         $this->uploadDir = $uploadDir;
     }
 
-    public function buildSystemPrompt(string $query): string
+    public function buildSystemPrompt(string $query, bool $isEditorMode = false): string
     {
         $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
         $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
@@ -25,13 +25,25 @@ class PromptAssemblyService
             $systemPrompt .= "USER IDENTITY AND CORE CONSTRAINTS:\n{$stableProfile}\n\n";
         }
 
-        $systemPrompt .= <<<TEXT
+        if ($isEditorMode) {
+            $systemPrompt .= <<<TEXT
+You are a document editor assistant. The user is working on a file in the text editor and may have highlighted sections for your attention. Your job is to help with rewriting, formatting, summarizing, or answering questions about the document content.
+
+LIMITATIONS IN EDITOR MODE:
+- You CANNOT search files on disk, check email, manage tasks, or search the web.
+- You CAN search long-term memories using: {"tool": "search_memories", "query": "specific query"}
+- If the user asks you to find files, check email, schedule tasks, or search the web, explain that these are unavailable in editor mode and suggest closing the editor first.
+- To use the search_memories tool, output ONLY the JSON block — no other text. If no tool is needed, respond naturally in plain text.
+
+TEXT;
+        } else {
+            $systemPrompt .= <<<TEXT
 You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
 
 TEXT;
 
-        $systemPrompt .= <<<TEXT
+            $systemPrompt .= <<<TEXT
 TOOL USAGE:
 You have access to tools that can search files, manage tasks, check email, and retrieve memories. To use a tool, output ONLY the JSON block for that tool — no other text. If no tool is needed, respond normally in plain text.
 
@@ -57,10 +69,11 @@ After a tool's results appear in the conversation, respond naturally with a plai
 
 TEXT;
 
-        $systemPrompt .= <<<TEXT
+            $systemPrompt .= <<<TEXT
 INSTRUCTIONS FOR PRE-VETTED REMINDERS:
 If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
 TEXT;
+        }
 
         $now = time();
         $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;

@@ -43,18 +43,18 @@ export async function handleChatSubmit(e) {
     if (window.activeToggledBlocks && window.activeToggledBlocks.size > 0 && window.activeBlocks.length > 0) {
         const toggledArray = Array.from(window.activeToggledBlocks);
         
-        let injectedContext = "The user has highlighted the following exact text sections from their active workspace file for your attention:\n";
+        let injectBefore = `The user has highlighted these sections from '${window.activeEditFile}':\n`;
         
         toggledArray.forEach(id => {
             const blockObj = window.activeBlocks.find(b => b.id === id);
             if (blockObj) {
-                injectedContext += `- [${id}]: "${blockObj.content}"\n`;
+                injectBefore += `- [${id}]: "${blockObj.content}"\n`;
             }
         });
         
-        injectedContext += "\nCRITICAL COMPILER INSTRUCTION: If the user asks you to rewrite, edit, or modify any of these highlighted sections, DO NOT just explain or output standard lists. You MUST execute the edits directly by wrapping each rewritten section inside <update id=\"BLOCK_ID\">your modified text</update> tags inline during your conversation. Only modify the targeted blocks. Do not wrap updates in code fences.";
+        const editInstruction = `\nEDIT RULE: To edit a block, output <update id="${toggledArray[0]}">new text here</update>. Replace ONLY the blocks listed above. Do not describe edits — output the tags directly.`;
         
-        finalQueryText = `${injectedContext}\nuser has toggled blocks [${toggledArray.join(', ')}] and wrote the following prompt:\n"${message}"`;
+        finalQueryText = `${injectBefore}\nuser prompt:\n"${message}"${editInstruction}`;
     }
 
     if (hasReferences) {
