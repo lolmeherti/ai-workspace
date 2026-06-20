@@ -21,6 +21,60 @@ export function loadEmailBody(accountId, uid, element) {
     document.getElementById('email-reader-pane').classList.remove('hidden');
     document.getElementById('reply-form-container').classList.add('hidden');
 
+    document.getElementById('read-subject').textContent = '';
+    document.getElementById('read-from').innerHTML = '<span class="text-slate-500">Loading...</span>';
+    document.getElementById('read-date').textContent = '';
+
+    iframe.srcdoc = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                html, body {
+                    background-color: #040810 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    height: 100% !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                }
+                .loader {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 20px;
+                }
+                .spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 3px solid rgba(6, 182, 212, 0.12);
+                    border-top: 3px solid rgba(6, 182, 212, 0.8);
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                .label {
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #475569;
+                    letter-spacing: 0.2em;
+                    text-transform: uppercase;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="loader">
+                <div class="spinner"></div>
+                <div class="label">Decrypting Transmission</div>
+            </div>
+        </body>
+        </html>`;
+
     fetch(`index.php?api_action=get_email_body&account_id=${accountId}&uid=${uid}`)
         .then(res => res.json())
         .then(data => {
@@ -29,9 +83,38 @@ export function loadEmailBody(accountId, uid, element) {
                 document.getElementById('read-from').textContent = data.from;
                 document.getElementById('read-date').textContent = data.date;
 
-                const unreadDot = element ? element.querySelector('span[class*="bg-cyan-400"]') : null;
-                if (unreadDot) {
-                    unreadDot.remove();
+                if (element) {
+                    const unreadDot = element.querySelector('span[class*="bg-cyan-400"]');
+                    if (unreadDot) {
+                        unreadDot.remove();
+                    }
+
+                    element.classList.remove(
+                        'border-cyan-500/30', 'bg-[#0e1a30]/80',
+                        'shadow-[0_0_12px_rgba(6,182,212,0.1)]', 'hover:border-cyan-500/50',
+                        'shadow-[inset_3px_0_0_#22d3ee]'
+                    );
+                    element.classList.add(
+                        'border-slate-850/60', 'bg-[#091124]/30',
+                        'hover:border-slate-700/60', 'opacity-75', 'hover:opacity-100'
+                    );
+
+                    const badge = element.querySelector('span.bg-cyan-950\\/50, span[class*="bg-cyan-950/50"]');
+                    if (badge) {
+                        badge.outerHTML = '<span class="px-1.5 py-0.5 text-[8px] font-bold tracking-widest uppercase bg-slate-900/60 border border-slate-800 text-slate-500 rounded-md shrink-0">READ</span>';
+                    }
+
+                    const fromEl = element.querySelector('.text-\\[10px\\].tracking-wide');
+                    if (fromEl) {
+                        fromEl.classList.remove('text-slate-100', 'font-extrabold');
+                        fromEl.classList.add('text-slate-400', 'font-medium');
+                    }
+
+                    const subjectEl = element.querySelector('.text-\\[11px\\].mt-1\\.5');
+                    if (subjectEl) {
+                        subjectEl.classList.remove('text-slate-200', 'font-bold');
+                        subjectEl.classList.add('text-slate-400');
+                    }
                 }
 
                 let cleanSenderName = 'Sender';
