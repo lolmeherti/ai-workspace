@@ -230,18 +230,3 @@ export function parseInlineFiles(content) {
 
     return parsedContent;
 }
-
-
-document.querySelectorAll('.markdown-rendered').forEach(el => {
-    const rawMarkdown = el.getAttribute('data-markdown') || '';
-    let htmlContent = marked.parse(rawMarkdown);
-    
-    if (window.parseInlineFiles) {
-        htmlContent = window.parseInlineFiles(htmlContent);
-    }
-    
-    el.innerHTML = htmlContent;
-    el.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-    });
-});

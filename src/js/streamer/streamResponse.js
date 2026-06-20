@@ -241,6 +241,10 @@ export async function streamResponse(formData, originalMessage) {
                             addTraceEntry(`Completed \u2014 ${doneLabel}`, 'emerald');
                         }
 
+                        if (event === 'trace') {
+                            addTraceEntry(data.label || 'Trace entry', data.color || 'slate');
+                        }
+
                         if (event === 'data_fetching') {
                             const accordion = document.createElement('details');
                             accordion.className = 'w-full mb-4 overflow-hidden group data-fetching-accordion rounded-xl border border-amber-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(245,158,11,0.05),inset_0_1px_0_rgba(245,158,11,0.04)] transition-all duration-300';
