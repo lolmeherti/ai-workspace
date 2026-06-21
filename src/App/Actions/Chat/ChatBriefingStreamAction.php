@@ -4,6 +4,7 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\Agents\SchedulingAgent;
+use App\Utils\CurrentDateUtil;
 
 class ChatBriefingStreamAction extends BaseAction
 {
@@ -269,7 +270,7 @@ class ChatBriefingStreamAction extends BaseAction
 
         $finalSystem = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the summaries provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n"
                      . "TEMPORAL AWARENESS FOR DAILY BRIEFINGS:\n"
-                     . "Today's exact system date and current time is " . date('l, F j, Y (H:i)') . ".\n"
+                     . "Today's date is " . CurrentDateUtil::getCurrentDate() . ".\n"
                      . "When summarizing emails, calendar tasks, or updates during your daily briefing:\n"
                      . "1. Always compare any mentioned appointment or event times against the current clock.\n"
                      . "2. If an event or appointment was scheduled for today but its slot has already passed, do not present it as an upcoming task under 'Upcoming Schedule' or 'This Week'.\n"

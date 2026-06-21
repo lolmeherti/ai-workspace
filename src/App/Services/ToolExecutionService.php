@@ -7,6 +7,7 @@ use App\AgentManager;
 use App\Enums\Tool;
 use App\Services\Tools\TodoistApiClient;
 use App\Services\Tools\SearchFilesTool;
+use App\Services\Tools\WebSearchTool;
 use App\Services\Tools\CreateTodoistTaskTool;
 use App\Services\Tools\GetTodoistTasksTool;
 use App\Services\Tools\DeleteTodoistTaskTool;
@@ -21,6 +22,7 @@ class ToolExecutionService
     private string $uploadDir;
     private TodoistApiClient $todoist;
     private SearchFilesTool $searchFilesTool;
+    private WebSearchTool $webSearchTool;
     private CreateTodoistTaskTool $createTodoistTaskTool;
     private GetTodoistTasksTool $getTodoistTasksTool;
     private DeleteTodoistTaskTool $deleteTodoistTaskTool;
@@ -36,6 +38,7 @@ class ToolExecutionService
         $this->todoist = new TodoistApiClient();
 
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
+        $this->webSearchTool = new WebSearchTool(null, null);
         $this->createTodoistTaskTool = new CreateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
@@ -62,6 +65,7 @@ class ToolExecutionService
         try {
             return match ($resolvedTool) {
                 Tool::SEARCH_FILES => $this->searchFilesTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
+                Tool::WEB_SEARCH => $this->webSearchTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
                 Tool::CREATE_TODOIST_TASK => $this->createTodoistTaskTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
                 Tool::GET_TODOIST_TASKS => $this->getTodoistTasksTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),
                 Tool::DELETE_TODOIST_TASK => $this->deleteTodoistTaskTool->execute($decoded, $sessionId, $messages, $emit, $cleanJson),

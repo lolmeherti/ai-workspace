@@ -10,20 +10,50 @@ const THINKING_FORMATS = [
 ];
 
 export function extractThinking(text) {
+    let bestThinking = '';
+    let bestResponse = text;
+    let bestFormat = null;
+
     for (const fmt of THINKING_FORMATS) {
-        const start = text.indexOf(fmt.open);
-        if (start === -1) continue;
-        const end = text.indexOf(fmt.close, start + fmt.openLen);
-        if (end === -1) {
-            return { thinking: text.substring(start + fmt.openLen), response: '', format: fmt };
+        const chunks = [];
+        let response = '';
+        let lastEnd = 0;
+        let pos = 0;
+        let found = false;
+
+        while (true) {
+            const start = text.indexOf(fmt.open, pos);
+            if (start === -1) break;
+            found = true;
+
+            response += text.substring(lastEnd, start);
+            const contentStart = start + fmt.openLen;
+            const end = text.indexOf(fmt.close, contentStart);
+
+            if (end === -1) {
+                chunks.push(text.substring(contentStart));
+                lastEnd = text.length;
+                break;
+            }
+
+            chunks.push(text.substring(contentStart, end));
+            pos = end + fmt.closeLen;
+            lastEnd = pos;
         }
-        return {
-            thinking: text.substring(start + fmt.openLen, end),
-            response: text.substring(end + fmt.closeLen),
-            format: fmt
-        };
+
+        if (!found) continue;
+
+        response += text.substring(lastEnd);
+        const thinking = chunks.join('\n\n');
+
+        if (thinking.length > bestThinking.length) {
+            bestThinking = thinking;
+            bestResponse = response;
+            bestFormat = fmt;
+        }
     }
-    return { thinking: '', response: text, format: null };
+
+    return { thinking: bestThinking, response: bestResponse, format: bestFormat };
 }
 
 export function createThinkingAccordion(thinkingText) {

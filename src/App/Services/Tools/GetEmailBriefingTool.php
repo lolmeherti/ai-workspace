@@ -4,6 +4,7 @@ namespace App\Services\Tools;
 
 use App\Agents\SchedulingAgent;
 use App\Services\EmailService;
+use App\Utils\CurrentDateUtil;
 
 class GetEmailBriefingTool
 {
@@ -38,7 +39,7 @@ class GetEmailBriefingTool
                     }
                 }
 
-                $currentDate = date('l, F j, Y (H:i)');
+                $currentDate = CurrentDateUtil::getCurrentDate();
                 $currentTimestamp = time();
                 $upcomingTasksStr = "";
                 $pastTasksTodayStr = "";

@@ -5,7 +5,7 @@
 
 import { state } from '../state.js';
 import { showCondensationModal, updateTokenCounter } from '../ui.js';
-import { cleanAssistantStreamText } from './streamTextCleaner.js';
+import { cleanAssistantStreamText, stripToolCallArtifacts } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
 
@@ -85,7 +85,7 @@ export async function streamResponse(formData, originalMessage) {
             </div>
         </details>
 
-        <div class="streaming-text-container w-full"></div>
+        <div class="streaming-text-container w-full whitespace-pre-wrap"></div>
         <div class="file-choices-placeholder-container w-full"></div>
     `;
     chatWindow.appendChild(aiNode);
@@ -104,6 +104,7 @@ export async function streamResponse(formData, originalMessage) {
     let traceStepCount = 0;
     const traceStepCounter = aiWrapper.querySelector('.trace-step-counter');
     const tracePulseDot = aiWrapper.querySelector('.trace-pulse-dot');
+    let currentResponseText = '';
 
     function addTraceEntry(label, color = 'slate') {
         const colors = {
@@ -415,6 +416,11 @@ export async function streamResponse(formData, originalMessage) {
                                 loadingIndicator.remove();
                             }
                             thinkingAccordion.classList.remove('hidden');
+                            thinkingAccordion.open = true;
+                            const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
+                            const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
+                            if (pulseDot) pulseDot.classList.remove('hidden');
+                            if (statusLabel) statusLabel.textContent = 'Streaming';
                             renderThinkingContent(thinkingContent, thinkingContent.textContent + data.chunk);
                             chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
@@ -439,23 +445,16 @@ export async function streamResponse(formData, originalMessage) {
 
                             if (thinking) {
                                 thinkingAccordion.classList.remove('hidden');
-                                if (response) {
-                                    thinkingAccordion.open = false;
-                                    const summaryLabel = thinkingAccordion.querySelector('summary span:first-of-type');
-                                    const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
-                                    const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
-                                    if (summaryLabel && !summaryLabel.innerHTML.includes('Complete')) {
-                                        summaryLabel.className = 'flex items-center gap-2 text-slate-400';
-                                        summaryLabel.innerHTML = '<uk-icon icon="check" class="w-3.5 h-3.5 text-emerald-500"></uk-icon> Thought Process Complete';
-                                    }
-                                    if (pulseDot) pulseDot.classList.add('hidden');
-                                    if (statusLabel) statusLabel.textContent = 'Complete';
-                                } else {
-                                    thinkingAccordion.open = true;
-                                }
+                                thinkingAccordion.open = true;
 
-                                thinkingContent.textContent = thinkingText;
-                                renderThinkingContent(thinkingContent, thinkingText);
+                                const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
+                                const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
+                                if (pulseDot) pulseDot.classList.remove('hidden');
+                                if (statusLabel) statusLabel.textContent = 'Streaming';
+
+                                const cleanedThinkingText = stripToolCallArtifacts(thinkingText);
+                                thinkingContent.textContent = cleanedThinkingText;
+                                renderThinkingContent(thinkingContent, cleanedThinkingText);
                             }
 
                             let hasAppliedEdit = false;
@@ -501,22 +500,18 @@ export async function streamResponse(formData, originalMessage) {
                                     }
                                 }
 
-                                let htmlContent = marked.parse(parseBuffer);
+                                currentResponseText = stripToolCallArtifacts(parseBuffer);
+                                textContainer.classList.remove('whitespace-pre-wrap');
+                                let htmlContent = marked.parse(currentResponseText);
                                 htmlContent = cleanAssistantStreamText(htmlContent);
-
-                                if (window.parseInlineFiles) {
-                                    htmlContent = window.parseInlineFiles(htmlContent);
-                                }
-
-                                const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
-                                
-                                textContainer.innerHTML = htmlContent + cursorHtml;
-                                textContainer.querySelectorAll('pre code').forEach((block) => {
-                                    hljs.highlightElement(block);
-                                });
+                                textContainer.innerHTML = htmlContent;
+                                const cursor = document.createElement('span');
+                                cursor.className = 'animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block';
+                                cursor.textContent = '▍';
+                                textContainer.appendChild(cursor);
                             }
  
-                            aiBubble.setAttribute('data-raw', markdownBuffer);
+                            aiBubble.setAttribute('data-raw', stripToolCallArtifacts(markdownBuffer));
  
                             if (payload.done) {
                                 window.evaluateStreamCompletion(hasAppliedEdit, aiBubble, textContainer);
@@ -528,6 +523,21 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
+
+                            // Render final markdown now that the response is complete
+                            if (currentResponseText) {
+                                let htmlContent = marked.parse(currentResponseText);
+                                htmlContent = cleanAssistantStreamText(htmlContent);
+
+                                if (window.parseInlineFiles) {
+                                    htmlContent = window.parseInlineFiles(htmlContent);
+                                }
+
+                                textContainer.innerHTML = htmlContent;
+                                textContainer.querySelectorAll('pre code').forEach((block) => {
+                                    hljs.highlightElement(block);
+                                });
+                            }
 
                             if (window.activeEditFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {
                                 const re = /<update id="([^"]+)">([\s\S]*?)<\/update>/g;
@@ -545,6 +555,21 @@ export async function streamResponse(formData, originalMessage) {
 
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
+                            }
+
+                            // Finalize thinking accordion state when the turn completes
+                            const thinkingAccordion = aiWrapper.querySelector('.thinking-accordion');
+                            if (thinkingAccordion && !thinkingAccordion.classList.contains('hidden')) {
+                                thinkingAccordion.open = false;
+                                const summaryLabel = thinkingAccordion.querySelector('summary span:first-of-type');
+                                const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
+                                const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
+                                if (summaryLabel) {
+                                    summaryLabel.className = 'flex items-center gap-2 text-slate-400';
+                                    summaryLabel.innerHTML = '<uk-icon icon="check" class="w-3.5 h-3.5 text-emerald-500"></uk-icon> Thought Process Complete';
+                                }
+                                if (pulseDot) pulseDot.classList.add('hidden');
+                                if (statusLabel) statusLabel.textContent = 'Complete';
                             }
 
                             if (data.total_session_tokens && typeof maxTokensLimit !== 'undefined') {

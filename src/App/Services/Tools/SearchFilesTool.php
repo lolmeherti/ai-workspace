@@ -44,17 +44,15 @@ class SearchFilesTool
                 $sql .= " ORDER BY uploaded_at DESC LIMIT 5";
                 $matchingFiles = $this->db->query($sql, $params);
 
-                $resultsTxt = "System search completed for '{$toolQuery}'. Matches found on disk:\n";
+                $resultsTxt = "System search completed for '{$toolQuery}'.\n";
 
                 if (empty($matchingFiles)) {
-                    $resultsTxt .= "- No matching files found.\n";
+                    $resultsTxt .= "No matching files found.\n";
                 } else {
-                    if (count($matchingFiles) >= 1) {
-                        $emit('file_choices', [
-                            'query' => $toolQuery,
-                            'files' => $matchingFiles
-                        ]);
-                    }
+                    $emit('file_choices', [
+                        'query' => $toolQuery,
+                        'files' => $matchingFiles
+                    ]);
 
                     foreach ($matchingFiles as &$f) {
                         $f['preview'] = '';
@@ -63,21 +61,6 @@ class SearchFilesTool
                     unset($f);
                 }
 
-                $instructions = <<<TEXT
-Below are the results of the file search you just requested.
-
-{$resultsTxt}
-TEXT;
-
-                $instructions .= <<<TEXT
-
-
-INSTRUCTIONS:
-1. Tell the user which files you found by their title.
-2. If the user asked a specific question that the file could answer, tell them to click "Append to Chat" on the relevant file so you can read its contents.
-3. Keep your answer professional, direct, and concise.
-TEXT;
-
-                return $instructions;
+                return $resultsTxt;
     }
 }

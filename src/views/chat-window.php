@@ -1,3 +1,99 @@
+<?php
+function renderExecutionTraceEntry(array $entry): array
+{
+    $event = $entry['event'] ?? '';
+    $data = $entry['data'] ?? [];
+    $label = '';
+    $color = 'slate';
+    switch ($event) {
+        case 'title_updated':
+            $label = 'Title assigned: "' . htmlspecialchars($data['title'] ?? '') . '"';
+            $color = 'cyan';
+            break;
+        case 'search_decided':
+            $q = $data['query'] ?? '';
+            if (strlen($q) > 50) $q = substr($q, 0, 50) . '...';
+            $label = 'Web search triggered: "' . htmlspecialchars($q) . '"';
+            $color = 'blue';
+            break;
+        case 'intent_result':
+            $intentLabels = [
+                'none' => 'general conversation',
+                'search_files' => 'file search',
+                'todoist_create' => 'task creation',
+                'todoist_get' => 'task retrieval',
+                'todoist_update' => 'task update',
+                'todoist_delete' => 'task deletion',
+                'email_briefing' => 'email briefing',
+                'search_memories' => 'memory search'
+            ];
+            $intents = ($data['intents'] ?? '') === 'none' ? [] : explode(',', $data['intents'] ?? '');
+            $parts = array_map(fn($i) => $intentLabels[trim($i)] ?? trim($i), $intents);
+            $q = $data['search_query'] ?? '';
+            if ($q) {
+                if (strlen($q) > 50) $q = substr($q, 0, 50) . '...';
+                if (!empty($parts)) {
+                    $label = 'Classified as ' . implode(', ', $parts) . ' — web search needed for: "' . htmlspecialchars($q) . '"';
+                } else {
+                    $label = 'Web search needed for: "' . htmlspecialchars($q) . '"';
+                }
+            } else {
+                if (!empty($parts)) {
+                    $label = 'Classified as ' . implode(', ', $parts) . ' — no web search required';
+                } else {
+                    $label = 'Classified as general conversation — no tools or web search needed';
+                }
+            }
+            $color = 'indigo';
+            break;
+        case 'tool_start':
+            $label = 'Executing — ' . htmlspecialchars($data['label'] ?? $data['tool'] ?? '');
+            $color = 'slate';
+            break;
+        case 'tool_done':
+            $label = 'Completed — ' . htmlspecialchars($data['label'] ?? 'Done.');
+            $color = 'emerald';
+            break;
+        case 'trace':
+            $label = htmlspecialchars($data['label'] ?? 'Trace entry');
+            $color = $data['color'] ?? 'slate';
+            break;
+        case 'search_no_results':
+            $q = $data['query'] ?? '';
+            if (strlen($q) > 50) $q = substr($q, 0, 50) . '...';
+            $label = 'No usable web results for: "' . htmlspecialchars($q) . '"';
+            $color = 'rose';
+            break;
+        case 'cache_used':
+            $label = 'Memory cache matched — serving cached results';
+            $color = 'amber';
+            break;
+        case 'context_assembled':
+            $ctxParts = [];
+            if (!empty($data['has_search_context'])) {
+                $ctxParts[] = !empty($data['used_cache']) ? 'cached web results' : 'fresh web results';
+            }
+            $ctxParts[] = !empty($data['message_count']) ? ((int)$data['message_count']) . ' prior messages' : 'new conversation';
+            $label = 'Context assembled with ' . implode(' + ', $ctxParts);
+            $color = 'emerald';
+            break;
+        case 'condensing':
+            $label = 'Condensing information...';
+            $color = 'slate';
+            break;
+        case 'scraping_start':
+            $label = 'Scraping: ' . htmlspecialchars($data['url'] ?? '');
+            $color = 'emerald';
+            break;
+        case 'scraping_done':
+            $label = 'Scraped: ' . htmlspecialchars($data['url'] ?? '');
+            $color = 'emerald';
+            break;
+    }
+    return ['label' => $label, 'color' => $color];
+}
+?>
+
 <section class="flex-1 flex flex-col h-full relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1526] via-[#070b14] to-[#070b14]">
     
     <header class="h-16 border-b border-slate-800/80 flex items-center justify-between px-6 glass-panel backdrop-blur-md z-10">
@@ -62,6 +158,7 @@
                     <?php foreach ($history as $msg): ?>
                         <?php 
                         $msgType = $msg['message_type'] ?? 'text';
+                        if ($msgType === 'tool_call') continue;
                         if ($msgType === 'data_fetching'): 
                         ?>
                         <details class="w-full max-w-[92%] mx-auto mb-4 overflow-hidden group data-fetching-accordion rounded-xl border border-amber-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(245,158,11,0.05),inset_0_1px_0_rgba(245,158,11,0.04)] transition-all duration-300">
@@ -111,8 +208,14 @@
                                 </button>
                             </div>
                             
-                            <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
-                                 data-raw="<?php echo htmlspecialchars($msg['message']); ?>">
+                            <?php
+                            $msgTags = json_decode($msg['tags'] ?? '[]', true);
+                            $msgTags = is_array($msgTags) ? $msgTags : [];
+                            $tagColorMap = ['web' => 'cyan', 'files' => 'emerald', 'memory' => 'amber', 'local' => 'violet'];
+                            $composedRaw = (empty($msgTags) ? '' : implode(' ', array_map(fn($t) => '@' . $t, $msgTags)) . (empty($msg['message']) ? '' : ' ')) . $msg['message'];
+                            ?>
+                            <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch w-full'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
+                                 data-raw="<?php echo htmlspecialchars($composedRaw); ?>">
                                 <?php if (!empty($msg['image_path'])): ?>
                                     <?php 
                                     $ext = strtolower(pathinfo($msg['image_path'], PATHINFO_EXTENSION));
@@ -128,43 +231,104 @@
                                 <?php endif; ?>
                                 
                                 <?php if ($msg['role'] === 'assistant'): ?>
-                                    <?php if (!empty($msg['scraped_urls']) || !empty($msg['search_query']) || !empty($msg['cache_used'])): ?>
-                                        <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group">
-                                            <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
-                                                <span class="flex items-center gap-2">
-                                                    <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
-                                                    Agent Execution Trace
+                                    <?php
+                                    $executionTrace = json_decode($msg['execution_trace'] ?? '[]', true);
+                                    $hasTrace = is_array($executionTrace) && !empty($executionTrace);
+                                    ?>
+                                    <?php if ($hasTrace || !empty($msg['scraped_urls']) || !empty($msg['search_query']) || !empty($msg['cache_used'])): ?>
+                                        <?php
+                                        $traceStepCount = $hasTrace ? count($executionTrace) : 0;
+                                        $traceColorBarClasses = [
+                                            'cyan' => 'bg-cyan-500/50',
+                                            'blue' => 'bg-blue-500/50',
+                                            'amber' => 'bg-amber-500/50',
+                                            'emerald' => 'bg-emerald-500/50',
+                                            'indigo' => 'bg-indigo-500/50',
+                                            'rose' => 'bg-rose-500/50',
+                                            'slate' => 'bg-slate-500/40'
+                                        ];
+                                        $traceTextClasses = [
+                                            'cyan' => 'text-cyan-400',
+                                            'blue' => 'text-blue-400',
+                                            'amber' => 'text-amber-400',
+                                            'emerald' => 'text-emerald-400',
+                                            'indigo' => 'text-indigo-400',
+                                            'rose' => 'text-rose-400',
+                                            'slate' => 'text-slate-300'
+                                        ];
+                                        ?>
+                                        <details class="w-full mb-4 overflow-hidden group trace-accordion rounded-xl border border-emerald-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(16,185,129,0.05),inset_0_1px_0_rgba(16,185,129,0.04)] transition-all duration-300" open>
+                                            <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200">
+                                                <span class="flex items-center gap-3">
+                                                    <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.12)]">
+                                                        <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                                            <polyline points="4 17 10 11 4 5"/>
+                                                            <line x1="12" y1="19" x2="20" y2="19"/>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-emerald-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Execution Trace</span>
                                                 </span>
-                                                <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
+                                                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                                                    <span><?php echo $traceStepCount; ?> step<?php echo $traceStepCount !== 1 ? 's' : ''; ?></span>
+                                                    <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                                                </span>
                                             </summary>
-                                            <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2">
-                                                <?php if (!empty($msg['cache_used'])): ?>
-                                                    <div class="text-xs text-amber-400 flex items-center gap-1.5 font-medium">
-                                                        <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cache matched successfully
-                                                    </div>
-                                                <?php elseif (!empty($msg['search_query'])): ?>
-                                                    <div class="text-xs text-blue-400 flex items-center gap-1.5 font-medium">
-                                                        <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"
-                                                    </div>
-                                                <?php endif; ?>
-                                                <?php if (!empty($msg['scraped_urls'])): ?>
-                                                    <?php $urls = json_decode($msg['scraped_urls'], true); ?>
-                                                    <?php if (is_array($urls) && !empty($urls)): ?>
-                                                        <div class="flex flex-col gap-1.5">
-                                                            <?php foreach ($urls as $url): ?>
-                                                                <a href="<?php echo htmlspecialchars($url); ?>" target="_blank" class="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950/40 p-2 rounded border border-slate-850 hover:bg-slate-800/30 transition-colors w-full font-medium">
-                                                                    <uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>
-                                                                    <span class="truncate max-w-full"><?php echo htmlspecialchars($url); ?></span>
-                                                                </a>
-                                                             <?php endforeach; ?>
-                                                        </div>
+                                            <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
+                                                <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono">
+                                                    <?php if ($hasTrace): ?>
+                                                        <?php foreach ($executionTrace as $entry): ?>
+                                                            <?php $rendered = renderExecutionTraceEntry($entry); ?>
+                                                            <?php if ($rendered['label']): ?>
+                                                                <?php
+                                                                $barClass = $traceColorBarClasses[$rendered['color']] ?? $traceColorBarClasses['slate'];
+                                                                $textClass = $traceTextClasses[$rendered['color']] ?? $traceTextClasses['slate'];
+                                                                ?>
+                                                                <div class="flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150">
+                                                                    <span class="w-0.5 self-stretch rounded-full shrink-0 <?php echo $barClass; ?>"></span>
+                                                                    <span class="text-[0.7rem] <?php echo $textClass; ?> mt-px font-medium tracking-wide flex-1 leading-relaxed">&#9656; <?php echo $rendered['label']; ?></span>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        <?php endforeach; ?>
+                                                    <?php else: ?>
+                                                        <?php if (!empty($msg['cache_used'])): ?>
+                                                            <div class="flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150">
+                                                                <span class="w-0.5 self-stretch rounded-full shrink-0 bg-amber-500/50"></span>
+                                                                <span class="text-[0.7rem] text-amber-400 mt-px font-medium tracking-wide flex-1 leading-relaxed">&#9656; Memory Cache matched successfully</span>
+                                                            </div>
+                                                        <?php elseif (!empty($msg['search_query'])): ?>
+                                                            <div class="flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150">
+                                                                <span class="w-0.5 self-stretch rounded-full shrink-0 bg-blue-500/50"></span>
+                                                                <span class="text-[0.7rem] text-blue-400 mt-px font-medium tracking-wide flex-1 leading-relaxed">&#9656; Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"</span>
+                                                            </div>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
-                                                <?php endif; ?>
+                                                    <?php if (!empty($msg['scraped_urls'])): ?>
+                                                        <?php $urls = json_decode($msg['scraped_urls'], true); ?>
+                                                        <?php if (is_array($urls) && !empty($urls)): ?>
+                                                            <div class="flex flex-col gap-1.5 mt-2">
+                                                                <?php foreach ($urls as $url): ?>
+                                                                    <a href="<?php echo htmlspecialchars($url); ?>" target="_blank" class="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950/40 p-2 rounded border border-slate-850 hover:bg-slate-800/30 transition-colors w-full font-medium">
+                                                                        <uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>
+                                                                        <span class="truncate max-w-full"><?php echo htmlspecialchars($url); ?></span>
+                                                                    </a>
+                                                                <?php endforeach; ?>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                         </details>
                                     <?php endif; ?>
                                     <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
                                 <?php else: ?>
+                                    <?php if (!empty($msgTags)): ?>
+                                        <?php foreach ($msgTags as $tag): ?>
+                                            <span class="tag-badge tag-badge-<?php echo htmlspecialchars($tagColorMap[$tag] ?? 'cyan'); ?>">
+                                                <span class="tag-badge-label">@<?php echo htmlspecialchars($tag); ?></span>
+                                            </span>
+                                        <?php endforeach; ?>
+                                        <?php if (!empty($msg['message'])): ?> <?php endif; ?>
+                                    <?php endif; ?>
                                     <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
                                 <?php endif; ?>
 
@@ -201,21 +365,23 @@
                     </div>
 
                     <div id="referenced-files-container" class="flex flex-wrap gap-2 mb-3"></div>
+                    <div id="tag-badges" class="hidden flex flex-wrap gap-2 mb-2"></div>
                     
                     <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
                         <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
                         <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                         
-                        <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
+                        <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner relative" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
                             <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
                                 <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
                             </button>
                             
-                            <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant..." required autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                            <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant... (type @ for tags)" autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
                             
                             <button type="submit" class="btn-futuristic shrink-0 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 h-[44px]">
                                 Send <uk-icon icon="send" class="w-4 h-4"></uk-icon>
                             </button>
+                            <div id="tag-autocomplete" class="hidden absolute left-0 right-0 bottom-full mb-1 z-50"></div>
                         </div>
                     </form>
                 </div>
