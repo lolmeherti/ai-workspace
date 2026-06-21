@@ -4,7 +4,6 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\ChatManager;
-use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
 
@@ -34,15 +33,12 @@ class ChatStreamAction extends BaseAction
         echo ":{$pad}\n\n";
         @flush();
 
-        $searchDecider = new SearchDecider($this->agentManager);
         $cacheEvaluator = new SemanticCacheEvaluator($this->agentManager);
         $contextCondenser = new ContextCondenser($this->agentManager);
 
         $chatManager = new ChatManager(
             $this->db,
             $this->agentManager,
-            $this->memoryExtractor,
-            $searchDecider,
             $cacheEvaluator,
             $contextCondenser
         );

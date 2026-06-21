@@ -36,7 +36,7 @@ Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB
 - **Core**: `AgentManager.php` — wraps llama.cpp API calls (OpenAI-compatible chat endpoint at `http://host.docker.internal:1234/v1`). Supports streaming + non-streaming responses.
 - **Agents** (`src/App/Agents/`): specialized reasoning modules:
   - `MemoryExtractor.php`, `MemorySelector.php` — persistent memory management
-  - `SearchDecider.php`, `SemanticCacheEvaluator.php`, `TaskMatcher.php` — routing/intent logic
+  - `SemanticCacheEvaluator.php`, `TaskMatcher.php` — routing/intent logic
   - `SchedulingAgent.php`, `ContextCondenser.php`
 - **Controllers** (`src/App/Controllers/`): Chat, Email, File, Cache, AI Settings
 - **Actions** (`src/App/Actions/`): HTTP action handlers (chat stream, email list/send/reply, file search/upload/edit, todoist integration)

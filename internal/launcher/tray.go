@@ -147,7 +147,7 @@ func InitLogging(workDir string) {
 	logging.File, err = os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		logging.Writer = io.MultiWriter(logging.File, os.Stdout)
-		if DebugMode {
+		if DebugMode && os.Getenv("LOCALSY_DEV_ENV") == "" {
 			SpawnLogTerminal(logFilePath)
 		}
 	}

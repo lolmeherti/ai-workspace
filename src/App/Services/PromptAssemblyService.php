@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Config;
+use App\Utils\CurrentDateUtil;
 
 class PromptAssemblyService
 {
@@ -41,14 +42,9 @@ TEXT;
 You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
 This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
 
-TEXT;
-
-            $systemPrompt .= <<<TEXT
-TOOL USAGE:
-You have access to tools that can search files, manage tasks, check email, and retrieve memories. To use a tool, output ONLY the JSON block for that tool — no other text. If no tool is needed, respond normally in plain text.
-
-search_files — Search uploaded files and documents on disk:
-{"tool": "search_files", "query": "cv, resume"}
+TODOIST TOOLS:
+You can manage tasks and reminders through Todoist. To use a tool, output ONLY the JSON block for that tool — no other text. If no tool is needed, respond normally in plain text.
+Never explain, plan, or analyze your actions. When tool results appear in the conversation, respond directly to the user without repeating the tool call.
 
 create_todoist_task — Schedule a task or reminder:
 {"tool": "create_todoist_task", "content": "clean task summary", "due_string": "tomorrow at 3pm"}
@@ -62,10 +58,7 @@ update_todoist_task — Edit an existing task's title, date, or time:
 delete_todoist_task — Remove a task or reminder:
 {"tool": "delete_todoist_task", "query": "search words"}
 
-search_memories — Search long-term memories for specific information:
-{"tool": "search_memories", "query": "specific query"}
-
-After a tool's results appear in the conversation, respond naturally with a plain text answer. Do not call the same tool more than once for the same request.
+When the user asks about files, memories, or web search, the relevant information will be provided to you automatically in the conversation. You do not need to request it.
 
 TEXT;
 
@@ -75,11 +68,9 @@ If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSugges
 TEXT;
         }
 
-        $now = time();
-        $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;
-        $currentDate = date('l, F j, Y', $now) . sprintf(' (%02d:%02d)', (int)date('H', $now), $roundedMinute);
+        $currentDate = CurrentDateUtil::getCurrentDate();
         $cutoffDate = 'early 2024';
-        $systemPrompt .= "\n\nToday's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+        $systemPrompt .= "\n\nToday's date is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
 
         return $systemPrompt;
     }
@@ -137,7 +128,7 @@ TEXT;
         return $merged;
     }
 
-    public function buildMessagesArray(string $systemPrompt, array $history, string $intent = 'none', string $condensedContext = '', bool $usedCache = false): array
+    public function buildMessagesArray(string $systemPrompt, array $history, string $condensedContext = '', bool $usedCache = false): array
     {
         $history = $this->preprocessHistory($history);
 
@@ -217,27 +208,19 @@ TEXT;
             }
         }
 
-        // Append routing hint and web search context to the last user message (preserves KV cache)
-        if ($intent !== 'none' || !empty($condensedContext)) {
+        // Append web search context to the last user message if present
+        if (!empty($condensedContext)) {
             for ($i = count($messages) - 1; $i >= 0; $i--) {
                 if ($messages[$i]['role'] === 'user') {
-                    $append = '';
-                    if ($intent !== 'none') {
-                        $append .= "\n\n[System Routing Hint: Active intent is classified as '{$intent}'. You must focus exclusively on utilizing the corresponding tool instructions defined in your system prompt. Do not call other tools.]";
+                    $append = "\n\n[LIVE WEB SEARCH CONTEXT]:\n{$condensedContext}";
+                    if ($usedCache) {
+                        $append .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
                     }
-                    if (!empty($condensedContext)) {
-                        $append .= "\n\n[LIVE WEB SEARCH CONTEXT]:\n{$condensedContext}";
-                        if ($usedCache) {
-                            $append .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
-                        }
-                        $append .= "\n\nRespond to the user's query using the above retrieved information.";
-                    }
-                    if ($append !== '') {
-                        if (is_array($messages[$i]['content'])) {
-                            $messages[$i]['content'][0]['text'] .= $append;
-                        } else {
-                            $messages[$i]['content'] .= $append;
-                        }
+                    $append .= "\n\nRespond to the user's query using the above retrieved information.";
+                    if (is_array($messages[$i]['content'])) {
+                        $messages[$i]['content'][0]['text'] .= $append;
+                    } else {
+                        $messages[$i]['content'] .= $append;
                     }
                     break;
                 }

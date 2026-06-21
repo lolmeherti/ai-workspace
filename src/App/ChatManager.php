@@ -4,42 +4,38 @@ namespace App;
 
 use App\Database;
 use App\AgentManager;
-use App\Agents\MemoryExtractor;
-use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
+use App\Agents\SearchQueryRefiner;
 use App\Config;
 use App\Services\FileAttachmentService;
-use App\Services\WebSearchService;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
+use App\Services\TagParserService;
+use App\Services\Tools\WebSearchTool;
 
 class ChatManager
 {
     private Database $db;
     private AgentManager $agent;
-    private ?SearchDecider $searchDecider;
     private FileAttachmentService $fileAttachmentService;
-    private WebSearchService $webSearchService;
+    private WebSearchTool $webSearchTool;
     private PromptAssemblyService $promptAssemblyService;
     private ToolExecutionService $toolExecutionService;
     private string $uploadDir;
 
     public function __construct(
-        Database $db, 
-        AgentManager $agent, 
-        ?MemoryExtractor $memoryExtractor = null,
-        ?SearchDecider $searchDecider = null,
+        Database $db,
+        AgentManager $agent,
         ?SemanticCacheEvaluator $cacheEvaluator = null,
         ?ContextCondenser $contextCondenser = null
     ) {
         $this->db = $db;
         $this->agent = $agent;
-        $this->searchDecider = $searchDecider;
-        $this->uploadDir = __DIR__ . '/../uploads/';
+        $this->uploadDir = Config::getProjectRoot() . '/uploads/';
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
-        $this->webSearchService = new WebSearchService($searchDecider, $cacheEvaluator, $contextCondenser);
+        $this->webSearchTool = new WebSearchTool($cacheEvaluator, $contextCondenser, new SearchQueryRefiner($agent));
         $this->promptAssemblyService = new PromptAssemblyService($this->db, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
     }
@@ -74,9 +70,13 @@ class ChatManager
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?string $activeEditFile = null, ?callable $streamCallback = null): array
     {
-        $emit = function(string $event, array $data = []) use ($streamCallback) {
+        $executionTrace = [];
+        $emit = function(string $event, array $data = []) use ($streamCallback, &$executionTrace) {
             if ($streamCallback !== null) {
                 $streamCallback($event, $data);
+            }
+            if (in_array($event, ['title_updated', 'intent_result', 'tool_start', 'tool_done', 'search_decided', 'cache_used', 'search_no_results', 'context_assembled', 'scraping_start', 'scraping_done', 'condensing', 'trace'], true)) {
+                $executionTrace[] = ['event' => $event, 'data' => $data];
             }
         };
 
@@ -94,16 +94,24 @@ class ChatManager
 
         $this->ensureSessionExists($sessionId);
 
+        $tagParser = new TagParserService();
+        $parsed = $tagParser->parse($query);
+        $tags = $parsed['tags'];
+        $query = $parsed['query']; // stripped of tags for storage and LLM context
+        $displayTags = $parsed['displayTags'];
+
         $imagePath = null;
         if (empty($cacheAction)) {
             if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
                 $emit('status', ['text' => 'Processing attachment...']);
             }
             $imagePath = $this->fileAttachmentService->handleUpload($sessionId, $imageFile);
+
             $this->db->insert('chat_history', [
                 'session_id' => $sessionId,
                 'role' => 'user',
                 'message' => $query,
+                'tags' => empty($displayTags) ? null : json_encode($displayTags),
                 'image_path' => $imagePath,
                 'token_estimate' => (int)(mb_strlen($query) / 4)
             ]);
@@ -121,18 +129,31 @@ class ChatManager
         $searchQuery = null;
         $intent = 'none';
 
-       $emit('status', ['text' => 'Analyzing intent...']);
+        $emit('status', ['text' => 'Analyzing intent...']);
         if (!empty($activeEditFile)) {
             $intent = 'none';
             $searchQuery = null;
-        } elseif ($this->searchDecider) {
-            $decisionResult = $this->searchDecider->decideSearchAndIntent($query, $history);
-            $searchQuery = $decisionResult['search_query'] ?? null;
-            $intent = $decisionResult['intents'] ?? 'none';
-
-            if ($intent !== 'none' && $intent !== 'none,none' && !empty($intent)) {
-                $searchQuery = null; 
+        } else {
+            $intents = [];
+            foreach ($tags as $tag) {
+                switch ($tag) {
+                    case 'web_search':
+                        $searchQuery = $query;
+                        break;
+                    case 'search_files':
+                        $intents[] = 'search_files';
+                        break;
+                    case 'search_memories':
+                        $intents[] = 'search_memories';
+                        break;
+                    case 'local_search':
+                        $intents[] = 'search_files';
+                        $intents[] = 'search_memories';
+                        break;
+                }
             }
+            $intents = array_values(array_unique($intents));
+            $intent = empty($intents) ? 'none' : implode(',', $intents);
         }
 
         $emit('intent_result', [
@@ -161,17 +182,18 @@ class ChatManager
                 
                 $emit('tool_done', ['tool' => 'search_files', 'label' => 'Files checked.']);
 
+                // Always record the tool result so the AI/history knows the search happened
+                $this->db->insert('chat_history', [
+                    'session_id' => $sessionId,
+                    'role' => 'system',
+                    'message' => $toolOutput,
+                    'message_type' => 'data_fetching',
+                    'tool_name' => 'search_files',
+                    'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
+                ]);
+
                 if (stripos($toolOutput, 'No matching files') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
                     $tier1Found = true;
-
-                    $this->db->insert('chat_history', [
-                        'session_id' => $sessionId,
-                        'role' => 'system',
-                        'message' => $toolOutput,
-                        'message_type' => 'data_fetching',
-                        'tool_name' => 'search_files',
-                        'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
-                    ]);
                 }
             }
 
@@ -183,17 +205,18 @@ class ChatManager
                 
                 $emit('tool_done', ['tool' => 'search_memories', 'label' => 'Memories checked.']);
 
+                // Always record the tool result so the AI/history knows the search happened
+                $this->db->insert('chat_history', [
+                    'session_id' => $sessionId,
+                    'role' => 'system',
+                    'message' => $toolOutput,
+                    'message_type' => 'data_fetching',
+                    'tool_name' => 'search_memories',
+                    'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
+                ]);
+
                 if (stripos($toolOutput, 'No specific relevant memories') === false && stripos($toolOutput, 'error') === false && trim($toolOutput) !== '') {
                     $tier1Found = true;
-
-                    $this->db->insert('chat_history', [
-                        'session_id' => $sessionId,
-                        'role' => 'system',
-                        'message' => $toolOutput,
-                        'message_type' => 'data_fetching',
-                        'tool_name' => 'search_memories',
-                        'token_estimate' => (int)(mb_strlen($toolOutput) / 4)
-                    ]);
                 }
             }
         }
@@ -231,15 +254,15 @@ class ChatManager
         $condensedContext = '';
         if (!$tier1Found && !$tier2Found && !empty($searchQuery)) {
             $emit('status', ['text' => 'Consulting external sources...']);
-            $condensedContext = $this->webSearchService->executeDecision(
+            $condensedContext = $this->webSearchTool->executeWebSearch(
                 $query,
-                $history,
                 $cacheAction,
                 $cacheKeyToUse,
                 $emit,
                 $usedCache,
                 $scrapedUrls,
-                $searchQuery
+                $sessionId,
+                $history
             );
 
             if ($condensedContext === 'ASK_USER') {
@@ -250,9 +273,64 @@ class ChatManager
         // Re-read updated history (including any pre-emptively inserted tool outputs)
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
+        // Deterministic response for a pure @files tag: the tool already did the work,
+        // so don't give the AI a chance to overthink or ignore the result.
+        $isPureFileSearchTag = (count($tags) === 1 && $tags[0] === 'search_files');
+        if ($isPureFileSearchTag) {
+            $filesFound = false;
+            foreach (array_reverse($history) as $msg) {
+                if (($msg['message_type'] ?? '') === 'data_fetching' && ($msg['tool_name'] ?? '') === 'search_files') {
+                    $filesFound = stripos($msg['message'], 'No matching files') === false;
+                    break;
+                }
+            }
+
+            $encodedQuery = json_encode($searchTargetQuery);
+            $aiResponse = $filesFound
+                ? "I found these files. Click **Append to Chat** on any file you want me to read or discuss.\n\n{\"tool\":\"search_files\",\"query\":{$encodedQuery}}"
+                : "I didn't find any files matching \"{$searchTargetQuery}\".";
+
+            $emit('status', ['text' => 'Done.']);
+            $emit('token', ['chunk' => $aiResponse]);
+
+            $this->db->insert('chat_history', [
+                'session_id' => $sessionId,
+                'role' => 'assistant',
+                'message' => $aiResponse,
+                'image_path' => null,
+                'token_estimate' => (int)(mb_strlen($aiResponse) / 4),
+                'search_query' => $searchQuery,
+                'execution_trace' => empty($executionTrace) ? null : json_encode($executionTrace)
+            ]);
+
+            $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+            $totalSessionTokens = 0;
+            foreach ($finalHistory as $row) {
+                $totalSessionTokens += (int)($row['token_estimate'] ?? 0);
+            }
+
+            $emit('done', [
+                'message' => $this->stripThinkingTags($aiResponse),
+                'title' => $updatedTitle,
+                'total_session_tokens' => $totalSessionTokens,
+                'session_id' => $sessionId
+            ]);
+
+            return [
+                'status' => 'success',
+                'message' => $aiResponse,
+                'title' => $updatedTitle,
+                'meta' => [
+                    'search_triggered' => $searchQuery !== null,
+                    'search_query' => $searchQuery,
+                    'cache_used' => $usedCache
+                ]
+            ];
+        }
+
         $emit('status', ['text' => 'Assembling context...']);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $intent, $condensedContext, $usedCache);
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $condensedContext, $usedCache);
         
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
@@ -285,17 +363,6 @@ class ChatManager
         while ($executionCount < $maxExecutions) {
             $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
 
-            // Translate Gemma 4 / Qwen native tokenizer tool calls to standard JSON blocks on the fly
-            $aiRawResponse = preg_replace_callback(
-                '/<\|tool_call|>call:(?:[a-zA-Z0-9_-]+\.)?([a-zA-Z0-9_-]+)({.*?})(?:<\|tool_call|>)?/is',
-                function($matches) {
-                    $toolName = $matches[1];
-                    $args = json_decode($matches[2], true) ?: [];
-                    return json_encode(array_merge(['tool' => $toolName], $args));
-                },
-                $aiRawResponse
-            );
-
             $rawTools = \App\JsonParser::extractAllAndDecode($aiRawResponse);
             
             $decodedTools = [];
@@ -324,8 +391,7 @@ class ChatManager
 
                 // If all tools were repeats, treat as text response
                 if (empty($decodedTools)) {
-                    $aiResponse = $aiRawResponse;
-                    // Strip tool JSON from the response
+                    $aiResponse = \App\JsonParser::stripToolCallArtifacts($aiRawResponse);
                     foreach ($rawTools as $toolParams) {
                         $toolJson = json_encode($toolParams);
                         $aiResponse = str_replace($toolJson, '', $aiResponse);
@@ -418,13 +484,13 @@ class ChatManager
                 ]);
 
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $intent, $condensedContext, $usedCache);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $condensedContext, $usedCache);
                 
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
                 
                 $executionCount++;
             } else {
-                $aiResponse = $aiRawResponse;
+                $aiResponse = \App\JsonParser::stripToolCallArtifacts($aiRawResponse);
                 break;
             }
         }
@@ -458,7 +524,8 @@ class ChatManager
             'token_estimate' => $assistantTokens,
             'search_query' => $searchQuery,
             'cache_used' => $usedCache ? 1 : 0,
-            'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null
+            'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null,
+            'execution_trace' => empty($executionTrace) ? null : json_encode($executionTrace)
         ]);
 
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
@@ -556,10 +623,9 @@ class ChatManager
         $utf8_buffer = '';
         $inJsonTool = false;
         $jsonBraceDepth = 0;
-        $inThoughtTag = false;
         $isStartOfResponse = true; // Tracks the absolute start of the textual response
 
-        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThoughtTag, &$isStartOfResponse) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$isStartOfResponse) {
             if ($type === 'reasoning') {
                 $emit('reasoning', ['chunk' => $chunk]);
                 return;
@@ -567,29 +633,57 @@ class ChatManager
 
             $aiResponse .= $chunk;
 
-            // Suppress Gemma thought tags and DeepSeek think tags
-            if ($inThoughtTag) {
-                if (str_contains($chunk, '<channel|>') || str_contains($chunk, '</think>')) {
-                    $inThoughtTag = false;
+            // Suppress native tokenizer tool-call blocks (Gemma 4 / Qwen) from streaming to screen,
+            // but preserve any text that appears before/after the wrapper so reasoning tags are not swallowed.
+            $nativeOpenTags = ['<|tool_call|>', '<|tool_call>', '<tool_call|>', '<tool_call>'];
+            $nativeCloseTags = ['<|tool_call|>', '<tool_call|>', '</tool_call>'];
+
+            $openTagPos = false;
+            $openTagLen = 0;
+            foreach ($nativeOpenTags as $tag) {
+                $pos = strpos($chunk, $tag);
+                if ($pos !== false && ($openTagPos === false || $pos < $openTagPos)) {
+                    $openTagPos = $pos;
+                    $openTagLen = strlen($tag);
                 }
-                return;
             }
-            if (str_contains($chunk, '<|channel>thought') || str_contains($chunk, '<think>')) {
-                $inThoughtTag = true;
-                // Check if the tag closes in the same chunk
-                if (str_contains($chunk, '<channel|>') || str_contains($chunk, '</think>')) {
-                    $inThoughtTag = false;
+
+            $closeTagPos = false;
+            $closeTagLen = 0;
+            foreach ($nativeCloseTags as $tag) {
+                $pos = strpos($chunk, $tag);
+                if ($pos !== false && ($closeTagPos === false || $pos < $closeTagPos)) {
+                    $closeTagPos = $pos;
+                    $closeTagLen = strlen($tag);
+                }
+            }
+
+            if ($openTagPos !== false && !$inJsonTool) {
+                if ($openTagPos > 0) {
+                    $utf8_buffer .= substr($chunk, 0, $openTagPos);
+                }
+                $inJsonTool = true;
+                $afterOpen = substr($chunk, $openTagPos + $openTagLen);
+                foreach ($nativeCloseTags as $tag) {
+                    $innerClose = strpos($afterOpen, $tag);
+                    if ($innerClose !== false) {
+                        $inJsonTool = false;
+                        $afterClose = substr($afterOpen, $innerClose + strlen($tag));
+                        if (!empty($afterClose)) {
+                            $utf8_buffer .= $afterClose;
+                        }
+                        break;
+                    }
                 }
                 return;
             }
 
-            // Suppress native tokenizer tool-call blocks (Gemma 4 / Qwen) from streaming to screen
-            if (str_contains($chunk, '<|tool_call|>') || str_contains($chunk, '<tool_call>')) {
-                $inJsonTool = true;
-                return;
-            }
-            if ($inJsonTool && (str_contains($chunk, '<|tool_call|>') || str_contains($chunk, '</tool_call>'))) {
+            if ($closeTagPos !== false && $inJsonTool) {
                 $inJsonTool = false;
+                $afterClose = substr($chunk, $closeTagPos + $closeTagLen);
+                if (!empty($afterClose)) {
+                    $utf8_buffer .= $afterClose;
+                }
                 return;
             }
 

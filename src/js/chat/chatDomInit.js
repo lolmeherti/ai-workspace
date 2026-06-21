@@ -8,6 +8,33 @@ import { openEditorDrawer, closeEditorDrawer, saveEditorDraft } from './chatEdit
 import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
 import { extractThinking, createThinkingAccordion } from '../markdown.js';
+import { parseTagsFromText, renderTagBadges } from './chatTagInput.js';
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+}
+
+function renderUserTagBadges(el) {
+    if (el.querySelector('.tag-badge')) return;
+    const msgText = el.querySelector('.msg-text');
+    const sourceText = msgText ? msgText.textContent : (el.getAttribute('data-raw') || '');
+    const { tags, query } = parseTagsFromText(sourceText);
+    if (tags.length === 0) return;
+
+    const badgesHtml = renderTagBadges(tags);
+    const body = query ? ' ' + escapeHtml(query) : '';
+    if (msgText) {
+        msgText.innerHTML = badgesHtml + body;
+    } else {
+        const wrapper = document.createElement('span');
+        wrapper.innerHTML = badgesHtml + body;
+        el.insertBefore(wrapper, el.firstChild);
+    }
+}
 
 export function initChatDom() {
     document.addEventListener('DOMContentLoaded', () => {
@@ -68,6 +95,7 @@ export function initChatDom() {
 
             document.querySelectorAll('.chat-user').forEach(el => {
                 el.innerHTML = parseInlineFiles(el.innerHTML);
+                renderUserTagBadges(el);
             });
         };
         parseAllCurrentMessages();
@@ -153,6 +181,7 @@ export function initChatDom() {
                     </div>
                     <span class="msg-text">${actualPrompt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                 `;
+                renderUserTagBadges(el);
             }
         });
 
