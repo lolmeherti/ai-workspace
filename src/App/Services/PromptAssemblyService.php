@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Config;
-use App\Utils\CurrentDateUtil;
 
 class PromptAssemblyService
 {
@@ -32,45 +31,47 @@ You are a document editor assistant. The user is working on a file in the text e
 
 LIMITATIONS IN EDITOR MODE:
 - You CANNOT search files on disk, check email, manage tasks, or search the web.
-- You CAN search long-term memories using: {"tool": "search_memories", "query": "specific query"}
+- You CAN search long-term memories using: search_memories QUERY:specific query
 - If the user asks you to find files, check email, schedule tasks, or search the web, explain that these are unavailable in editor mode and suggest closing the editor first.
-- To use the search_memories tool, output ONLY the JSON block — no other text. If no tool is needed, respond naturally in plain text.
+- To use the search_memories tool, output ONLY the  line — no other text. If no tool is needed, respond naturally in plain text.
 
 TEXT;
         } else {
             $systemPrompt .= <<<TEXT
-You are a helpful, friendly, and highly intelligent AI conversational assistant. You are being supplemented with up to date data from a third party source via content injection. 
-This is what keeps you up to date. If you see data from what you perceive to be the future, don't worry about it and understand that its relatively reliable data.
+You are a helpful, friendly, and highly intelligent AI conversational assistant with access to super_abilities.
 
-TODOIST TOOLS:
-You can manage tasks and reminders through Todoist. To use a tool, output ONLY the JSON block for that tool — no other text. If no tool is needed, respond normally in plain text.
-Never explain, plan, or analyze your actions. When tool results appear in the conversation, respond directly to the user without repeating the tool call.
+### Context & Temporality
+You are supplemented with up-to-date data from third-party sources via content injection. If you see timestamps or information that seem to be from the "future" relative to your training cutoff (such as data from 2026 or later), accept it as reliable, real-time context. Do not argue about the date.
 
-create_todoist_task — Schedule a task or reminder:
-{"tool": "create_todoist_task", "content": "clean task summary", "due_string": "tomorrow at 3pm"}
+### Information Limitations
+Do not explain that as an AI you cannot browse the web or access the user's files, instead if the user asks you to:
+- Access real-time data, current events, or live web info
+- Look up their personal files, documents, or notes
+- View or modify their calendar, todos, or emails
+- Perform any action beyond generating text
 
-get_todoist_tasks — Fetch your upcoming tasks and agenda:
-{"tool": "get_todoist_tasks"}
+Simply say that in order to help the user you need access to super_abilities.
 
-update_todoist_task — Edit an existing task's title, date, or time:
-{"tool": "update_todoist_task", "query": "search words", "new_content": "new title", "new_due_string": "new date/time"}
+TOOL TURN RULE: When you see [State: Tools active] at the end of a user message, tools are already enabled. Do NOT output super_abilities. Instead, output ONLY the tool call in the format shown in that message — no other text.
 
-delete_todoist_task — Remove a task or reminder:
-{"tool": "delete_todoist_task", "query": "search words"}
+IMPORTANT: If the information the user is asking for is already available in the conversation history (from previous tool results, data_fetching, or your own earlier responses), answer directly from that context. Do not request super_abilities for information you already possess.
 
-When the user asks about files, memories, or web search, the relevant information will be provided to you automatically in the conversation. You do not need to request it.
+Example:
+In order to help you with that, I need super_abilities.
 
-TEXT;
+Do not attempt to make up, guess, or hallucinate the information. Instead, you must request assistance by outputting the exact secret keyword:
+super_abilities
 
-            $systemPrompt .= <<<TEXT
-INSTRUCTIONS FOR PRE-VETTED REMINDERS:
-If the system provides you with pre-vetted suggestion tags (e.g. `[TodoistSuggest: content | due_string]`), you MUST output those exact tags at the very end of your final response so the user can review and click them.
+Keep your response brief when requesting assistance, explaining naturally to the user that you need these capabilities to proceed.
+
 TEXT;
         }
 
-        $currentDate = CurrentDateUtil::getCurrentDate();
+        $now = time();
+        $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;
+        $currentDate = date('l, F j, Y', $now) . sprintf(' (%02d:%02d)', (int)date('H', $now), $roundedMinute);
         $cutoffDate = 'early 2024';
-        $systemPrompt .= "\n\nToday's date is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+        $systemPrompt .= "\n\nToday's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
 
         return $systemPrompt;
     }
@@ -78,57 +79,26 @@ TEXT;
     public function preprocessHistory(array $history): array
     {
         $merged = [];
-        $pendingData = '';
 
-        // Find the last user message index to only collect data_fetching from the current request
-        $lastUserIdx = -1;
-        foreach ($history as $idx => $msg) {
-            if ($msg['role'] === 'user') {
-                $lastUserIdx = $idx;
-            }
-        }
-
-        // Pass 1: Collect and strip data_fetching messages, and filter out intermediate tool calls
-        foreach ($history as $idx => $msg) {
-            if (($msg['message_type'] ?? 'text') === 'data_fetching') {
-                // Only collect data_fetching rows from the current request (after last user message)
-                if ($idx > $lastUserIdx) {
-                    $pendingData .= "\n\n[SYSTEM DATA FETCHED]\n"
-                                  . "Tool Executed: " . ($msg['tool_name'] ?? 'unknown_tool') . "()\n"
-                                  . "Status: Success\n"
-                                  . "Result Payload:\n"
-                                  . "-----------------\n"
-                                  . $msg['message'] . "\n"
-                                  . "-----------------";
-                }
-                continue;
-            }
-
-            // Skip intermediate assistant tool calls to prevent them from terminating the dialogue chain
+        foreach ($history as $msg) {
+            // Skip intermediate tool-call stubs — machine-readable syntax,
+            // not something the model should pattern-match on
             if ($msg['role'] === 'assistant' && 
                 (($msg['message_type'] ?? '') === 'tool_call' || 
-                 stripos($msg['message'], '"tool"') !== false)) {
+                 ($msg['message_type'] ?? '') === 'super_abilities')) {
                 continue;
             }
 
             $merged[] = $msg;
         }
 
-        // Pass 2: Append collected data to the LAST user message
-        if (!empty($pendingData)) {
-            for ($i = count($merged) - 1; $i >= 0; $i--) {
-                if ($merged[$i]['role'] === 'user') {
-                    $merged[$i]['message'] .= "\n\n" . $pendingData
-                        . "\n\nRespond to the user's query using the above retrieved information.";
-                    break;
-                }
-            }
-        }
-
         return $merged;
     }
 
-    public function buildMessagesArray(string $systemPrompt, array $history, string $condensedContext = '', bool $usedCache = false): array
+    /**
+     * @param array $activeTools
+     */
+    public function buildMessagesArray(string $systemPrompt, array $history, array $activeTools = [], string $condensedContext = '', bool $usedCache = false): array
     {
         $history = $this->preprocessHistory($history);
 
@@ -208,19 +178,25 @@ TEXT;
             }
         }
 
-        // Append web search context to the last user message if present
+        // Append state guard to the last user message
+        $stateGuard = $this->buildStateGuard($activeTools);
+
+        // Append web search context if provided
         if (!empty($condensedContext)) {
+            $stateGuard .= "\n\n[LIVE WEB SEARCH CONTEXT]:\n{$condensedContext}";
+            if ($usedCache) {
+                $stateGuard .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
+            }
+            $stateGuard .= "\n\nRespond to the user's query using the above retrieved information.";
+        }
+
+        if ($stateGuard !== '') {
             for ($i = count($messages) - 1; $i >= 0; $i--) {
                 if ($messages[$i]['role'] === 'user') {
-                    $append = "\n\n[LIVE WEB SEARCH CONTEXT]:\n{$condensedContext}";
-                    if ($usedCache) {
-                        $append .= "\n(Note: This context was retrieved from your recent semantic memory cache).";
-                    }
-                    $append .= "\n\nRespond to the user's query using the above retrieved information.";
                     if (is_array($messages[$i]['content'])) {
-                        $messages[$i]['content'][0]['text'] .= $append;
+                        $messages[$i]['content'][0]['text'] .= $stateGuard;
                     } else {
-                        $messages[$i]['content'] .= $append;
+                        $messages[$i]['content'] .= $stateGuard;
                     }
                     break;
                 }
@@ -228,5 +204,41 @@ TEXT;
         }
 
         return $messages;
+    }
+
+    private function buildStateGuard(array $activeTools): string
+    {
+        if (empty($activeTools)) {
+            return "\n\n[State: No tools active. The user has not enabled any tools. If the user asks for actions beyond text generation, say super_abilities.]";
+        }
+
+        $toolList = implode(', ', $activeTools);
+
+        // Per-tool parameter reference
+        $toolSpecs = [
+            'search_files'     => "search_files QUERY:<SEARCH_TERMS> — space-delimited keywords from the user's request. Include synonyms. Use QUERY: prefix, not query=",
+            'search_web'       => "search_web QUERY:<SEARCH_TERMS> — space-delimited search keywords. Use QUERY: prefix, not query=",
+            'search_memories'  => "search_memories QUERY:<SEARCH_TERMS> — space-delimited keywords with synonyms.",
+            'get_todoist_tasks'     => 'get_todoist_tasks QUERY:<what to look for>',
+            'create_todoist_task'   => 'create_todoist_task QUERY:<task description> DUE_STRING:<natural due date, e.g. "tomorrow at 9am" or "July 9 at 3pm". If the user provided no due date, use your best judgment to pick a reasonable one — never use "ASAP" or vague placeholders.>',
+            'update_todoist_task'   => 'update_todoist_task QUERY:<which task to find> NEW_CONTENT:<updated description> NEW_DUE_STRING:<new due date>',
+            'delete_todoist_task'   => 'delete_todoist_task QUERY:<which task to delete>',
+        ];
+
+        $specLines = [];
+        foreach ($activeTools as $tool) {
+            if ($tool === 'calendar') {
+                $specLines[] = '  ' . $toolSpecs['get_todoist_tasks'];
+                $specLines[] = '  ' . $toolSpecs['create_todoist_task'];
+                $specLines[] = '  ' . $toolSpecs['update_todoist_task'];
+                $specLines[] = '  ' . $toolSpecs['delete_todoist_task'];
+            } elseif (isset($toolSpecs[$tool])) {
+                $specLines[] = '  ' . $toolSpecs[$tool];
+            }
+        }
+
+        $specs = !empty($specLines) ? "\n" . implode("\n", $specLines) : '';
+
+        return "\n\n[State: Tools active — {$toolList}. DO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. Output ONLY one tool call from the list below, exactly as shown, with real values replacing the placeholders:]{$specs}";
     }
 }

@@ -54,43 +54,43 @@ trait RegistersUploadedFiles
         if ($agent) {
             if ($fileType === 'image') {
                 $base64 = base64_encode(file_get_contents($dest));
-                $systemInstruction = "Generate a natural, clear title for this image file that would make it easy to find later if searched for. Do not include markdown, explanations, or introductory text.";
+                $systemInstruction = "Give a short descriptive title for what this image shows. Prioritize: document or image type, what it is about, who issued it, and when. Do not describe colors, layout, or visual properties. Output only the title, nothing else.";
 
                 $messages = [
                     ['role' => 'system', 'content' => $systemInstruction],
                     [
                         'role' => 'user',
                         'content' => [
-                            ['type' => 'text', 'text' => 'What is in this image? Provide a clear title/description.'],
+                            ['type' => 'text', 'text' => 'What keywords describe this image?'],
                             ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
                         ]
                     ]
                 ];
                 try {
-                    $generatedTitle = trim($agent->chat($messages, false, null, 0.3));
+                    $generatedTitle = $agent->chat($messages, false, null, 0.3);
                 } catch (\Throwable $e) {
-                    $generatedTitle = 'Image: ' . basename($originalName);
+                    $generatedTitle = 'image, ' . pathinfo($originalName, PATHINFO_FILENAME);
                 }
             } else {
                 if ($extractedText !== null && trim($extractedText) !== '') {
                     $snippet = mb_substr($extractedText, 0, 1000);
-                    $systemInstruction = "If you were to name this file based on this snippet, what would the most natural, clear title be? Generate a single descriptive sentence summarizing exactly what this document is (e.g., 'this document is a resume of x profession with x years of experience'). Do not include markdown, explanations, or introductory text.";
+                    $systemInstruction = "Give a short descriptive title for this document. Prioritize: document type, who wrote or issued it, what it is about, and when. Do not list keywords or describe formatting. Output only the title, nothing else.";
 
                     $messages = [
                         ['role' => 'system', 'content' => $systemInstruction],
                         ['role' => 'user', 'content' => $snippet]
                     ];
                     try {
-                        $generatedTitle = trim($agent->chat($messages, false, null, 0.3));
+                        $generatedTitle = $agent->chat($messages, false, null, 0.3);
                     } catch (\Throwable $e) {
-                        $generatedTitle = 'Document: ' . basename($originalName);
+                        $generatedTitle = 'document, ' . pathinfo($originalName, PATHINFO_FILENAME);
                     }
                 } else {
-                    $generatedTitle = 'Document: ' . basename($originalName);
+                    $generatedTitle = 'document, ' . pathinfo($originalName, PATHINFO_FILENAME);
                 }
             }
         } else {
-            $generatedTitle = ($fileType === 'image' ? 'Image: ' : 'Document: ') . basename($originalName);
+            $generatedTitle = ($fileType === 'image' ? 'image, ' : 'document, ') . pathinfo($originalName, PATHINFO_FILENAME);
         }
 
         $fileData = [

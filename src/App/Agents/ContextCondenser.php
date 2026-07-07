@@ -21,11 +21,12 @@ class ContextCondenser
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
         $keepLimit = $manual ? 2 : (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
-        if (count($history) <= $keepLimit) {
+        $cutoffIndex = $this->findCutoffIndex($history, $keepLimit);
+        if ($cutoffIndex === -1) {
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
 
-        $archive = array_slice($history, 0, -$keepLimit);
+        $archive = array_slice($history, 0, $cutoffIndex);
 
         $archiveText = "";
         foreach ($archive as $msg) {
@@ -65,11 +66,12 @@ class ContextCondenser
         $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
         
         $keepLimit = $manual ? 2 : (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
-        if (count($history) <= $keepLimit) {
+        $cutoffIndex = $this->findCutoffIndex($history, $keepLimit);
+        if ($cutoffIndex === -1) {
             return ['status' => 'error', 'message' => 'Conversation is too short to condense.'];
         }
 
-        $archive = array_slice($history, 0, -$keepLimit);
+        $archive = array_slice($history, 0, $cutoffIndex);
         $archiveIds = array_column($archive, 'id');
         $oldestId = min($archiveIds);
         
@@ -79,8 +81,9 @@ class ContextCondenser
 
         try {
             $db->update('chat_history', [
-                'role' => 'system',
+                'role' => 'assistant',
                 'message' => $formattedSummary,
+                'message_type' => 'condensation_summary',
                 'image_path' => null,
                 'token_estimate' => (int)(mb_strlen($formattedSummary) / 4),
                 'search_query' => null,
@@ -126,6 +129,20 @@ class ContextCondenser
         ];
     }
 
+    private function findCutoffIndex(array $history, int $keepLimit): int
+    {
+        $uaCount = 0;
+        for ($i = count($history) - 1; $i >= 0; $i--) {
+            $role = $history[$i]['role'] ?? '';
+            if ($role === 'user' || $role === 'assistant') {
+                $uaCount++;
+                if ($uaCount >= $keepLimit) {
+                    return $i;
+                }
+            }
+        }
+        return -1;
+    }
     
     public function condense(array $scrapedPages, string $userPrompt): string
     {

@@ -1,7 +1,6 @@
 import { state } from './state.js';
 import { streamResponse } from './streamer/streamResponse.js';
 import { removeFile } from './fileHandler.js';
-import { parseTagsFromText, renderTagBadges } from './chat/chatTagInput.js';
 
 export async function handleChatSubmit(e) {
     e.preventDefault();
@@ -11,13 +10,11 @@ export async function handleChatSubmit(e) {
     const fileInput = document.getElementById("fileInput");
     const chatWindow = document.getElementById("chatWindow");
     
-    const message = (typeof window.getComposedQuery === 'function' ? window.getComposedQuery() : inputField.value).trim();
+    const message = inputField.value.trim();
     const file = state.selectedFile || (fileInput ? fileInput.files[0] : null) || state.pastedImageFile;
     const hasReferences = window.selectedFileReferences && window.selectedFileReferences.length > 0;
     
     if (!message && !file && !state.pastedImageFile && !hasReferences) return;
-
-    inputField.value = message;
 
     const emptyState = document.getElementById("empty-state");
     if (emptyState) emptyState.remove();
@@ -70,9 +67,6 @@ export async function handleChatSubmit(e) {
     inputField.value = "";
     inputField.style.height = "";
     removeFile();
-    if (typeof window.clearActiveTags === 'function') {
-        window.clearActiveTags();
-    }
 
     const tplUser = document.getElementById("tpl-user-message");
     const userNode = tplUser.content.cloneNode(true);
@@ -85,18 +79,10 @@ export async function handleChatSubmit(e) {
     if (message.startsWith("[TRIGGER_BRIEFING_PIPELINE]")) {
         displayMessage = "Please generate my unified daily briefing.";
     }
-
-    const { tags: displayTags, query: plainQuery } = parseTagsFromText(displayMessage);
-    const tagBadgesHtml = renderTagBadges(displayTags);
-
+    
     userBubble.setAttribute("data-raw", displayMessage);
-
-    let renderedUserMsg = '';
-    if (tagBadgesHtml) {
-        renderedUserMsg = tagBadgesHtml;
-        if (plainQuery) renderedUserMsg += ' ';
-    }
-    renderedUserMsg += plainQuery
+    
+    let renderedUserMsg = displayMessage
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

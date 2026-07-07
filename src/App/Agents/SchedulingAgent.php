@@ -4,7 +4,6 @@ namespace App\Agents;
 
 use App\AgentManager;
 use App\JsonParser;
-use App\Utils\CurrentDateUtil;
 
 class SchedulingAgent
 {
@@ -17,27 +16,22 @@ class SchedulingAgent
 
     public function analyzeTask(string $content, string $dueString, array $existingTasks): array
     {
-        $currentDate = CurrentDateUtil::getCurrentDate();
-        $currentTime = CurrentDateUtil::getCurrentTime();
+        $currentDate = date('l, F j, Y (H:i)');
         $existingTasksStr = "";
         foreach ($existingTasks as $t) {
             $tDue = isset($t['due']['datetime']) ? $t['due']['datetime'] : (isset($t['due']['date']) ? $t['due']['date'] : 'No due date');
             $existingTasksStr .= "- \"" . $t['content'] . "\" (Due: " . $tDue . ")\n";
         }
 
-        $systemPrompt = "You are a precise calendar conflict resolver.\n";
-        $systemPrompt .= "Check if scheduling a task duplicates or overlaps with existing tasks.\n";
-        $systemPrompt .= "Evaluate semantically (e.g. haircut matches barbershop at same time).\n\n";
-        $systemPrompt .= "Respond ONLY in this format:\n";
-        $systemPrompt .= "{\n  \"status\": \"clear\",\n  \"analysis\": \"Brief explanation of overlap.\"\n}";
-
-        $userMessage = "Today is {$currentDate}. The current time is {$currentTime}.\n\n";
-        $userMessage .= "New task: \"" . $content . "\" on \"" . $dueString . "\"\n\n";
-        $userMessage .= "Existing tasks:\n" . $existingTasksStr . "\n";
+        $analysisPrompt = "You are a precise calendar conflict resolver. Today is " . $currentDate . ".\n";
+        $analysisPrompt .= "Check if scheduling \"" . $content . "\" on \"" . $dueString . "\" duplicates or overlaps with existing tasks.\n";
+        $analysisPrompt .= "Evaluate semantically (e.g. haircut matches barbershop at same time).\n\n";
+        $analysisPrompt .= "Existing tasks:\n" . $existingTasksStr . "\n\n";
+        $analysisPrompt .= "Respond ONLY in this format:\n";
+        $analysisPrompt .= "{\n  \"status\": \"clear\",\n  \"analysis\": \"Brief explanation of overlap.\"\n}";
 
         $messages = [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $userMessage]
+            ['role' => 'system', 'content' => $analysisPrompt]
         ];
 
         $rawResponse = $this->agent->chat($messages, false);
@@ -46,9 +40,8 @@ class SchedulingAgent
 
     public function extractBriefingSuggestions(array $emails, array $existingTasks): array
     {
-        $currentDate = CurrentDateUtil::getCurrentDate();
-        $currentTime = CurrentDateUtil::getCurrentTime();
-        $tomorrowDate = CurrentDateUtil::getTomorrowDate();
+        $currentDate = date('l, F j, Y (H:i)');
+        $tomorrowDate = date('l, F j, Y', strtotime('+1 day'));
         
         $emailsStr = "";
         foreach ($emails as $email) {
@@ -62,21 +55,18 @@ class SchedulingAgent
             $existingTasksStr .= "- \"" . $t['content'] . "\" (Due: " . $tDue . ")\n";
         }
 
-        $systemPrompt = "You are an expert task extraction sub-agent.\n";
-        $systemPrompt .= "Scan emails ONLY for valid future personal commitments, pickups, reservations, meetings, or critical to-dos.\n";
-        $systemPrompt .= "STRICTLY IGNORE: promotional offers, marketing spam, newsletters, advertisements, shipping updates, receipts, or automated alerts.\n";
-        $systemPrompt .= "Skip duplicates present on the calendar.\n\n";
-        $systemPrompt .= "Return ONLY a JSON array of suggestions:\n";
-        $systemPrompt .= "[\n  {\n    \"content\": \"Brief title (e.g., Ebi 7 Reservation)\",\n    \"due_string\": \"Relative time (e.g. tomorrow at 11:30am)\"\n  }\n]\n";
-        $systemPrompt .= "If none, return `[]`.";
-
-        $userMessage = "Today is {$currentDate}. The current time is {$currentTime}. (Tomorrow is {$tomorrowDate}).\n\n";
-        $userMessage .= "Emails:\n" . $emailsStr . "\n";
-        $userMessage .= "Calendar:\n" . $existingTasksStr . "\n";
+        $briefingExtractorPrompt = "You are an expert task extraction sub-agent. Today is " . $currentDate . " (Tomorrow is " . $tomorrowDate . ").\n";
+        $briefingExtractorPrompt .= "Scan these emails ONLY for valid future personal commitments, pickups, reservations, meetings, or critical to-dos.\n";
+        $briefingExtractorPrompt .= "STRICTLY IGNORE: promotional offers, marketing spam, newsletters, advertisements, shipping updates, receipts, or automated alerts.\n";
+        $briefingExtractorPrompt .= "Skip duplicates present on the calendar.\n\n";
+        $briefingExtractorPrompt .= "Emails:\n" . $emailsStr . "\n";
+        $briefingExtractorPrompt .= "Calendar:\n" . $existingTasksStr . "\n\n";
+        $briefingExtractorPrompt .= "Return ONLY a JSON array of suggestions:\n";
+        $briefingExtractorPrompt .= "[\n  {\n    \"content\": \"Brief title (e.g., Ebi 7 Reservation)\",\n    \"due_string\": \"Concrete natural-language due date (e.g. tomorrow at 11:30am, Friday at 2pm). If the email implies urgency but no specific time, use your best judgment to pick a reasonable one — never use 'ASAP' or vague placeholders.\"\n  }\n]\n";
+        $briefingExtractorPrompt .= "If none, return `[]`.";
 
         $messages = [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $userMessage]
+            ['role' => 'system', 'content' => $briefingExtractorPrompt]
         ];
 
         $rawResponse = $this->agent->chat($messages, false);

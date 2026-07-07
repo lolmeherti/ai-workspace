@@ -19,8 +19,12 @@ class CreateTodoistTaskTool
     {
 
                 
-                $content = $toolData['content'] ?? '';
-                $dueString = $toolData['due_string'] ?? null;
+                $content = $toolData['content'] ?? $toolData['query'] ?? '';
+                $dueString = $toolData['due_string'] ?? $toolData['due_date'] ?? null;
+
+                if (!empty($dueString) && preg_match('/^(?:asap|whenever|no\s+rush|when\s+possible)$/i', trim($dueString))) {
+                    $dueString = 'today';
+                }
 
                 if (empty($content)) {
                     throw new \Exception("Task content is required.");

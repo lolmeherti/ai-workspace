@@ -29,7 +29,7 @@ class FileSearchAction extends BaseAction
         $cleanQuery = preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanQuery);
         $rawKeywords = array_filter(explode(' ', $cleanQuery));
 
-        $stopwords = ['of', 'for', 'the', 'and', 'to', 'in', 'my', 'your', 'with', 'on', 'at', 'by', 'an', 'is', 'it', 'or', 'as', 'list', 'search', 'words', 'example', 'keywords', 'comma', 'separated'];
+        $stopwords = ['a', 'i', 'of', 'for', 'the', 'and', 'to', 'in', 'my', 'your', 'with', 'on', 'at', 'by', 'an', 'is', 'it', 'or', 'as', 'be', 'we', 'he', 'me', 'us', 'if', 'so', 'no', 'go', 'do', 'up', 'am', 'pm', 'not', 'but', 'all', 'any', 'has', 'had', 'was', 'were', 'are', 'been', 'can', 'will', 'would', 'could', 'should', 'may', 'this', 'that', 'these', 'those', 'there', 'their', 'them', 'then', 'than', 'about', 'into', 'from', 'here', 'more', 'other', 'which', 'what', 'when', 'where', 'who', 'how', 'why', 'just', 'very', 'too', 'only', 'also', 'still', 'even', 'some', 'many', 'much', 'each', 'every', 'both', 'few', 'need', 'want', 'show', 'find', 'give', 'tell', 'please', 'like', 'look', 'make', 'made', 'use', 'used', 'using', 'see', 'know', 'think', 'work', 'take', 'come', 'say', 'mean', 'thing', 'things', 'stuff', 'way', 'file', 'files', 'now', 'get', 'got', 'really', 'again', 'always', 'never', 'back', 'down', 'off', 'out', 'over', 'new', 'old', 'first', 'last', 'next', 'same', 'own', 'well', 'still', 'already', 'yet', 'list', 'search', 'words', 'example', 'keywords', 'comma', 'separated'];
 
         $keywords = [];
         foreach ($rawKeywords as $word) {
