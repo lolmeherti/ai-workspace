@@ -19,6 +19,16 @@
     "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
   },
 
+  "gemma-4-26b-iq4nl-t1": {
+    "_comment": "Tier1: RTX 5090 (>= 32 GB VRAM) | Context Window: 160,000 tokens",
+    "name": "Gemma 4 26B IQ4_NL (unsloth) — Tier1 (≥32GB VRAM)",
+    "file": "gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
+    "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
+    "ctx_size": 160000,
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
+  },
+
   "gemma-4-26b-qat-t2": {
     "_comment": "Tier2: RTX 4090 / 3090 (24 GB to 31.9 GB VRAM) | Context Window: 60,000 tokens",
     "name": "Gemma 4 26B QAT — Tier2 (24-31GB VRAM)",
@@ -27,6 +37,16 @@
     "ctx_size": 60000,
     "mmproj_file": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
     "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf"
+  },
+
+  "gemma-4-26b-iq4nl-t2": {
+    "_comment": "Tier2: RTX 4090 / 3090 (24 GB to 31.9 GB VRAM) | Context Window: 60,000 tokens",
+    "name": "Gemma 4 26B IQ4_NL (unsloth) — Tier2 (24-31GB VRAM)",
+    "file": "gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
+    "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
+    "ctx_size": 60000,
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
   },
 
   "gemma-4-E4B-Q8-t3": {
@@ -39,6 +59,16 @@
     "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
   },
 
+  "gemma-4-E4B-iq4nl-t3": {
+    "_comment": "Tier3: RTX 4080 / 3060 16GB (16 GB to 23.9 GB VRAM) | Context Window: 65,000 tokens",
+    "name": "Gemma 4 E4B IQ4_NL (unsloth) — Tier3 (16-23GB VRAM)",
+    "file": "gemma-4-E4B-it-IQ4_NL.gguf",
+    "url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_NL.gguf",
+    "ctx_size": 65000,
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
+  },
+
   "gemma-4-E4B-Q4-t4": {
     "_comment": "Tier4: RTX 4070 / 3080 (12 GB to 15.9 GB VRAM) | Context Window: 50,000 tokens",
     "name": "Gemma 4 E4B Q4 — Tier4 (12-15GB VRAM)",
@@ -49,6 +79,16 @@
     "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
   },
 
+  "gemma-4-E4B-iq4nl-t4": {
+    "_comment": "Tier4: RTX 4070 / 3080 (12 GB to 15.9 GB VRAM) | Context Window: 50,000 tokens",
+    "name": "Gemma 4 E4B IQ4_NL (unsloth) — Tier4 (12-15GB VRAM)",
+    "file": "gemma-4-E4B-it-IQ4_NL.gguf",
+    "url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_NL.gguf",
+    "ctx_size": 50000,
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
+  },
+
   "gemma-4-E2B-Q4-t5": {
     "_comment": "Tier5: RTX 4060 / Laptops / CPU (<= 11.9 GB VRAM) | Context Window: 45,000 tokens",
     "name": "Gemma 4 E2B Q4 — Tier5 (<12GB VRAM)",
@@ -57,6 +97,16 @@
     "ctx_size": 45000,
     "mmproj_file": "mmproj-gemma-4-E2B-it-BF16.gguf",
     "mmproj_url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-BF16.gguf"
+  },
+
+  "gemma-4-E2B-iq4nl-t5": {
+    "_comment": "Tier5: RTX 4060 / Laptops / CPU (<= 11.9 GB VRAM) | Context Window: 45,000 tokens",
+    "name": "Gemma 4 E2B IQ4_NL (unsloth) — Tier5 (<12GB VRAM)",
+    "file": "gemma-4-E2B-it-IQ4_NL.gguf",
+    "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-IQ4_NL.gguf",
+    "ctx_size": 45000,
+    "mmproj_file": "mmproj-BF16.gguf",
+    "mmproj_url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf"
   },
   
   "qwen3-5-4b-t5": {
