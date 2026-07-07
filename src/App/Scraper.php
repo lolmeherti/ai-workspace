@@ -12,7 +12,7 @@ class Scraper
      * @param string $targetUrl The URL to scrape
      * @return string The cleaned, truncated text
      */
-    public static function fetchAndClean(string $targetUrl): string
+    public static function fetchAndClean(string $targetUrl, ?int $maxTokens = null): string
     {
         $flareHost = rtrim(getenv('FLARESOLVERR_HOST') ?: 'http://flaresolverr:8191', '/');
         $endpoint = $flareHost . '/v1';
@@ -45,13 +45,13 @@ class Scraper
 
         $html = $data['solution']['response'];
 
-        return self::cleanAndTruncate($html);
+        return self::cleanAndTruncate($html, $maxTokens);
     }
 
     /**
      * Surgically removes layout tags, strips HTML, and enforces the token limit.
      */
-    private static function cleanAndTruncate(string $html): string
+    private static function cleanAndTruncate(string $html, ?int $maxTokens = null): string
     {
         if (empty(trim($html))) {
             return "";
@@ -90,7 +90,7 @@ class Scraper
         $text = preg_replace('/\s+/', ' ', $text);
         $text = trim($text);
 
-        $maxTokens = (int)(getenv('MAX_SCRAPE_TOKENS') ?: 2500);
+        $maxTokens = $maxTokens ?? (int)(getenv('MAX_SCRAPE_TOKENS') ?: 2500);
         $maxCharacters = $maxTokens * 4;
 
         if (mb_strlen($text) > $maxCharacters) {
