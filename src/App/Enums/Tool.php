@@ -4,8 +4,8 @@ namespace App\Enums;
 
 enum Tool: string
 {
+    case SEARCH_WEB = 'search_web';
     case SEARCH_FILES = 'search_files';
-    case WEB_SEARCH = 'web_search';
     case CREATE_TODOIST_TASK = 'create_todoist_task';
     case GET_TODOIST_TASKS = 'get_todoist_tasks';
     case DELETE_TODOIST_TASK = 'delete_todoist_task';

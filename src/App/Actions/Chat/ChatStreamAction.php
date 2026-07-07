@@ -4,8 +4,6 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\ChatManager;
-use App\Agents\SemanticCacheEvaluator;
-use App\Agents\ContextCondenser;
 
 class ChatStreamAction extends BaseAction
 {
@@ -33,14 +31,10 @@ class ChatStreamAction extends BaseAction
         echo ":{$pad}\n\n";
         @flush();
 
-        $cacheEvaluator = new SemanticCacheEvaluator($this->agentManager);
-        $contextCondenser = new ContextCondenser($this->agentManager);
-
         $chatManager = new ChatManager(
             $this->db,
             $this->agentManager,
-            $cacheEvaluator,
-            $contextCondenser
+            $this->memoryExtractor
         );
 
         $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile, function ($event, $data) {

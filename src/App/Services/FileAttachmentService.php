@@ -71,7 +71,7 @@ class FileAttachmentService
         if ($fileType === 'image') {
             $base64 = base64_encode(file_get_contents($dest));
             $systemInstruction = <<<TEXT
-Generate a natural, clear title for this image file that would make it easy to find later if searched for. Do not include markdown, explanations, or introductory text.
+Give a short descriptive title for what this image shows. Prioritize: document or image type, what it is about, who issued it, and when. Do not describe colors, layout, or visual properties. Output only the title, nothing else.
 TEXT;
 
             $imageMessages = [
@@ -82,21 +82,21 @@ TEXT;
                 [
                     'role' => 'user',
                     'content' => [
-                        ['type' => 'text', 'text' => 'What is in this image? Provide a clear title/description.'],
+                        ['type' => 'text', 'text' => 'What keywords describe this image?'],
                         ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
                     ]
                 ]
             ];
             try {
-                $generatedTitle = trim($this->agent->chat($imageMessages, false, null, 0.3));
+                $generatedTitle = $this->agent->chat($imageMessages, false, null, 0.3);
             } catch (\Throwable $e) {
-                $generatedTitle = 'Image: ' . basename($imageFile['name']);
+                $generatedTitle = 'image, ' . pathinfo($imageFile['name'], PATHINFO_FILENAME);
             }
         } else {
             if ($extractedText !== null && trim($extractedText) !== '') {
                 $snippet = mb_substr($extractedText, 0, 1000);
                 $systemInstruction = <<<TEXT
-If you were to name this file based on this snippet, what would the most natural, clear title be? Generate a single descriptive sentence summarizing exactly what this document is (e.g., 'this document is a resume of x profession with x years of experience'). Do not include markdown, explanations, or introductory text.
+Give a short descriptive title for this document. Prioritize: document type, who wrote or issued it, what it is about, and when. Do not list keywords or describe formatting. Output only the title, nothing else.
 TEXT;
 
                 $docMessages = [
@@ -110,12 +110,12 @@ TEXT;
                     ]
                 ];
                 try {
-                    $generatedTitle = trim($this->agent->chat($docMessages, false, null, 0.3));
+                    $generatedTitle = $this->agent->chat($docMessages, false, null, 0.3);
                 } catch (\Throwable $e) {
-                    $generatedTitle = 'Document: ' . basename($imageFile['name']);
+                    $generatedTitle = 'document, ' . pathinfo($imageFile['name'], PATHINFO_FILENAME);
                 }
             } else {
-                $generatedTitle = 'Document: ' . basename($imageFile['name']);
+                $generatedTitle = 'document, ' . pathinfo($imageFile['name'], PATHINFO_FILENAME);
             }
         }
 

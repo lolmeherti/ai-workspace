@@ -41,7 +41,6 @@ class Schema
                 search_query VARCHAR(255) NULL,
                 cache_used TINYINT(1) DEFAULT 0,
                 scraped_urls TEXT NULL,
-                execution_trace JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
                     FOREIGN KEY (session_id)
@@ -132,22 +131,6 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'tool_name'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN tool_name VARCHAR(100) NULL AFTER message_type");
-            }
-        } catch (PDOException $e) {
-        }
-
-        try {
-            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'tags'");
-            if (empty($columns)) {
-                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN tags JSON NULL AFTER tool_name");
-            }
-        } catch (PDOException $e) {
-        }
-
-        try {
-            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'execution_trace'");
-            if (empty($columns)) {
-                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN execution_trace JSON NULL AFTER scraped_urls");
             }
         } catch (PDOException $e) {
         }

@@ -20,18 +20,15 @@ class AgentManager
     {
         $endpoint = $this->apiUrl . '/chat/completions';
         $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
-        
+
         $payload = [
             'model' => $this->modelName,
             'messages' => $messages,
-            'stream' => $stream,
+            'stream' => true,
+            'stream_options' => ['include_usage' => true],
             'temperature' => $finalTemperature,
-            'cache_prompt' => true
+            'max_tokens' => 4096,
         ];
-
-        if ($stream) {
-            $payload['stream_options'] = ['include_usage' => true];
-        }
 
         $ch = curl_init($endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -39,7 +36,7 @@ class AgentManager
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
-            'Accept: ' . ($stream ? 'text/event-stream' : 'application/json')
+            'Accept: text/event-stream'
         ]);
 
         curl_setopt($ch, CURLOPT_TIMEOUT, 600);
@@ -47,56 +44,41 @@ class AgentManager
         $fullResponse = '';
         $lastUsage = null;
 
-        if ($stream) {
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage) {
-                $lines = explode("\n", $data);
-                
-                foreach ($lines as $line) {
-                    $line = trim($line);
-                    
-                    if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
-                        $json = json_decode(substr($line, 6), true);
-                        
-                        if (isset($json['usage'])) {
-                            $lastUsage = $json['usage'];
-                        }
-                        
-                        if (isset($json['choices'][0]['delta']['reasoning_content'])) {
-                            $chunk = $json['choices'][0]['delta']['reasoning_content'];
-                            if ($streamCallback !== null) {
-                                $streamCallback($chunk, 'reasoning');
-                            }
-                        }
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, $stream) {
+            $lines = explode("\n", $data);
 
-                        if (isset($json['choices'][0]['delta']['content'])) {
-                            $chunk = $json['choices'][0]['delta']['content'];
-                            $fullResponse .= $chunk;
+            foreach ($lines as $line) {
+                $line = trim($line);
 
-                            if ($streamCallback !== null) {
-                                $streamCallback($chunk, 'content');
-                            }
+                if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
+                    $json = json_decode(substr($line, 6), true);
+
+                    if (isset($json['usage'])) {
+                        $lastUsage = $json['usage'];
+                    }
+
+                    if (isset($json['choices'][0]['delta']['reasoning_content'])) {
+                        $chunk = $json['choices'][0]['delta']['reasoning_content'];
+                        if ($stream && $streamCallback !== null) {
+                            $streamCallback($chunk, 'reasoning');
+                        }
+                        // Never accumulate reasoning into fullResponse
+                    }
+
+                    if (isset($json['choices'][0]['delta']['content'])) {
+                        $chunk = $json['choices'][0]['delta']['content'];
+                        $fullResponse .= $chunk;
+
+                        if ($stream && $streamCallback !== null) {
+                            $streamCallback($chunk, 'content');
                         }
                     }
                 }
-                return strlen($data);
-            });
-            
-            $result = curl_exec($ch);
-        } else {
-            $result = curl_exec($ch);
-            
-            if ($result !== false) {
-                $json = json_decode($result, true);
-                if (isset($json['error'])) {
-                    \App\Logger::error("LLM API returned an error", ['response' => $json['error']]);
-                    throw new Exception("LLM API Error: " . json_encode($json['error']));
-                }
-                $fullResponse = $json['choices'][0]['message']['content'] ?? '';
-                if (isset($json['usage'])) {
-                    $lastUsage = $json['usage'];
-                }
             }
-        }
+            return strlen($data);
+        });
+
+        $result = curl_exec($ch);
 
         if ($result === false) {
             $error = curl_error($ch);
@@ -106,8 +88,11 @@ class AgentManager
         }
 
         curl_close($ch);
-        
+
         $this->lastUsage = $lastUsage;
-        return $fullResponse;
+
+        // Strip thinking tags that leaked into the content stream.
+        // With --reasoning-format removed, reasoning_content is separate — this is a safety no-op.
+        return \App\ThoughtExtractor::strip($fullResponse);
     }
 }

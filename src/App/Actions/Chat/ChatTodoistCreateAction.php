@@ -18,6 +18,10 @@ class ChatTodoistCreateAction extends BaseAction
         $dueString = $_GET['due_string'] ?? '';
         $bypass = ($_GET['bypass'] ?? '0') === '1';
 
+        if (!empty($dueString) && preg_match('/^(?:asap|whenever|no\s+rush|when\s+possible)$/i', trim($dueString))) {
+            $dueString = 'today';
+        }
+
         if (empty($content)) {
             $this->jsonResponse(['status' => 'error', 'message' => 'Missing task content.'], 400);
             return;

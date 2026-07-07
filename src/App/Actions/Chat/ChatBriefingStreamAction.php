@@ -4,7 +4,6 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\Agents\SchedulingAgent;
-use App\Utils\CurrentDateUtil;
 
 class ChatBriefingStreamAction extends BaseAction
 {
@@ -128,34 +127,26 @@ class ChatBriefingStreamAction extends BaseAction
                     ['role' => 'user', 'content' => $prompt]
                 ];
 
-                $summary = "";
-                $this->agentManager->chat($messages, true, function ($token) use (&$summary) {
-                    $summary .= $token;
-                });
+                // Use non-streaming return value — AgentManager strips thinking centrally
+                $summary = $this->agentManager->chat($messages, false);
 
-                $summary = trim($summary);
+                $emit('data_fetching', ['tool' => 'email_summarize', 'status' => 'success', 'label' => "Chunk {$chunkNum}/{$totalChunks} summary", 'payload' => $summary]);
+                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: summarized (" . mb_strlen($summary) . " chars)", 'color' => 'emerald']);
 
-                $cleanSummary = preg_replace('/<\|channel>thought.*?<channel\|>/s', '', $summary);
-                $cleanSummary = preg_replace('/<think>.*?<\/think>/s', '', $cleanSummary);
-                $cleanSummary = trim($cleanSummary);
-
-                $emit('data_fetching', ['tool' => 'email_summarize', 'status' => 'success', 'label' => "Chunk {$chunkNum}/{$totalChunks} summary", 'payload' => $cleanSummary]);
-                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: summarized (" . mb_strlen($cleanSummary) . " chars)", 'color' => 'emerald']);
-
-                \App\Logger::info("Briefing chunk {$chunkNum}/{$totalChunks}: " . mb_strlen($cleanSummary) . ' chars (raw: ' . mb_strlen($summary) . ')');
+                \App\Logger::info("Briefing chunk {$chunkNum}/{$totalChunks}: " . mb_strlen($summary) . ' chars');
 
                 if ($this->db) {
                     $this->db->insert('chat_history', [
                         'session_id'    => $sessionId,
                         'role'          => 'system',
-                        'message'       => $cleanSummary,
+                        'message'       => $summary,
                         'message_type'  => 'data_fetching',
                         'tool_name'     => 'email_summarize',
-                        'token_estimate' => (int)(mb_strlen($cleanSummary) / 4)
+                        'token_estimate' => (int)(mb_strlen($summary) / 4)
                     ]);
                 }
 
-                $emailSummaries[] = $cleanSummary;
+                $emailSummaries[] = $summary;
             }
             $emit('tool_done', ['tool' => 'email_summarize', 'label' => 'Email summaries complete.']);
         }
@@ -270,7 +261,7 @@ class ChatBriefingStreamAction extends BaseAction
 
         $finalSystem = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the summaries provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n"
                      . "TEMPORAL AWARENESS FOR DAILY BRIEFINGS:\n"
-                     . "Today's date is " . CurrentDateUtil::getCurrentDate() . ".\n"
+                     . "Today's exact system date and current time is " . date('l, F j, Y (H:i)') . ".\n"
                      . "When summarizing emails, calendar tasks, or updates during your daily briefing:\n"
                      . "1. Always compare any mentioned appointment or event times against the current clock.\n"
                      . "2. If an event or appointment was scheduled for today but its slot has already passed, do not present it as an upcoming task under 'Upcoming Schedule' or 'This Week'.\n"
@@ -291,16 +282,9 @@ class ChatBriefingStreamAction extends BaseAction
 
         $finalBriefingText = $this->agentManager->chat($finalMessages, false);
 
-        $thought = '';
-        $content = $finalBriefingText;
-
-        if (preg_match('/<\|channel>thought(.*?)(?:<channel\|>|$)/s', $finalBriefingText, $matches)) {
-            $thought = trim($matches[1]);
-            $content = trim(preg_replace('/<\|channel>thought.*?<channel\|>/s', '', $finalBriefingText));
-        } elseif (preg_match('/<think>(.*?)(?:<\/think>|$)/s', $finalBriefingText, $matches)) {
-            $thought = trim($matches[1]);
-            $content = trim(preg_replace('/<think>.*?<\/think>/s', '', $finalBriefingText));
-        }
+        $extracted = \App\ThoughtExtractor::extract($finalBriefingText);
+        $thought = $extracted['thought'];
+        $content = $extracted['content'];
 
         if (!empty($thought)) {
             $emit('reasoning', ['chunk' => $thought]);

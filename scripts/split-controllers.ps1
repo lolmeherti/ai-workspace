@@ -158,6 +158,7 @@ $chatUses = @(
     "App\Enums\Action",
     "App\Enums\ApiAction",
     "App\Enums\Tab",
+    "App\Agents\SearchDecider",
     "App\Agents\SemanticCacheEvaluator",
     "App\Agents\ContextCondenser",
     "App\Agents\MemorySelector",

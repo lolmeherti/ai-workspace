@@ -21,6 +21,8 @@ class SemanticCacheEvaluator
             return null;
         }
 
+        $currentDate = date('l, F j, Y g:i A');
+        
         $slicedLedger = array_slice($ledger, -5, null, true);
         $ledgerText = "";
         foreach ($slicedLedger as $index => $item) {
@@ -30,6 +32,8 @@ class SemanticCacheEvaluator
         }
 
         $systemPrompt = <<<TEXT
+Today is {$currentDate}.
+
 You are a strict Cache Verification Agent. Your job is to analyze if any existing cached context in the Ledger contains the exact, highly specific data required to answer the New Query.
 
 Decision Guidelines:
