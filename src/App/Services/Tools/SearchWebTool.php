@@ -40,10 +40,12 @@ class SearchWebTool
             return "Web search for '{$searchQuery}' returned no results.";
         }
 
+        $perUrlTokens = $this->calculateScrapeBudget($messages, count($scrapedUrls));
+
         $scrapedPages = [];
         foreach ($scrapedUrls as $url) {
             $emit('scraping_start', ['url' => $url]);
-            $pageText = Scraper::fetchAndClean($url);
+            $pageText = Scraper::fetchAndClean($url, $perUrlTokens);
             $emit('scraping_done', ['url' => $url]);
             if (!empty(trim($pageText))) {
                 $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
@@ -65,5 +67,27 @@ class SearchWebTool
         }
 
         return $condensedContext ?: "Web search for '{$searchQuery}' completed but produced no useful summary.";
+    }
+
+    private function calculateScrapeBudget(array $messages, int $urlCount): int
+    {
+        $ctxSize = (int) Config::get('LLM_CTX_SIZE', 32768);
+
+        $consumed = 0;
+        foreach ($messages as $msg) {
+            $consumed += (int)(mb_strlen($msg['content'] ?? '') / 4);
+        }
+
+        // Reserve: response buffer (4096) + condenser overhead (1024) = 5120
+        $remaining = $ctxSize - $consumed - 5120;
+        if ($remaining < 10000) {
+            return 2500;
+        }
+
+        // Condenser compresses ~4:1 — give it raw budget proportional to remaining room
+        $rawBudget = $remaining * 4;
+        $perUrl = (int)($rawBudget / $urlCount);
+
+        return max(2500, min(15000, $perUrl));
     }
 }

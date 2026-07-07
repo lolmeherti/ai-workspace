@@ -226,19 +226,26 @@ TEXT;
         ];
 
         $specLines = [];
+        $resolvedTools = [];
         foreach ($activeTools as $tool) {
             if ($tool === 'calendar') {
+                $resolvedTools[] = 'get_todoist_tasks';
+                $resolvedTools[] = 'create_todoist_task';
+                $resolvedTools[] = 'update_todoist_task';
+                $resolvedTools[] = 'delete_todoist_task';
                 $specLines[] = '  ' . $toolSpecs['get_todoist_tasks'];
                 $specLines[] = '  ' . $toolSpecs['create_todoist_task'];
                 $specLines[] = '  ' . $toolSpecs['update_todoist_task'];
                 $specLines[] = '  ' . $toolSpecs['delete_todoist_task'];
             } elseif (isset($toolSpecs[$tool])) {
+                $resolvedTools[] = $tool;
                 $specLines[] = '  ' . $toolSpecs[$tool];
             }
         }
 
+        $resolvedList = implode(', ', $resolvedTools);
         $specs = !empty($specLines) ? "\n" . implode("\n", $specLines) : '';
 
-        return "\n\n[State: Tools active — {$toolList}. DO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. Output ONLY one tool call from the list below, exactly as shown, with real values replacing the placeholders:]{$specs}";
+        return "\n\n[State: Tools active — {$resolvedList}. DO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. Output ONLY one tool call from the list below, exactly as shown, with real values replacing the placeholders:]{$specs}";
     }
 }
