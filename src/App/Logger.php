@@ -13,6 +13,12 @@ class Logger
     public const CRITICAL = 'CRITICAL';
 
     private static ?string $logFile = null;
+    private static ?Database $db = null;
+
+    public static function setDatabase(Database $db): void
+    {
+        self::$db = $db;
+    }
 
     private static function getLogFile(): string
     {
@@ -27,12 +33,42 @@ class Logger
         return self::$logFile;
     }
 
-    public static function log(string $level, string $message, array $context = [], ?Throwable $exception = null): void
+    public static function logEvent(string $eventType, string $message, array $context = [], string $level = 'info', ?string $source = null): void
+    {
+        $contextStr = !empty($context) ? ' | Context: ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
+        $fullMessage = $message . $contextStr;
+
+        if (self::$db !== null) {
+            try {
+                self::$db->insert('app_events', [
+                    'event_type' => $eventType,
+                    'message' => mb_substr($fullMessage, 0, 65535),
+                    'context' => !empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                    'level' => $level,
+                    'source' => $source,
+                ]);
+            } catch (Throwable $e) {
+                // DB write failed — fall through to file log only
+                $fullMessage .= "\n[Logger DB write failed: " . $e->getMessage() . ']';
+            }
+        }
+
+        // Always write to file log as backup
+        self::writeFile($level, $fullMessage);
+    }
+
+    private static function writeFile(string $level, string $message): void
     {
         $timestamp = date('Y-m-d H:i:s');
+        $logEntry = "[{$timestamp}] [{$level}] {$message}\n" . str_repeat('-', 80) . "\n";
+        file_put_contents(self::getLogFile(), $logEntry, FILE_APPEND);
+    }
+
+    public static function log(string $level, string $message, array $context = [], ?Throwable $exception = null): void
+    {
         $contextStr = !empty($context) ? ' | Context: ' . json_encode($context) : '';
         
-        $logEntry = "[{$timestamp}] [{$level}] {$message}{$contextStr}";
+        $logEntry = "[{$level}] {$message}{$contextStr}";
 
         if ($exception !== null) {
             $logEntry .= "\nException: " . $exception->getMessage() . "\nStack Trace:\n" . $exception->getTraceAsString();
@@ -40,9 +76,26 @@ class Logger
             $logEntry .= "\nStack Trace:\n" . (new Exception())->getTraceAsString();
         }
 
-        $logEntry .= "\n" . str_repeat('-', 80) . "\n";
+        // DB event (auto-derived event_type from level)
+        $dbContext = $context;
+        if ($exception !== null) {
+            $dbContext['exception'] = $exception->getMessage();
+            $dbContext['trace'] = $exception->getTraceAsString();
+        } elseif ($level === self::ERROR || $level === self::CRITICAL) {
+            $dbContext['trace'] = (new Exception())->getTraceAsString();
+        }
 
-        file_put_contents(self::getLogFile(), $logEntry, FILE_APPEND);
+        self::logEvent(
+            strtolower($level),
+            $message,
+            $dbContext,
+            strtolower($level)
+        );
+
+        // File log (existing behavior preserved)
+        $timestamp = date('Y-m-d H:i:s');
+        $fileEntry = "[{$timestamp}] {$logEntry}\n" . str_repeat('-', 80) . "\n";
+        file_put_contents(self::getLogFile(), $fileEntry, FILE_APPEND);
     }
 
     public static function info(string $message, array $context = []): void

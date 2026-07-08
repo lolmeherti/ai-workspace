@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Database;
 use App\AgentManager;
+use App\Agents\SemanticCacheEvaluator;
 use App\Enums\Tool;
 use App\Services\Tools\TodoistApiClient;
 use App\Services\Tools\SearchFilesTool;
@@ -48,7 +49,7 @@ class ToolExecutionService
         $this->todoist = new TodoistApiClient();
 
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
-        $this->searchWebTool = new SearchWebTool($db, $agent, $uploadDir, $this->todoist);
+        $this->searchWebTool = new SearchWebTool($db, $agent, $uploadDir, $this->todoist, new SemanticCacheEvaluator($agent));
         $this->createTodoistTaskTool = new CreateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
@@ -59,31 +60,45 @@ class ToolExecutionService
 
     public function parseAndExecuteToolLines(string $response, int $sessionId, array $messages, callable $emit): array
     {
-        $results = [];
-        $toolName = $this->matchToolName($response);
+        $matches = $this->matchAllToolNames($response);
 
-        if ($toolName === null) {
+        if (empty($matches)) {
             \App\Logger::info("parseAndExecuteToolLines: no tool name match in response", [
                 'response' => $response
             ]);
-            return $results;
+            return [];
         }
 
-        $params = $this->extractParams($toolName, $response);
+        $toolNames = array_column($matches, 'name');
+        \App\Logger::logEvent('tool_name_matched', 'matchAllToolNames matched: ' . implode(', ', $toolNames), [
+            'session_id' => $sessionId,
+            'tool_names' => $toolNames,
+            'response_preview' => mb_substr($response, 0, 200),
+        ], 'info', 'ToolExecutionService::parseAndExecuteToolLines');
 
-        // Calendar expansion
-        $toolsToCall = $toolName === 'calendar'
-            ? ['get_todoist_tasks', 'create_todoist_task', 'update_todoist_task', 'delete_todoist_task']
-            : [$toolName];
+        $results = [];
+        for ($i = 0; $i < count($matches); $i++) {
+            $toolName = $matches[$i]['name'];
+            $start = $matches[$i]['pos'];
+            $end = ($i + 1 < count($matches)) ? $matches[$i + 1]['pos'] : strlen($response);
+            $segment = substr($response, $start, $end - $start);
 
-        foreach ($toolsToCall as $singleTool) {
-            $toolData = array_merge(['tool' => $singleTool], $params);
+            $params = $this->extractParams($toolName, $segment);
 
-            $emit('tool_start', ['tool' => $singleTool, 'label' => "Executing {$singleTool}..."]);
+            // Calendar expansion
+            $toolsToCall = $toolName === 'calendar'
+                ? ['get_todoist_tasks', 'create_todoist_task', 'update_todoist_task', 'delete_todoist_task']
+                : [$toolName];
 
-            $result = $this->executeTool($singleTool, $toolData, $sessionId, $messages, $emit);
-            if (!empty($result)) {
-                $results[] = ['tool' => $singleTool, 'result' => $result];
+            foreach ($toolsToCall as $singleTool) {
+                $toolData = array_merge(['tool' => $singleTool], $params);
+
+                $emit('tool_start', ['tool' => $singleTool, 'label' => "Executing {$singleTool}..."]);
+
+                $result = $this->executeTool($singleTool, $toolData, $sessionId, $messages, $emit);
+                if (!empty($result)) {
+                    $results[] = ['tool' => $singleTool, 'result' => $result];
+                }
             }
         }
 
@@ -95,18 +110,62 @@ class ToolExecutionService
         $toolNames = array_map(fn($t) => $t->value, Tool::cases());
         usort($toolNames, fn($a, $b) => strlen($b) <=> strlen($a));
 
+        $bestPos = PHP_INT_MAX;
+        $bestName = null;
+
         foreach ($toolNames as $name) {
             $len = strlen($name);
-            if (strlen($response) < $len) continue;
-            if (substr($response, 0, $len) !== $name) continue;
+            $pos = 0;
+            while (($pos = strpos($response, $name, $pos)) !== false) {
+                if ($pos >= $bestPos) break;
 
-            $next = substr($response, $len, 1);
-            if ($next === ' ' || $next === '(' || $next === ':' || $next === '' || $next === "\n") {
-                return $name;
+                $nextPos = $pos + $len;
+                $next = ($nextPos < strlen($response)) ? $response[$nextPos] : '';
+                if ($next === ' ' || $next === '(' || $next === ':' || $next === '' || $next === "\n") {
+                    $bestPos = $pos;
+                    $bestName = $name;
+                    break;
+                }
+                $pos++;
             }
         }
 
-        return null;
+        return $bestName;
+    }
+
+    private function matchAllToolNames(string $response): array
+    {
+        $toolNames = array_map(fn($t) => $t->value, Tool::cases());
+        usort($toolNames, fn($a, $b) => strlen($b) <=> strlen($a));
+
+        $matches = [];
+        foreach ($toolNames as $name) {
+            $len = strlen($name);
+            $pos = 0;
+            while (($pos = strpos($response, $name, $pos)) !== false) {
+                $nextPos = $pos + $len;
+                $next = ($nextPos < strlen($response)) ? $response[$nextPos] : '';
+                if ($next === ' ' || $next === '(' || $next === ':' || $next === '' || $next === "\n") {
+                    $matches[] = ['name' => $name, 'pos' => $pos, 'len' => $len];
+                    $pos = $nextPos;
+                } else {
+                    $pos++;
+                }
+            }
+        }
+
+        usort($matches, fn($a, $b) => $a['pos'] <=> $b['pos']);
+
+        $seen = [];
+        $result = [];
+        foreach ($matches as $m) {
+            if (!isset($seen[$m['name']])) {
+                $seen[$m['name']] = true;
+                $result[] = $m;
+            }
+        }
+
+        return $result;
     }
 
     private function extractParams(string $toolName, string $response): array
@@ -158,17 +217,27 @@ class ToolExecutionService
     {
         $params = [];
 
-        for ($i = 0; $i < count($keys); $i++) {
-            $key = $keys[$i];
+        // Find first occurrence of each key, sort by position in the response.
+        // This fixes the reverse-order bug: if DUE_STRING appears before QUERY,
+        // we process DUE_STRING first and use QUERY's position as the value boundary.
+        $positions = [];
+        foreach ($keys as $key) {
             $pos = strpos($rest, $key);
-            if ($pos === false) continue;
+            if ($pos !== false) {
+                $positions[] = ['key' => $key, 'pos' => $pos, 'len' => strlen($key)];
+            }
+        }
+        usort($positions, fn($a, $b) => $a['pos'] <=> $b['pos']);
 
-            $valueStart = $pos + strlen($key);
+        for ($i = 0; $i < count($positions); $i++) {
+            $key = $positions[$i]['key'];
+            $valueStart = $positions[$i]['pos'] + $positions[$i]['len'];
+
             $nextKeyPos = null;
-            for ($j = $i + 1; $j < count($keys); $j++) {
-                $nkPos = strpos($rest, $keys[$j], $valueStart);
-                if ($nkPos !== false && ($nextKeyPos === null || $nkPos < $nextKeyPos)) {
-                    $nextKeyPos = $nkPos;
+            for ($j = $i + 1; $j < count($positions); $j++) {
+                if ($positions[$j]['pos'] > $positions[$i]['pos']) {
+                    $nextKeyPos = $positions[$j]['pos'];
+                    break;
                 }
             }
 
@@ -208,6 +277,12 @@ class ToolExecutionService
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
             };
         } catch (\Throwable $e) {
+            \App\Logger::logEvent('tool_execution_failed', "Tool {$toolName} failed: " . $e->getMessage(), [
+                'tool_name' => $toolName,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 'error', 'ToolExecutionService::executeTool');
+
             return "System tool execution error: " . $e->getMessage();
         }
     }

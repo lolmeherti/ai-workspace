@@ -7,10 +7,14 @@ use App\AgentManager;
 use App\Agents\MemoryExtractor;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
+use App\Cache;
 use App\Config;
+use App\Scraper;
+use App\Search;
 use App\Services\FileAttachmentService;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
+use App\Services\Tools\SearchWebTool;
 
 class ChatManager
 {
@@ -85,6 +89,15 @@ class ChatManager
             $activeTools = array_filter(array_map('trim', explode(',', $activeToolsRaw)));
         }
         $isToolTurn = !empty($activeTools);
+        $pendingTools = $activeTools; // multi-tool: queue of tools left to execute
+
+        if ($isToolTurn) {
+            \App\Logger::logEvent('tool_turn_start', 'Tool turn initiated', [
+                'session_id' => $sessionId,
+                'active_tools' => $activeTools,
+                'query' => $query,
+            ], 'info', 'ChatManager::process');
+        }
 
         \App\Logger::info("isToolTurn check", [
             'raw' => $activeToolsRaw ?: 'EMPTY',
@@ -128,7 +141,8 @@ class ChatManager
         $usedCache = false;
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $activeTools);
+        $firstTool = $isToolTurn ? [$pendingTools[0]] : [];
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $firstTool);
 
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
@@ -138,6 +152,28 @@ class ChatManager
             'used_cache' => false
         ]);
 
+        // Handle cache_action resubmits from ask_user card
+        if ($cacheAction === 'use_cache' && !empty($cacheKeyToUse)) {
+            $cachedContent = Cache::get($cacheKeyToUse) ?? '';
+            if (!empty($cachedContent)) {
+                $currentMessages[] = [
+                    'role' => 'system',
+                    'content' => "[LIVE WEB SEARCH CONTEXT — CACHED]\n\n" . $cachedContent
+                ];
+                $usedCache = true;
+            }
+        } elseif ($cacheAction === 'force_live') {
+            if ($this->contextCondenserService !== null) {
+                $condensed = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService);
+                if (!empty($condensed) && !str_starts_with($condensed, 'Web search for')) {
+                    $currentMessages[] = [
+                        'role' => 'system',
+                        'content' => "[LIVE WEB SEARCH CONTEXT]\n\n" . $condensed
+                    ];
+                }
+            }
+        }
+
         $emit('generating', []);
 
         $executionCount = 0;
@@ -145,10 +181,17 @@ class ChatManager
         $finalResponse = '';
 
         while ($executionCount < $maxExecutions) {
-            if ($executionCount === 0 && $isToolTurn) {
+            if ($isToolTurn && !empty($pendingTools)) {
                 $emit('status', ['text' => 'Analyzing request...']);
 
                 $aiRawResponse = $this->agent->chat($currentMessages, false);
+
+                $responseLen = strlen($aiRawResponse);
+                \App\Logger::logEvent('tool_turn_first_pass', "Tool turn first pass complete: {$responseLen} chars", [
+                    'session_id' => $sessionId,
+                    'response_length' => $responseLen,
+                    'response_preview' => mb_substr($aiRawResponse, 0, 300),
+                ], 'info', 'ChatManager::process');
 
                 \App\Logger::info('tool-turn first pass response', [
                     'len' => strlen($aiRawResponse),
@@ -200,10 +243,19 @@ class ChatManager
             // Parse tool calls from response. On a tool turn, only the first
             // (non-streaming) response contains tool calls. Subsequent streaming
             // responses are the model's natural-language answer — don't re-scan.
-            $shouldParse = !$isToolTurn || $executionCount === 0;
+            $shouldParse = $isToolTurn && !empty($pendingTools);
             $toolResults = $shouldParse
                 ? $this->toolExecutionService->parseAndExecuteToolLines($aiRawResponse, $sessionId, $currentMessages, $emit)
                 : [];
+
+            if ($isToolTurn && $executionCount === 0 && empty($toolResults)) {
+                \App\Logger::logEvent('tool_name_missed', 'Tool turn: model response contained no parseable tool names', [
+                    'session_id' => $sessionId,
+                    'response_length' => strlen($aiRawResponse),
+                    'response_preview' => mb_substr($aiRawResponse, 0, 500),
+                    'response_first_50_chars' => mb_substr($aiRawResponse, 0, 50),
+                ], 'warn', 'ChatManager::process');
+            }
 
             \App\Logger::info('tool-turn parse result', [
                 'shouldParse' => $shouldParse,
@@ -212,6 +264,29 @@ class ChatManager
                 'responseLen' => strlen($aiRawResponse),
                 'responsePreview' => substr($aiRawResponse, 0, 200),
             ]);
+
+            // Check for ASK_USER sentinel from cache evaluator
+            $askUser = false;
+            foreach ($toolResults as $item) {
+                if (str_starts_with($item['result'], '__ASK_USER__')) {
+                    $askUser = true;
+                    break;
+                }
+            }
+            if ($askUser) {
+                // Frontend card is already shown via ask_user SSE event.
+                // Don't save tool results — let the user decide cache vs live.
+                $emit('done', [
+                    'message' => '',
+                    'title' => $updatedTitle,
+                    'session_id' => $sessionId
+                ]);
+                return [
+                    'status' => 'success',
+                    'message' => '',
+                    'meta' => ['ask_user' => true]
+                ];
+            }
 
             if (!empty($toolResults)) {
                 // Save the tool-call response
@@ -242,17 +317,27 @@ class ChatManager
                     ]);
                 }
 
-                $activeTools = [];
+                array_shift($pendingTools); // mark this tool complete
 
-                // Rebuild messages with tool results
+                // Rebuild messages with next pending tool (or empty for natural response)
+                $nextTools = !empty($pendingTools) ? [$pendingTools[0]] : [];
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $activeTools);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $nextTools);
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
 
                 $executionCount++;
-            } elseif ($isToolTurn && $executionCount === 0) {
-                // First pass found no tool call. Save the raw response and fall
-                // through to the streaming pass so the model can respond naturally.
+            } elseif ($isToolTurn && !empty($pendingTools)) {
+                // Tool call not matched. Save the raw response so the model
+                // can see what happened, move to next tool (or natural response).
+                array_shift($pendingTools);
+
+                \App\Logger::logEvent('tool_turn_no_match', 'Tool turn produced no parseable tool call', [
+                    'session_id' => $sessionId,
+                    'response_preview' => mb_substr($aiRawResponse, 0, 500),
+                    'response_length' => strlen($aiRawResponse),
+                    'pending_tools' => $pendingTools,
+                ], 'warn', 'ChatManager::process');
+
                 $this->db->insert('chat_history', [
                     'session_id' => $sessionId,
                     'role' => 'assistant',
@@ -260,12 +345,26 @@ class ChatManager
                     'message_type' => 'tool_call',
                     'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
                 ]);
+
+                $nextTools = !empty($pendingTools) ? [$pendingTools[0]] : [];
+                $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $nextTools);
+                $currentMessages = $this->cleanMessagesArray($currentMessages);
+
                 $executionCount++;
             } else {
                 // No tool calls — this is the final response
                 $finalResponse = $aiRawResponse;
                 break;
             }
+        }
+
+        if ($executionCount >= $maxExecutions) {
+            \App\Logger::logEvent('tool_loop_exhausted', "Tool execution loop hit max iterations ({$maxExecutions})", [
+                'session_id' => $sessionId,
+                'max_executions' => $maxExecutions,
+                'final_response_len' => strlen($finalResponse),
+            ], 'warn', 'ChatManager::process');
         }
 
         $cleanResponse = $finalResponse;
