@@ -19,18 +19,30 @@ class SearchMemoriesTool
 
     public function execute(array $params, int $sessionId, array $messages, callable $emit, string $originalJson): string
     {
-        $query = $params['query'] ?? '';
-        if (empty($query)) {
+        $rawQuery = $params['query'] ?? '';
+        if (empty($rawQuery)) {
             return "Error: Missing 'query' parameter for search_memories tool.";
         }
 
-        $selector = new MemorySelector($this->db);
-        $results = $selector->selectRelevantMemory($query);
+        $queries = SearchWebTool::splitQueries($rawQuery);
 
-        if (!$results) {
+        $allResults = [];
+        foreach ($queries as $q) {
+            $selector = new MemorySelector($this->db);
+            $results = $selector->selectRelevantMemory($q);
+            $allResults[] = $results ?: '';
+        }
+
+        $nonEmpty = array_filter($allResults);
+        if (empty($nonEmpty)) {
             return "No specific relevant memories found for this query in the long-term database.";
         }
 
-        return "Found the following relevant memories:\n\n" . $results;
+        if (count($queries) === 1) {
+            return "Found the following relevant memories:\n\n" . $allResults[0];
+        }
+
+        $combined = SearchWebTool::combineResults($queries, $allResults, 'Memory');
+        return "Found the following relevant memories:\n\n" . $combined;
     }
 }

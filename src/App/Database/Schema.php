@@ -134,6 +134,20 @@ class Schema
             }
         } catch (PDOException $e) {
         }
+
+        $this->db->executeStatement("
+            CREATE TABLE IF NOT EXISTS app_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                event_type VARCHAR(50) NOT NULL,
+                message TEXT NOT NULL,
+                context JSON NULL,
+                level ENUM('debug', 'info', 'warn', 'error') NOT NULL DEFAULT 'info',
+                source VARCHAR(100) NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_event_type (event_type),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
     }
 
     public function nukeAndRebuild(): void
@@ -145,6 +159,7 @@ class Schema
         $this->db->executeStatement("DROP TABLE IF EXISTS uploaded_files;");
         $this->db->executeStatement("DROP TABLE IF EXISTS email_accounts;");
         $this->db->executeStatement("DROP TABLE IF EXISTS email_cache;");
+        $this->db->executeStatement("DROP TABLE IF EXISTS app_events;");
         $this->db->executeStatement("SET FOREIGN_KEY_CHECKS = 1;");
 
         $this->initTables();

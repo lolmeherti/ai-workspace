@@ -130,6 +130,36 @@ Runs automatically when session token count exceeds ~15K tokens (~60K chars). Ex
 ### ContextCondenser (`src/App/Agents/ContextCondenser.php`)
 Triggers when session approaches ~12K tokens (80% of threshold). Slices off old messages, sends archive to LLM for summarization + fact extraction, replaces history with a single "SUMMARY OF PREVIOUS CONVERSATION" system message. Well-scoped and earns its call — keep this logic mostly as-is.
 
+## Tool-turn architecture
+
+The super abilities card system replaces SearchDecider. When the user clicks a card (web search, file search, calendar, etc.), the backend enters a tool turn — the LLM outputs a tool call, the PHP parser extracts it, executes the tool, and the model formulates a natural-language response from the results.
+
+**Multi-tool turns**: When the user selects multiple cards simultaneously, a `$pendingTools` queue drives the execution loop. Each tool gets its own non-streaming LLM call with a focused state guard showing only that one tool's spec. After execution, the tool is popped from the queue and messages are rebuilt with the next pending tool (or empty for natural response). Key invariants: one tool per LLM call, `parseAndExecuteToolLines` unchanged, `buildStateGuard` unchanged (single-tool arrays work as-is), calendar expansion still works per-pass, and the `$maxExecutions = 5` cap prevents infinite loops. On no-match, the failed tool is shifted and execution continues to the next tool.
+
+**Code dedup**: `splitQueries()` and `combineResults()` were duplicated across `SearchWebTool` and `SearchMemoriesTool`. Both now live as `public static` on `SearchWebTool`; `SearchMemoriesTool` delegates to `SearchWebTool::splitQueries()` and `SearchWebTool::combineResults()`.
+
+Key files: see skill `localsy-development` → `references/super-abilities-architecture.md` for the full pipeline, state guard, thought extraction, multi-tool implementation, and known pitfalls.
+
+Parser: `ToolExecutionService::matchToolName()` scans the ENTIRE thought-stripped response for Tool enum values (not just position 0). `extractColonParams()` processes KEY:VALUE pairs in occurrence order. 62 parser tests in `src/tests/ParserTest.php`.
+
+## Diagnostic event logging
+
+`app_events` MySQL table captures every pipeline decision point. `Logger::logEvent()` writes to both DB and file log. Events include LLM request/response timing, tool turn lifecycle, tool match/miss/failure, and loop exhaustion.
+
+Viewer at `/logs` (not linked from UI): event type counts, expandable samples, recent stream, manual Refresh + Clear.
+
+## Unit test suites
+
+~249 deterministic tests in `src/tests/`, no LLM calls. Uses PHP reflection to test private methods. Run: `docker exec ai_php_web php /var/www/html/tests/run.php`.
+
+| Suite | Tests | Coverage |
+|---|---|---|
+| ParserTest | 62 | matchToolName scan, extractParams colon + function-call formats |
+| MessageAssemblyTest | 50 | buildStateGuard, preprocessHistory, cleanMessagesArray |
+| ThoughtExtractionTest | 58 | strip(), extract(), tag detection methods |
+| MultiQueryTest | 27 | splitQueries edge cases, combineResults with Search/Memory prefixes |
+| SearchPipelineTest | ~52 | Phase A: scrape budget math. Phase B: scraper HTML cleaning + truncation. Phase C: cache evaluator routing (mock, sentinel, emit capture) |
+
 ## Coding conventions
 - PHP uses PSR-4 autoloading (`App\` -> `src/App/`)
 - JavaScript modules use `<script type="module">` with explicit src attributes

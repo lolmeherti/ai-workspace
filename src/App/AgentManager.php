@@ -30,6 +30,20 @@ class AgentManager
             'max_tokens' => 4096,
         ];
 
+        $msgCount = count($messages);
+        $estTokens = 0;
+        foreach ($messages as $m) {
+            $content = is_array($m['content'] ?? null) ? ($m['content'][0]['text'] ?? '') : ($m['content'] ?? '');
+            $estTokens += (int)(mb_strlen($content) / 4);
+        }
+
+        \App\Logger::logEvent('llm_request_start', "LLM request: {$msgCount} messages, ~{$estTokens} tokens", [
+            'message_count' => $msgCount,
+            'estimated_tokens' => $estTokens,
+            'stream' => $stream,
+            'temperature' => $finalTemperature,
+        ], 'info', 'AgentManager::chat');
+
         $ch = curl_init($endpoint);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -43,6 +57,7 @@ class AgentManager
 
         $fullResponse = '';
         $lastUsage = null;
+        $startTime = microtime(true);
 
         curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, $stream) {
             $lines = explode("\n", $data);
@@ -62,7 +77,6 @@ class AgentManager
                         if ($stream && $streamCallback !== null) {
                             $streamCallback($chunk, 'reasoning');
                         }
-                        // Never accumulate reasoning into fullResponse
                     }
 
                     if (isset($json['choices'][0]['delta']['content'])) {
@@ -79,10 +93,18 @@ class AgentManager
         });
 
         $result = curl_exec($ch);
+        $elapsed = round((microtime(true) - $startTime) * 1000);
 
         if ($result === false) {
             $error = curl_error($ch);
             curl_close($ch);
+
+            \App\Logger::logEvent('llm_connection_error', "LLM connection failed after {$elapsed}ms: {$error}", [
+                'error' => $error,
+                'elapsed_ms' => $elapsed,
+                'endpoint' => $endpoint,
+            ], 'error', 'AgentManager::chat');
+
             \App\Logger::critical("cURL Error connecting to LLM at {$endpoint}", ['error' => $error]);
             throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
         }
@@ -91,8 +113,21 @@ class AgentManager
 
         $this->lastUsage = $lastUsage;
 
-        // Strip thinking tags that leaked into the content stream.
-        // With --reasoning-format removed, reasoning_content is separate — this is a safety no-op.
+        $responseLen = strlen($fullResponse);
+        $level = $responseLen < 20 ? 'warn' : 'info';
+        \App\Logger::logEvent('llm_response_done', "LLM response: {$responseLen} chars in {$elapsed}ms", [
+            'response_length' => $responseLen,
+            'elapsed_ms' => $elapsed,
+            'tokens_used' => $lastUsage,
+        ], $level, 'AgentManager::chat');
+
+        if ($responseLen < 20 && $responseLen > 0) {
+            \App\Logger::logEvent('llm_partial_response', "LLM returned unusually short response ({$responseLen} chars)", [
+                'response_preview' => mb_substr($fullResponse, 0, 500),
+                'elapsed_ms' => $elapsed,
+            ], 'warn', 'AgentManager::chat');
+        }
+
         return \App\ThoughtExtractor::strip($fullResponse);
     }
 }

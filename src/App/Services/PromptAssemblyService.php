@@ -217,8 +217,8 @@ TEXT;
         // Per-tool parameter reference
         $toolSpecs = [
             'search_files'     => "search_files QUERY:<SEARCH_TERMS> — space-delimited keywords from the user's request. Include synonyms. Use QUERY: prefix, not query=",
-            'search_web'       => "search_web QUERY:<SEARCH_TERMS> — space-delimited search keywords. Use QUERY: prefix, not query=",
-            'search_memories'  => "search_memories QUERY:<SEARCH_TERMS> — space-delimited keywords with synonyms.",
+            'search_web'       => "search_web QUERY:<SEARCH_TERMS> — space-delimited keywords. For comparisons or multi-topic questions, use comma-separated queries (e.g. QUERY:iPhone 15 specs, Samsung Galaxy S24 specs). Each runs independently.",
+            'search_memories'  => "search_memories QUERY:<SEARCH_TERMS> — space-delimited keywords with synonyms. For multiple distinct topics, use comma-separated queries (e.g. QUERY:my IBAN, my home address). Each runs independently.",
             'get_todoist_tasks'     => 'get_todoist_tasks QUERY:<what to look for>',
             'create_todoist_task'   => 'create_todoist_task QUERY:<task description> DUE_STRING:<natural due date, e.g. "tomorrow at 9am" or "July 9 at 3pm". If the user provided no due date, use your best judgment to pick a reasonable one — never use "ASAP" or vague placeholders.>',
             'update_todoist_task'   => 'update_todoist_task QUERY:<which task to find> NEW_CONTENT:<updated description> NEW_DUE_STRING:<new due date>',

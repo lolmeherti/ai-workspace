@@ -46,6 +46,9 @@ try {
     }
 
     $db = $status->database ? new Database() : null;
+    if ($db !== null) {
+        \App\Logger::setDatabase($db);
+    }
     $agentManager = new AgentManager();
     $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
