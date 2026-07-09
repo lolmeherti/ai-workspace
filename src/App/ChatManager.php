@@ -146,8 +146,10 @@ class ChatManager
 
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
+        $contextMessageCount = count($currentMessages) - 1; 
+
         $emit('context_assembled', [
-            'message_count' => count($history),
+            'message_count' => $contextMessageCount,
             'has_search_context' => false,
             'used_cache' => false
         ]);
@@ -399,9 +401,13 @@ class ChatManager
         ]);
 
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-        $totalSessionTokens = 0;
-        foreach ($finalHistory as $row) {
-            $totalSessionTokens += (int)($row['token_estimate'] ?? 0);
+        if ($usage && isset($usage['prompt_tokens'])) {
+            $totalSessionTokens = (int)$usage['prompt_tokens'];
+        } else {
+            $totalSessionTokens = 0;
+            foreach ($finalHistory as $row) {
+                $totalSessionTokens += (int)($row['token_estimate'] ?? 0);
+            }
         }
 
         $emit('done', [
@@ -431,9 +437,15 @@ class ChatManager
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
-        if (count($history) > ($keepLimit * 2)) {
+
+        $filteredHistory = array_filter($history, function($row) {
+            $type = $row['message_type'] ?? '';
+            return $type !== 'tool_call' && $type !== 'super_abilities';
+        });
+
+        if (count($filteredHistory) > ($keepLimit * 2)) {
             $totalTokens = 0;
-            foreach ($history as $row) {
+            foreach ($filteredHistory as $row) {
                 $totalTokens += (int)($row['token_estimate'] ?? 0);
             }
 
@@ -448,7 +460,7 @@ class ChatManager
                 $emit('limit_warning', [
                     'total_tokens' => $totalTokens,
                     'max_tokens' => $maxTokens,
-                    'message_count' => count($history)
+                    'message_count' => count($filteredHistory)
                 ]);
                 return false;
             }
