@@ -344,6 +344,12 @@ class SearchPipelineTest
 
         // Cleanup test cache entry
         Cache::delete($cacheKey);
+
+        // Remove test entries from ledger so they don't pollute the Web tab
+        $ledger = Cache::getSearchLedger();
+        $testKeys = ['ctx_dummy_hermes_test', $cacheKey];
+        $cleanLedger = array_filter($ledger, fn($item) => !in_array($item['cache_key'], $testKeys, true));
+        Cache::set('search_ledger', json_encode(array_values($cleanLedger)), 604800);
     }
 
     // ==================================================================

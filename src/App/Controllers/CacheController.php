@@ -34,6 +34,8 @@ class CacheController extends BaseController
 
         if ($action === Action::DELETE_QUERY) {
             $this->deleteQuery($sessionId);
+        } elseif ($action === Action::DELETE_MULTIPLE_QUERIES) {
+            $this->deleteMultipleQueries($sessionId);
         }
     }
 
@@ -88,6 +90,25 @@ class CacheController extends BaseController
             $filteredLedger = array_filter($ledger, fn($item) => $item['cache_key'] !== $cacheKey);
             Cache::set('search_ledger', json_encode(array_values($filteredLedger)), 604800);
             Cache::delete($cacheKey);
+        }
+        $this->redirect($this->buildUrl($sessionId, Tab::QUERIES));
+    }
+
+    private function deleteMultipleQueries(int $sessionId): void
+    {
+        if (!$this->status->redis) {
+            $this->redirect($this->buildUrl($sessionId, Tab::QUERIES));
+            return;
+        }
+
+        $selectedKeys = $_POST['selected_queries'] ?? [];
+        if (!empty($selectedKeys) && is_array($selectedKeys)) {
+            $ledger = Cache::getSearchLedger();
+            $filteredLedger = array_filter($ledger, fn($item) => !in_array($item['cache_key'], $selectedKeys, true));
+            Cache::set('search_ledger', json_encode(array_values($filteredLedger)), 604800);
+            foreach ($selectedKeys as $key) {
+                Cache::delete($key);
+            }
         }
         $this->redirect($this->buildUrl($sessionId, Tab::QUERIES));
     }

@@ -18,6 +18,8 @@ class SearchFilesTool
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
                 $toolQuery = $toolData['query'] ?? '';
+                \App\ProgressWriter::write($sessionId, 'search_querying', "Searching files for: {$toolQuery}", 'slate');
+
                 $cleanQuery = str_replace([',', ';', '/', '-', '_'], ' ', $toolQuery);
                 $cleanQuery = preg_replace('/[^\\p{L}\\p{N}\\s]/u', '', $cleanQuery);
                 $rawKeywords = array_filter(explode(' ', $cleanQuery));
@@ -58,8 +60,10 @@ class SearchFilesTool
                 $resultsTxt = "System search completed for '{$toolQuery}'. Matches found on disk:\n";
 
                 if (empty($matchingFiles)) {
+                    \App\ProgressWriter::write($sessionId, 'search_no_results', "No files found matching: {$toolQuery}", 'rose');
                     $resultsTxt .= "- No matching files found.\n";
                 } else {
+                    \App\ProgressWriter::write($sessionId, 'search_done', count($matchingFiles) . ' files found.', 'emerald');
                     if (count($matchingFiles) >= 1) {
                         $emit('file_choices', [
                             'query' => $toolQuery,

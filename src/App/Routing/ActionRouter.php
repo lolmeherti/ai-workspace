@@ -79,6 +79,7 @@ class ActionRouter
                         break;
 
                     case Action::DELETE_QUERY:
+                    case Action::DELETE_MULTIPLE_QUERIES:
                         $controller = new CacheController($this->status);
                         break;
 

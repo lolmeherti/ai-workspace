@@ -98,7 +98,7 @@ TEXT;
     /**
      * @param array $activeTools
      */
-    public function buildMessagesArray(string $systemPrompt, array $history, array $activeTools = [], string $condensedContext = '', bool $usedCache = false): array
+    public function buildMessagesArray(string $systemPrompt, array $history, array $activeTools = [], string $condensedContext = '', bool $usedCache = false, string $currentQuery = ''): array
     {
         $history = $this->preprocessHistory($history);
 
@@ -179,7 +179,7 @@ TEXT;
         }
 
         // Append state guard to the last user message
-        $stateGuard = $this->buildStateGuard($activeTools);
+        $stateGuard = $this->buildStateGuard($activeTools, $currentQuery);
 
         // Append web search context if provided
         if (!empty($condensedContext)) {
@@ -206,11 +206,15 @@ TEXT;
         return $messages;
     }
 
-    private function buildStateGuard(array $activeTools): string
+    private function buildStateGuard(array $activeTools, string $currentQuery = ''): string
     {
         if (empty($activeTools)) {
             return "\n\n[State: No tools active. The user has not enabled any tools. If the user asks for actions beyond text generation, say super_abilities.]";
         }
+
+        $queryHint = !empty($currentQuery)
+            ? "\nThe user's current request is: \"{$currentQuery}\""
+            : '';
 
         $toolList = implode(', ', $activeTools);
 
@@ -246,6 +250,13 @@ TEXT;
         $resolvedList = implode(', ', $resolvedTools);
         $specs = !empty($specLines) ? "\n" . implode("\n", $specLines) : '';
 
-        return "\n\n[State: Tools active — {$resolvedList}. DO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. Output ONLY one tool call from the list below, exactly as shown, with real values replacing the placeholders:]{$specs}";
+        $toolCount = count($activeTools);
+        if ($toolCount > 1) {
+            $callInstruction = "Output all relevant tool calls from the list below, one per line. For calendar tools, pick the ONE that matches the user's intent. Replace placeholders with real values:";
+        } else {
+            $callInstruction = "Output ONLY one tool call from the list below, using keywords from the current request. Replace placeholders with real values:";
+        }
+
+        return "\n\n[State: Tools active — {$resolvedList}.{$queryHint}\nDO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. {$callInstruction}]{$specs}";
     }
 }

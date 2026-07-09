@@ -35,20 +35,20 @@ class SearchWebTool
             return '[Web Search: No query provided.]';
         }
 
-        // Comma-separated → multiple independent searches
         $queries = self::splitQueries($rawQuery);
         $isSingleQuery = count($queries) === 1;
         $searchQuery = $queries[0];
 
-        // Cache check — only for single queries (ASK_USER makes no sense for multi-query)
         if ($isSingleQuery) {
             $ledger = Cache::getSearchLedger();
             if ($this->cacheEvaluator !== null && !empty($ledger)) {
+                \App\ProgressWriter::write($sessionId, 'cache_check', 'Checking semantic cache...', 'slate');
                 $evaluation = $this->cacheEvaluator->evaluate($searchQuery, $ledger);
                 if ($evaluation !== null) {
                     if ($evaluation['decision'] === 'AUTO_USE') {
                         $cachedContent = Cache::get($evaluation['cache_key']) ?? '';
                         if (!empty($cachedContent)) {
+                            \App\ProgressWriter::write($sessionId, 'cache_hit', 'Memory cache matched — serving cached results', 'amber');
                             $emit('cache_used', []);
                             return $cachedContent;
                         }
@@ -65,10 +65,13 @@ class SearchWebTool
             }
         }
 
-        // Run searches — per-query for multi, single pass for single
         $results = [];
-        foreach ($queries as $q) {
-            $results[] = $this->doLiveSearch($q, $messages, $emit);
+        $totalQueries = count($queries);
+        foreach ($queries as $i => $q) {
+            if ($totalQueries > 1) {
+                \App\ProgressWriter::write($sessionId, 'search_querying', "Search {$i}/{$totalQueries}: {$q}", 'slate');
+            }
+            $results[] = $this->doLiveSearch($q, $messages, $emit, $sessionId);
         }
 
         if ($isSingleQuery) {
@@ -79,18 +82,20 @@ class SearchWebTool
         return self::combineResults($queries, $results, 'Search');
     }
 
-    private function doLiveSearch(string $searchQuery, array $messages, callable $emit): string
+    private function doLiveSearch(string $searchQuery, array $messages, callable $emit, int $sessionId): string
     {
-        return self::liveSearch($searchQuery, $messages, $emit, $this->contextCondenser);
+        return self::liveSearch($searchQuery, $messages, $emit, $this->contextCondenser, $sessionId);
     }
 
-    public static function liveSearch(string $searchQuery, array $messages, callable $emit, ContextCondenser $condenser): string
+    public static function liveSearch(string $searchQuery, array $messages, callable $emit, ContextCondenser $condenser, int $sessionId = 0): string
     {
+        \App\ProgressWriter::write($sessionId, 'search_querying', "Querying search engine for: {$searchQuery}", 'slate');
+
         $limit = (int) Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
         $scrapedUrls = Search::query($searchQuery, $limit);
 
         if (empty($scrapedUrls)) {
-            $emit('search_no_results', ['query' => $searchQuery]);
+            \App\ProgressWriter::write($sessionId, 'search_no_results', "No results for: {$searchQuery}", 'rose');
             return "Web search for '{$searchQuery}' returned no results.";
         }
 
@@ -98,20 +103,21 @@ class SearchWebTool
 
         $scrapedPages = [];
         foreach ($scrapedUrls as $url) {
-            $emit('scraping_start', ['url' => $url]);
+            $shortUrl = strlen($url) > 60 ? substr($url, 0, 57) . '...' : $url;
+            \App\ProgressWriter::write($sessionId, 'scraping_start', "Scraping {$shortUrl}", 'slate');
             $pageText = Scraper::fetchAndClean($url, $perUrlTokens);
-            $emit('scraping_done', ['url' => $url]);
+            \App\ProgressWriter::write($sessionId, 'scraping_done', "Scraped {$shortUrl}", 'emerald');
             if (!empty(trim($pageText))) {
                 $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
             }
         }
 
         if (empty($scrapedPages)) {
-            $emit('search_no_results', ['query' => $searchQuery]);
+            \App\ProgressWriter::write($sessionId, 'search_no_results', "No usable content for: {$searchQuery}", 'rose');
             return "Web search for '{$searchQuery}' returned no usable content.";
         }
 
-        $emit('condensing', []);
+        \App\ProgressWriter::write($sessionId, 'condensing', 'Condensing search results...', 'slate');
         $condensedContext = $condenser->condense($scrapedPages, $searchQuery);
 
         if (!empty($condensedContext)) {

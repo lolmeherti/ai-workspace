@@ -92,8 +92,9 @@ class ToolExecutionService
 
             foreach ($toolsToCall as $singleTool) {
                 $toolData = array_merge(['tool' => $singleTool], $params);
+                $queryLabel = !empty($toolData['query']) ? ": {$toolData['query']}" : '';
 
-                $emit('tool_start', ['tool' => $singleTool, 'label' => "Executing {$singleTool}..."]);
+                \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$singleTool}{$queryLabel}", 'slate');
 
                 $result = $this->executeTool($singleTool, $toolData, $sessionId, $messages, $emit);
                 if (!empty($result)) {
