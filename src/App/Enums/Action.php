@@ -14,6 +14,7 @@ enum Action: string
     case DELETE_MULTIPLE_SESSIONS = 'delete_multiple_sessions';
     case UPDATE_MEMORY = 'update_memory';
     case DELETE_QUERY = 'delete_query';
+    case DELETE_MULTIPLE_QUERIES = 'delete_multiple_queries';
     case CLEAR_ALL = 'clear_all';
     case DELETE_FILES = 'delete_files';
     case ADD_EMAIL_ACCOUNT = 'add_email_account';

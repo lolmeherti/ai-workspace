@@ -25,9 +25,13 @@ class SearchMemoriesTool
         }
 
         $queries = SearchWebTool::splitQueries($rawQuery);
+        $totalQueries = count($queries);
 
         $allResults = [];
-        foreach ($queries as $q) {
+        foreach ($queries as $i => $q) {
+            if ($totalQueries > 1) {
+                \App\ProgressWriter::write($sessionId, 'search_querying', "Search {$i}/{$totalQueries}: {$q}", 'slate');
+            }
             $selector = new MemorySelector($this->db);
             $results = $selector->selectRelevantMemory($q);
             $allResults[] = $results ?: '';
@@ -35,8 +39,11 @@ class SearchMemoriesTool
 
         $nonEmpty = array_filter($allResults);
         if (empty($nonEmpty)) {
+            \App\ProgressWriter::write($sessionId, 'search_no_results', "No memories found for: {$rawQuery}", 'rose');
             return "No specific relevant memories found for this query in the long-term database.";
         }
+
+        \App\ProgressWriter::write($sessionId, 'search_done', 'Memories retrieved.', 'emerald');
 
         if (count($queries) === 1) {
             return "Found the following relevant memories:\n\n" . $allResults[0];

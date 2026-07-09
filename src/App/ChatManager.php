@@ -62,6 +62,16 @@ class ChatManager
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?string $activeEditFile = null, ?callable $streamCallback = null): array
     {
+        \App\ProgressWriter::init('/tmp');
+
+        // Sentinel — confirms progress directory is writable
+        if (\App\ProgressWriter::isReady()) {
+            @unlink('/tmp/progress/' . $sessionId . '.jsonl');
+            \App\ProgressWriter::write($sessionId, 'ready', 'Progress pipeline active', 'emerald');
+        } else {
+            error_log('ProgressWriter: directory not writable — /tmp/progress');
+        }
+
         $emit = function(string $event, array $data = []) use ($streamCallback) {
             if ($streamCallback !== null) {
                 $streamCallback($event, $data);
@@ -106,10 +116,10 @@ class ChatManager
             'post_keys' => array_keys($_POST),
         ]);
 
-        // Silent emit for tool turns — suppress trace noise, only pass tokens + done
+        // Silent emit for tool turns — suppress trace noise, only pass core stream events
         $silentEmit = function(string $event, array $data = []) use ($emit, $isToolTurn) {
             if ($isToolTurn) {
-                if (!in_array($event, ['token', 'reasoning', 'thought_complete', 'generating', 'done', 'super_abilities_requested', 'file_choices', 'tool_start', 'tool_done', 'status'])) {
+                if (!in_array($event, ['token', 'reasoning', 'thought_complete', 'generating', 'done', 'super_abilities_requested', 'file_choices', 'status', 'ask_user'])) {
                     return;
                 }
             }
@@ -134,15 +144,15 @@ class ChatManager
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
-        if (empty($cacheAction) && empty($history)) {
+        if (empty($cacheAction) && count($history) === 1) {
             $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
         }
 
         $usedCache = false;
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
-        $firstTool = $isToolTurn ? [$pendingTools[0]] : [];
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $firstTool);
+        $firstTool = $isToolTurn ? $activeTools : [];
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $firstTool, '', false, $query);
 
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
@@ -166,7 +176,7 @@ class ChatManager
             }
         } elseif ($cacheAction === 'force_live') {
             if ($this->contextCondenserService !== null) {
-                $condensed = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService);
+                $condensed = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService, $sessionId);
                 if (!empty($condensed) && !str_starts_with($condensed, 'Web search for')) {
                     $currentMessages[] = [
                         'role' => 'system',
@@ -300,14 +310,11 @@ class ChatManager
                     'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
                 ]);
 
-                // Emit tool_done + save each tool result
+                // tool_done + save each tool result
                 foreach ($toolResults as $item) {
                     $tn = $item['tool'];
 
-                    $emit('tool_done', [
-                        'tool' => $tn,
-                        'label' => "{$tn} completed."
-                    ]);
+                    \App\ProgressWriter::write($sessionId, 'tool_done', "{$tn} completed.", 'emerald');
 
                     $this->db->insert('chat_history', [
                         'session_id' => $sessionId,
@@ -319,19 +326,16 @@ class ChatManager
                     ]);
                 }
 
-                array_shift($pendingTools); // mark this tool complete
-
-                // Rebuild messages with next pending tool (or empty for natural response)
-                $nextTools = !empty($pendingTools) ? [$pendingTools[0]] : [];
+                // All tools executed — rebuild for natural streaming response
+                $pendingTools = [];
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $nextTools);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, [], '', false, $query);
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
 
                 $executionCount++;
             } elseif ($isToolTurn && !empty($pendingTools)) {
-                // Tool call not matched. Save the raw response so the model
-                // can see what happened, move to next tool (or natural response).
-                array_shift($pendingTools);
+                // Tool call not matched. Clear queue, go to streaming.
+                $pendingTools = [];
 
                 \App\Logger::logEvent('tool_turn_no_match', 'Tool turn produced no parseable tool call', [
                     'session_id' => $sessionId,
@@ -348,9 +352,8 @@ class ChatManager
                     'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
                 ]);
 
-                $nextTools = !empty($pendingTools) ? [$pendingTools[0]] : [];
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, $nextTools);
+                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, [], '', false, $query);
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
 
                 $executionCount++;
@@ -416,6 +419,8 @@ class ChatManager
             'total_session_tokens' => $totalSessionTokens,
             'session_id' => $sessionId
         ]);
+
+        \App\ProgressWriter::done($sessionId);
 
         return [
             'status' => 'success',
@@ -483,7 +488,7 @@ class ChatManager
 
     private function autoGenerateTitle(int $sessionId, string $query, array $history, callable $emit): ?string
     {
-        if (!empty($history)) return null;
+        if (count($history) !== 1) return null;
 
         $systemPrompt = "Generate a short, descriptive title (max 6 words) for a conversation that starts with this message. Output ONLY the title, no quotes, no other text.";
         $messages = [

@@ -735,6 +735,8 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
     const textContainer = aiBubble.querySelector('.streaming-text-container');
     if (!textContainer) return;
 
+    const sessionId = formData.get('session_id');
+
     state.isGenerating = true;
     let markdownBuffer = textContainer.getAttribute('data-prior-text') || '';
     let isFirstEvent = true;
@@ -745,6 +747,85 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
             cardElement.remove();
         }
     };
+
+    // --- Trace accordion ---
+    let traceAccordion = aiBubble.querySelector('.trace-accordion');
+    if (!traceAccordion) {
+        const traceHtml = `
+            <details class="trace-accordion group mb-3 w-full rounded-xl border border-emerald-500/15 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.04),inset_0_1px_0_rgba(16,185,129,0.03)] transition-all duration-300" open>
+                <summary class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200 rounded-t-xl">
+                    <span class="flex items-center gap-2 text-[0.7rem] text-emerald-400/80 font-semibold tracking-wider uppercase">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <span class="trace-label">Execution Trace</span>
+                        <span class="flex h-1.5 w-1.5 relative trace-pulse-dot">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.8)]"></span>
+                        </span>
+                        <span class="trace-step-counter text-emerald-500/60"></span>
+                    </span>
+                    <svg class="w-3.5 h-3.5 text-emerald-500/50 transition-transform duration-300 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </summary>
+                <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
+                    <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono"></div>
+                </div>
+            </details>`;
+        textContainer.insertAdjacentHTML('beforebegin', traceHtml);
+        traceAccordion = aiBubble.querySelector('.trace-accordion');
+    } else {
+        traceAccordion.open = true;
+    }
+
+    const traceContent = traceAccordion.querySelector('.trace-content');
+    let traceStepCount = 0;
+    const traceStepCounter = traceAccordion.querySelector('.trace-step-counter');
+    const tracePulseDot = traceAccordion.querySelector('.trace-pulse-dot');
+
+    function addTraceEntry(label, color = 'slate') {
+        const colors = {
+            cyan:   { text: 'text-cyan-400',   accent: 'bg-cyan-500/50' },
+            blue:   { text: 'text-blue-400',   accent: 'bg-blue-500/50' },
+            amber:  { text: 'text-amber-400',  accent: 'bg-amber-500/50' },
+            emerald:{ text: 'text-emerald-400',accent: 'bg-emerald-500/50' },
+            indigo: { text: 'text-indigo-400', accent: 'bg-indigo-500/50' },
+            rose:   { text: 'text-rose-400',   accent: 'bg-rose-500/50' },
+            slate:  { text: 'text-slate-300',  accent: 'bg-slate-500/40' },
+        };
+        const c = colors[color] || colors.slate;
+
+        const row = document.createElement('div');
+        row.className = `flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150`;
+        row.innerHTML = `<span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span><span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u25b8 ${label}</span>`;
+        traceContent.appendChild(row);
+
+        traceStepCount++;
+        if (traceStepCounter) traceStepCounter.textContent = `${traceStepCount} step${traceStepCount !== 1 ? 's' : ''}`;
+    }
+
+    // --- Progress endpoint ---
+    let progressSource = null;
+    let progressEventCount = 0;
+    if (sessionId && sessionId !== '0') {
+        addTraceEntry(`Progress session: ${sessionId}`, 'slate');
+        progressSource = new EventSource('/progress.php?session=' + sessionId);
+        progressSource.addEventListener('message', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                progressEventCount++;
+                if (data.event === 'done') {
+                    progressSource.close();
+                    if (tracePulseDot) tracePulseDot.classList.add('hidden');
+                    return;
+                }
+                if (data.event === 'ready' || data.event === 'tool_start') return;
+                addTraceEntry(data.label, data.color || 'slate');
+            } catch (_) {}
+        });
+        progressSource.onerror = () => {
+            progressSource.close();
+        };
+    } else {
+        addTraceEntry("No session ID — progress unavailable", 'rose');
+    }
 
     try {
         const response = await fetch('index.php', {
@@ -783,29 +864,6 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
 
                         if (event === 'status') {
                             removeSpinner();
-                            let statusEl = textContainer.querySelector('#sa-tool-status');
-                            if (!statusEl) {
-                                statusEl = document.createElement('span');
-                                statusEl.className = 'text-xs text-slate-500 italic';
-                                statusEl.id = 'sa-tool-status';
-                                textContainer.appendChild(statusEl);
-                            }
-                            statusEl.textContent = data.text || 'Working...';
-                            const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
-                        }
-
-                        if (event === 'tool_start') {
-                            removeSpinner();
-                            const statusEl = document.createElement('span');
-                            statusEl.className = 'text-xs text-slate-500 italic';
-                            statusEl.id = 'sa-tool-status';
-                            statusEl.textContent = data.label || 'Working...';
-                            const existing = textContainer.querySelector('#sa-tool-status');
-                            if (existing) existing.remove();
-                            textContainer.appendChild(statusEl);
-                            const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
 
                         if (event === 'token') {
@@ -819,7 +877,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                                 htmlContent = window.parseInlineFiles(htmlContent);
                             }
 
-                            const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
+                            const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u25cd</span>';
                             textContainer.innerHTML = htmlContent + cursorHtml;
                             textContainer.querySelectorAll('pre code').forEach((block) => {
                                 hljs.highlightElement(block);
@@ -846,12 +904,26 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                             renderFileChoices(data, fcContainer, chatWindow);
                         }
 
+                        if (event === 'context_assembled') {
+                            let ctxParts = [];
+                            if (data.has_search_context) {
+                                ctxParts.push(data.used_cache ? 'cached web results' : 'fresh web results');
+                            }
+                            const memoryNote = data.message_count > 0
+                                ? `${data.message_count} prior messages`
+                                : 'new conversation';
+                            ctxParts.push(memoryNote);
+                            addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
+                        }
+
+                        if (event === 'generating') {
+                            removeSpinner();
+                        }
+
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
 
-                            // If no tokens were streamed (non-streaming first pass),
-                            // render the full response from the done payload.
                             if (!markdownBuffer && data.message) {
                                 let htmlContent = marked.parse(data.message);
                                 htmlContent = cleanAssistantStreamText(htmlContent);
@@ -871,6 +943,8 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                                 });
                             }
 
+                            traceAccordion.open = false;
+                            if (tracePulseDot) tracePulseDot.classList.add('hidden');
                             const chatWindow = document.getElementById('chatWindow');
                             if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
                         }
@@ -884,6 +958,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
         console.error("Stream Error:", error);
     } finally {
         state.isGenerating = false;
+        if (progressSource) progressSource.close();
         const lockOverlay = document.getElementById('editor-lock-overlay');
         if (lockOverlay) {
             lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
