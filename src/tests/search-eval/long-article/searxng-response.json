@@ -1,0 +1,1174 @@
+{
+    "query": "Stack Overflow 2024 Developer Survey AI tool usage findings",
+    "results": [
+        {
+            "template": "default.html",
+            "title": "AI | 2024 Stack Overflow Developer Survey",
+            "content": "Sentiment and usage → 3. 2. Developer tools → 3. 3. Efficacy and Ethics → 3. 1 Sentiment and usage AI tools in the development process 76% of all respondents are using or are planning to use AI tools in their development process this year, an increase from last year (70%). Many more developers are currently using AI tools this year, too ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                1,
+                1
+            ],
+            "score": 4,
+            "category": "general",
+            "url": "https://survey.stackoverflow.co/2024/ai",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "survey.stackoverflow.co",
+                "/2024/ai",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://survey.stackoverflow.co/2025",
+            "title": "2025 Stack Overflow Developer Survey",
+            "content": "84% of respondents are using or planning to use AI tools in their development process, an increase over last year (76%). This year we can see 51% of ...",
+            "publishedDate": null,
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "survey.stackoverflow.co",
+                "/2025",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                1
+            ],
+            "score": 1,
+            "category": "general"
+        },
+        {
+            "url": "https://stackoverflow.blog/2025/12/29/developers-remain-willing-but-reluctant-to-use-ai-the-2025-developer-survey-results-are-here/",
+            "title": "Developers remain willing but reluctant to use AI",
+            "content": "The Stack Overflow Developer Survey is full of new insights about technology, tools of the trade, community, careers, and more from 49,000+ ...",
+            "publishedDate": "2025-12-29T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "stackoverflow.blog",
+                "/2025/12/29/developers-remain-willing-but-reluctant-to-use-ai-the-2025-developer-survey-results-are-here/",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                2
+            ],
+            "score": 0.5,
+            "category": "general",
+            "pubdate": "2025-12-29 00:00:00"
+        },
+        {
+            "template": "default.html",
+            "title": "2024 Developer Survey Insights for AI/ML - Stack Overflow",
+            "content": "Current Use: Top 10 Developer Roles Of the top ten roles developers selected in the 2024 Developer Survey, mobile developers, full-stack developers and engineering managers are all most likely to be using or want to use AI tools. Different roles have different contexts for code; people managers are likely to have more influence over technology purchases, it makes sense that they are ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                2
+            ],
+            "score": 0.5,
+            "category": "general",
+            "url": "https://stackoverflow.blog/2024/07/22/2024-developer-survey-insights-for-ai-ml/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "stackoverflow.blog",
+                "/2024/07/22/2024-developer-survey-insights-for-ai-ml/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Developers Use AI More, Trust It Less, Stack Overflow Survey Finds",
+            "content": "6 Sept 2025 ... Trust in AI accuracy has fallen sharply: only 33% of developers now trust AI-generated output, down from 43% in 2024. · A more nuanced view is ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                11,
+                9
+            ],
+            "score": 0.40404040404040403,
+            "category": "general",
+            "url": "https://hackernoon.com/developers-use-ai-more-trust-it-less-stack-overflow-survey-finds",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "hackernoon.com",
+                "/developers-use-ai-more-trust-it-less-stack-overflow-survey-finds",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://survey.stackoverflow.co/2025/ai",
+            "title": "AI | 2025 Stack Overflow Developer Survey",
+            "content": "84% of respondents are using or planning to use AI tools in their development process, an increase over last year (76%). This year we can see 51% of ...",
+            "publishedDate": null,
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "survey.stackoverflow.co",
+                "/2025/ai",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general"
+        },
+        {
+            "template": "default.html",
+            "title": "developer survey - Stack Overflow",
+            "content": "0 comment s January 1, 2025 Developers want more, more, more: the 2024 results from Stack Overflow's Annual Developer Survey This year, technologies such as JavaScript and PostgreSQL remain most popular, Rust and Markdown remain most admired, developers are most frustrated by technical debt at work, and they don't see AI as a threat to ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general",
+            "url": "https://stackoverflow.blog/developer-survey/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "stackoverflow.blog",
+                "/developer-survey/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://news.ycombinator.com/item?id=44723876",
+            "title": "2025 Stack Overflow Developer Survey Results - Hacker News",
+            "content": "\"49,000+\" makes this the least responses the survey has gotten since 2016 (\"over fifty thousand\"), every year in between has been in the 65-100k range.",
+            "publishedDate": null,
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "news.ycombinator.com",
+                "/item",
+                "",
+                "id=44723876",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                5
+            ],
+            "score": 0.2,
+            "category": "general"
+        },
+        {
+            "template": "default.html",
+            "title": "PDF Stack-Overflow-2024-Survey-Analysis/2024 Developer Survey.pdf at main ...",
+            "content": "The Stack Overflow 2024 Survey, with 65,437 participants, is summarized in four dashboards analyzing how coding was learned, correlations between tools (languages, databases, platforms, OS, AI), and participants' views on AI.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5
+            ],
+            "score": 0.2,
+            "category": "general",
+            "url": "https://github.com/ousstrk/Stack-Overflow-2024-Survey-Analysis/blob/main/2024%20Developer%20Survey.pdf",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "github.com",
+                "/ousstrk/Stack-Overflow-2024-Survey-Analysis/blob/main/2024%20Developer%20Survey.pdf",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "2024 Stack Overflow Developer Survey",
+            "content": "In May 2024, over 65,000 developers responded to our annual survey about coding, the technologies and tools they use and want to learn, AI, and developer experience at work. Check out the results and see what's new for Stack Overflow users.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcRqHhBpl3ygVVwI7B5OLUGJ-HQS0LxzHCnwbnDCqIET2Kx4AjRS3AQg4eg",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                3,
+                3
+            ],
+            "score": 1.3333333333333333,
+            "category": "general",
+            "url": "https://survey.stackoverflow.co/2024/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "survey.stackoverflow.co",
+                "/2024/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Dev world, unplugged: 65000+ developers' survey results on code ...",
+            "content": "19.06.2025 ... Every year, Stack Overflow drops the developer equivalent of a world census and the 2024 edition is a wild one. With 65,437 responses from ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcT1TkJ0__sbTB5xLv-T03JnGdjdt74mauEXIYm9b2OTaoeARmMEFxgtnsM",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                17,
+                3
+            ],
+            "score": 0.7843137254901961,
+            "category": "general",
+            "url": "https://dev.to/dev_tips/dev-world-unplugged-65000-developers-survey-results-on-code-ai-and-burnout-in-2024-and-why-3nde",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "dev.to",
+                "/dev_tips/dev-world-unplugged-65000-developers-survey-results-on-code-ai-and-burnout-in-2024-and-why-3nde",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Codeium: Rising the Ranks on Stack Overflow - Devin",
+            "content": "29.07.2024 ... That was a few thousand developers on just the narrow range of AI code assistants. Stack Overflow just published their 2024 Developer Survey ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTKGTEIol8ElLKpE7jfP7HSudqnxPOmHlEjWLB9R5T0kfArVQJwQajcSqc",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5,
+                10
+            ],
+            "score": 0.6000000000000001,
+            "category": "general",
+            "url": "https://devin.ai/blog/codeium-stack-overflow-developer-survey-2024",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "devin.ai",
+                "/blog/codeium-stack-overflow-developer-survey-2024",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "the 2024 results from Stack Overflow's Annual Developer Survey",
+            "content": "01.01.2025 ... While it has been hypothesized that AI could affect developer roles, the trends we see in this year's survey remain consistent over previous ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSxJls5igkegJ5Njo8gxMgc-XnQYh-YpE4wxYrw27cXe2fBeosfsMImOcLm",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                2
+            ],
+            "score": 0.5,
+            "category": "general",
+            "url": "https://stackoverflow.blog/2025/01/01/developers-want-more-more-more-the-2024-results-from-stack-overflow-s-annual-developer-survey/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "stackoverflow.blog",
+                "/2025/01/01/developers-want-more-more-more-the-2024-results-from-stack-overflow-s-annual-developer-survey/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "2024 Stack Overflow Survey Results - Elixir Forum",
+            "content": "In May 2024, over 65,000 developers responded to our annual survey about coding, the technologies and tools they use and want to learn, AI, and developer ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQ44-tOv25zVZXWb96SN2djorWcv_azRNIeLCD5pIyvPMZtdiifeDOs",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                13,
+                6
+            ],
+            "score": 0.48717948717948717,
+            "category": "general",
+            "url": "https://elixirforum.com/t/2024-stack-overflow-survey-results/65116",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "elixirforum.com",
+                "/t/2024-stack-overflow-survey-results/65116",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Stack Overflow Survey 2025: 84% of devs use AI… but 46% don't ...",
+            "content": "31.07.2025 ... 84% of developers are using AI tools. 46% say they don't trust the accuracy of AI output (up from 31% last year!) That's quite the ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcT3onScd7kVlMMZP8JmidrIRqF_96oN-TGdibeMlNyKBFAXA_G40bA5Q3c",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                19,
+                8
+            ],
+            "score": 0.35526315789473684,
+            "category": "general",
+            "url": "https://www.reddit.com/r/programming/comments/1mdyy9x/stack_overflow_survey_2025_84_of_devs_use_ai_but/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.reddit.com",
+                "/r/programming/comments/1mdyy9x/stack_overflow_survey_2025_84_of_devs_use_ai_but/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "ousstrk/Stack-Overflow-2024-Survey-Analysis - GitHub",
+            "content": "The Stack Overflow 2024 Survey, with 65437 participants, is summarized in four dashboards analyzing how coding was learned, correlations between tools ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQlMzIUn1eyv8M1btV8ApurkMhWlGzhFZ8z_srl4YwyQ-iGm5QjpxhGb4IT",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general",
+            "url": "https://github.com/ousstrk/Stack-Overflow-2024-Survey-Analysis",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "github.com",
+                "/ousstrk/Stack-Overflow-2024-Survey-Analysis",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Stack Overflow Developer Survey 2024 key highlights - Medium",
+            "content": "26.07.2024 ... 76% of all respondents are using or are planning to use AI tools in their development process this year, an increase from last year (70%). Many ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTSqdCRcd5une4kBmuJPOMgwFmzCRDSA1vX_BAD7BI8aZhskRWM40TMlpXx",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6
+            ],
+            "score": 0.16666666666666666,
+            "category": "general",
+            "url": "https://medium.com/@rahulraina346/stack-overflow-developer-survey-2024-key-highlights-4d0065178e43",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "medium.com",
+                "/@rahulraina346/stack-overflow-developer-survey-2024-key-highlights-4d0065178e43",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Trust in AI coding tools is plummeting - LeadDev",
+            "content": "04.08.2025 ... “One of the most notable trends in this year's survey is the continued rise in AI tool usage – now at 84% of developers using or planning to use ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSjRPpxodPHGKOBBBFBn3Ct6qNlrVnYIQbihhFoPESC6yBVIcFBkLlf8mg",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                7
+            ],
+            "score": 0.14285714285714285,
+            "category": "general",
+            "url": "https://leaddev.com/technical-direction/trust-in-ai-coding-tools-is-plummeting",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "leaddev.com",
+                "/technical-direction/trust-in-ai-coding-tools-is-plummeting",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Data Project 5: StackOverFlow Developers Survey Analysis (2024 and 2025)",
+            "content": "To understand AI's impact on developer compensation, I performed a statistical analysis on Stack Overflow's 2024 and 2025 Developer Survey datasets (available at https://survey.stackoverflow.co/), totaling over 100,000 responses. Here's how the analysis was conducted: Data Preparation: Filtered for valid salary data (removing outliers below $1,000 and above $500,000) Identified AI users ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6
+            ],
+            "score": 0.16666666666666666,
+            "category": "general",
+            "url": "https://www.learnwithmeai.com/p/data-project-5-stackoverflow-developers",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.learnwithmeai.com",
+                "/p/data-project-5-stackoverflow-developers",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://www.facebook.com/officialstackoverflow/posts/for-the-last-decade-and-a-half-the-stack-overflow-developer-survey-has-been-a-pu/1396643895844455/",
+            "title": "For the last decade and a half, the Stack Overflow Developer Survey ...",
+            "content": "\"2025 Developer Survey\" Stack Overflow's 2025 Developer Survey, now in its fifteenth year with over 49,000 global responses, reveals that AI ...",
+            "publishedDate": "2026-06-29T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "www.facebook.com",
+                "/officialstackoverflow/posts/for-the-last-decade-and-a-half-the-stack-overflow-developer-survey-has-been-a-pu/1396643895844455/",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                7
+            ],
+            "score": 0.14285714285714285,
+            "category": "general",
+            "pubdate": "2026-06-29 00:00:00"
+        },
+        {
+            "template": "default.html",
+            "title": "AI Killed the Stack Overflow Star: The 76% Collapse in Developer Q&A",
+            "content": "The 2024 Stack Overflow Developer Survey found that 67.5% of developers use AI tools specifically for \"searching for answers.\" Among AI tool users, ChatGPT commands 82% adoption, GitHub Copilot 41%, and Claude 24%.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                7
+            ],
+            "score": 0.14285714285714285,
+            "category": "general",
+            "url": "https://www.allstacks.com/blog/ai-killed-the-stack-overflow-star-the-76-collapse-in-developer-qa",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.allstacks.com",
+                "/blog/ai-killed-the-stack-overflow-star-the-76-collapse-in-developer-qa",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Stack Overflow's Annual Developer Survey reveals that AI tools are here ...",
+            "content": "2024 Stack Overflow Developer Survey Highlights: PostgreSQL is the most popular database for the second year in a row, with over 49% of respondents using it. Microsoft SQL Server was ranked 4th in the survey. AWS is the most used cloud platform, followed by Azure and Google Cloud with 27.8% and 25.1% usage, respectively.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                8
+            ],
+            "score": 0.125,
+            "category": "general",
+            "url": "https://www.bigtechwire.com/2024/07/29/stack-overflows-annual-developer-survey-reveals-that-ai-tools-are-here-to-stay/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.bigtechwire.com",
+                "/2024/07/29/stack-overflows-annual-developer-survey-reveals-that-ai-tools-are-here-to-stay/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Mahiipatil/Stack-Overflow-2024-Survey-Analysis - GitHub",
+            "content": "This repository contains an analysis of the Stack Overflow 2024 Developer Survey, which collected responses from 65,437 developers worldwide. The analysis provides insights into learning pathways, programming tools, AI usage, and other trends in the developer community.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9
+            ],
+            "score": 0.1111111111111111,
+            "category": "general",
+            "url": "https://github.com/Mahiipatil/Stack-Overflow-2024-Survey-Analysis",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "github.com",
+                "/Mahiipatil/Stack-Overflow-2024-Survey-Analysis",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "76% of Developers Use AI Tools 38% Report Inaccuracies 95% See ...",
+            "content": "A new survey from Stack Overflow reveals that even though many companies all across the globe are rapidly adapting AI tools in their workplaces, there are still concerns about accuracy and productivity of those AI tools. The survey was based on over 17,000 developers to know what those developers ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "url": "https://www.digitalinformationworld.com/2024/06/76-of-developers-use-ai-tools-38-report.html",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.digitalinformationworld.com",
+                "/2024/06/76-of-developers-use-ai-tools-38-report.html",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Share of professional software developers using AI tools",
+            "content": "05.02.2026 ... Share of professional developers who use AI tools in their development process, based on the annual Stack Overflow Developer Survey (2023–2025).",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQ9fuAGtH1FL9r8HMFkyRzXG8yu-Mh012-4bH20GoU-ttM5rwF5Gy4p1L8",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                8
+            ],
+            "score": 0.125,
+            "category": "general",
+            "url": "https://ourworldindata.org/grapher/share-of-professional-software-developers-using-ai-tools",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "ourworldindata.org",
+                "/grapher/share-of-professional-software-developers-using-ai-tools",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Developer Survey 2024: Developers love AI, but doubt its accuracy",
+            "content": "27.07.2024 ... According to Stack Overflow, developers benefit most from productivity increases through the use of AI tools. Around 43 percent of users trust ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQbmkNYojAlyso9p4bRd7_x9hTruKY1YCrk-WagKUIV4LKI88wMLt9F1gQ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9
+            ],
+            "score": 0.1111111111111111,
+            "category": "general",
+            "url": "https://www.heise.de/en/news/Developer-Survey-2024-Developers-love-AI-but-doubt-its-accuracy-9814287.html",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.heise.de",
+                "/en/news/Developer-Survey-2024-Developers-love-AI-but-doubt-its-accuracy-9814287.html",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Review our technology options for the 2024 Developer Survey",
+            "content": "30.04.2024 ... We are looking forward to kicking off the 14th annual Stack Overflow Developer Survey next month and your feedback here is really beneficial.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQxWXCJd0eU6LXXqfiQI3XZGSVX1qqH9pDbUflqT7TSiKIy5ehcoKJMH2AK",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "url": "https://meta.stackoverflow.com/questions/430024/review-our-technology-options-for-the-2024-developer-survey",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "meta.stackoverflow.com",
+                "/questions/430024/review-our-technology-options-for-the-2024-developer-survey",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Highlights from the 2024 Stack Overflow Developer Survey...",
+            "content": "25.07.2024 ... In May 2024, over 65,000 developers from 185 countries responded to Stack Overflow's annual survey, offering deep insights into the coding world ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQ0imq7KtxpP7_z_wwjSHf3X4XxolEd8df1EcvYZFvqmYSb0pLhkQVZmBlt",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                12
+            ],
+            "score": 0.08333333333333333,
+            "category": "general",
+            "url": "https://daily.dev/blog/highlights-from-the-2024-stack-overflow-developer-survey/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "daily.dev",
+                "/blog/highlights-from-the-2024-stack-overflow-developer-survey/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Domain expertise still wanted: the latest trends in AI-assisted ...",
+            "content": "16.03.2026 ... In comparing the results from the 2024 and 2025 Developer Survey and findings in this pulse survey, we find a clear trend. On one hand, use of ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQMjXAKWfawuS_49KbnL1KErYXM6loLrjJNR2rcDP2C_eAWbmfoYrAPxH2p",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                14
+            ],
+            "score": 0.07142857142857142,
+            "category": "general",
+            "url": "https://stackoverflow.blog/2026/03/16/domain-expertise-still-wanted-the-latest-trends-in-ai/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "stackoverflow.blog",
+                "/2026/03/16/domain-expertise-still-wanted-the-latest-trends-in-ai/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Daily AI agent use increases among developers - Facebook",
+            "content": "25.06.2026 ... Google Cloud just published its latest annual DORA report on 'State of AI-assisted Software Development', finding adoption of the tech has ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTlrrL7adrLcf9f7NG8qQfSk_10OM3i1kzCaeEBrY_SOS8V6BwMmVut-Pw",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                15
+            ],
+            "score": 0.06666666666666667,
+            "category": "general",
+            "url": "https://www.facebook.com/officialstackoverflow/posts/its-probably-no-surprise-that-daily-ai-agent-use-has-skyrocketed-since-our-2025-/1393182486190596/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.facebook.com",
+                "/officialstackoverflow/posts/its-probably-no-surprise-that-daily-ai-agent-use-has-skyrocketed-since-our-2025-/1393182486190596/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Stack Overflow Annual Developer Survey 2024 - Kaggle",
+            "content": "In May 2024 over 65,000 developers responded to Stack Overflow's annual survey about coding, working, AI and how they feel about all of those topics and more.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQMGLDRGPzG-vlgJT88xFj_VvCEIZR1XiM6Rt5zx8bX-Q7mXrCfnSXr04Pn",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                16
+            ],
+            "score": 0.0625,
+            "category": "general",
+            "url": "https://www.kaggle.com/datasets/berkayalan/stack-overflow-annual-developer-survey-2024",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.kaggle.com",
+                "/datasets/berkayalan/stack-overflow-annual-developer-survey-2024",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Stack Overflow data reveals the hidden productivity tax of 'almost ...",
+            "content": "29.07.2025 ... The 2025 survey of over 49,000 developers across 177 countries reveals a troubling paradox in enterprise AI adoption. AI usage continues ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQhYmoxSBpnkUIWFNSWo0jRmDP3VRu89GfZABHiCgGZUTsPXAH1O0watNQ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                18
+            ],
+            "score": 0.05555555555555555,
+            "category": "general",
+            "url": "https://venturebeat.com/technology/stack-overflow-data-reveals-the-hidden-productivity-tax-of-almost-right-ai-code",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "venturebeat.com",
+                "/technology/stack-overflow-data-reveals-the-hidden-productivity-tax-of-almost-right-ai-code",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "AI Coding Tools Statistics (2026): 48+ Data Poi… - CoderFile.io",
+            "content": "23.04.2026 ... 84% of developers use or plan to use AI tools in development, up from 76% in 2024 (Stack Overflow Developer Survey 2025). 51% of ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSiirb1XL42a1pHpMqMehegZJ0Y3TTaKNtAJPrPxBaX1aWixo3PuSEGXio",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                20
+            ],
+            "score": 0.05,
+            "category": "general",
+            "url": "https://coderfile.io/blog/ai-coding-tools-statistics-2026",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "coderfile.io",
+                "/blog/ai-coding-tools-statistics-2026",
+                "",
+                "",
+                ""
+            ]
+        }
+    ],
+    "answers": [],
+    "corrections": [],
+    "infoboxes": [],
+    "suggestions": [],
+    "unresponsive_engines": [
+        [
+            "brave",
+            "Suspended: too many requests"
+        ]
+    ]
+}

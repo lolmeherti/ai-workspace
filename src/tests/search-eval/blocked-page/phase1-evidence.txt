@@ -1,0 +1,461 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S2">
+<title>
+System Requirements for Adobe Photoshop in 2025
+</title>
+<domain>www.proxpc.com</domain>
+<published>2025-01-03T10:30:29.239Z</published>
+<fetched>2026-07-28T22:53:46+00:00</fetched>
+<chunk id="S2-C10" section="System Requirements for Adobe Photoshop in 2025 &gt; Featured Blogs &gt; System Requirements for Adobe Lightroom in 2025">
+The essential system requirements for Adobe Lightroom in 2025. Ensure your hardware and software are optimized for flawless performance.](/blogs/system-requirements-for-adobe-lightroom-in-2025)[System Requirements
+</chunk>
+<chunk id="S2-C2" section="System Requirements for Adobe Photoshop in 2025">
+Know the essential system requirements for Adobe Photoshop in 2025. This guide covers the recommended hardware and software to ensure smooth and efficient performance, whether you're a beginner or a professional editor.
+
+[Home](/)[Blogs](/blogs)System Requirements for Adobe Photoshop in 2025
+</chunk>
+<chunk id="S2-C4" section="System Requirements for Adobe Photoshop in 2025 &gt; **Minimum and recommended system requirements for Adobe Photoshop**">
+**Adobe Photoshop System Requirements and Benchmarks**
+
+- [Custom Built Intel Workstation for Photo Editing - Pro Maven GS I PM ](https://www.proxpc.com/product-details/pro-maven-gs-i-pm)
+- [Custom Built Intel PC for Photoshop Pro – Pro Maven GS I PH ](https://www.proxpc.com/product-details/pro-maven-gs-i-ph)
+- [Custom Built AMD PC for Photo Editing – Pro Maven GS A PM Custom Workstation ](https://www.proxpc.com/product-details/pro-maven-gs-a-pm)
+- [Custom Built AMD Workstation for Photoshop – Pro Maven GS A PH Custom Workstation ](https://www.proxpc.com/product-details/pro-maven-gs-a-ph)
+
+Like most software developers, Adobe maintains a list of system requirements for Photoshop that can be used to help ensure the hardware in your computer system will work with their software. However, most “system requirements” lists tend to cover only the very basics of what hardware is needed to run the software, not what hardware will actually give the best performance. In addition, sometimes these lists can be outdated, show old hardware revisions, or simply contain sub-optimal hardware.
+
+Because of how inconsistent these lists can be, here at ProX PC we run and publish our own set of extensive hardware benchmarks to ensure that the systems we sell are perfectly tailored for Photoshop. Even better, you don’t have to take our word for what to buy, you can browse and examine all our testing in detail in our Photoshop hardware articles. Based on all our testing, we have our own list of recommended hardware for an Adobe Photoshop PC.
+
+**Processor (CPU)**
+
+The processor (or CPU) is one of the most important pieces of a Photoshop workstation. While GPU acceleration is gaining traction, right now your choice of CPU is usually going to make a much larger impact on overall system performance. However, be aware a CPU that is theoretically more powerful is not always better since there is a limit to the number of cores that Photoshop can effectively take advantage of. In many cases, spending more money can actually result in worse performance so it is more important to get the right CPU over a more expensive one.
+
+**What CPU is best for Photoshop?**
+
+Currently, the best CPU for Photoshop is Intel’s Core i9 14900K. It leads the pack of other 13th &amp;amp; 14th Gen Core and AMD Ryzen 7000 Series processors in our Photoshop benchmark, though it is only slightly faster than the previous 13900K. The i7 14700K is also a solid option if you want to save some money.
+
+**Do more cores make Photoshop faster?**
+
+Adobe has been making improvements in order to make more effective use of higher core count CPUs, but for now, having beyond ~8 cores is only going to give you a minimal increase in performance. In general, the architecture of the CPU is often more important than the raw number of cores.
+
+**Does Photoshop work better with Intel or AMD CPUs?**
+
+At the moment, Intel has a slight lead over AMD. This tends to change as both brands release new products, however.
+
+**Should I use a Xeon CPU for Photoshop?**
+</chunk>
+<chunk id="S2-C8" section="System Requirements for Adobe Photoshop in 2025 &gt; **Minimum and recommended system requirements for Adobe Photoshop** &gt; [**Custom Workstations for Adobe Photoshop**](https://www.proxpc.com/workstation/content-creation/photo-editing)">
+[**Custom Built Intel Workstations For Photo Editing**](http://www.proxpc.com/workstation/content-creation/photo-editing)
+
+[Pro Maven GS I PE ](https://www.proxpc.com/product-details/pro-maven-gs-i-pe)
+
+[Pro Maven GS I PM ](https://www.proxpc.com/product-details/pro-maven-gs-i-pm)
+
+[Pro Maven GS I PH ](https://www.proxpc.com/product-details/pro-maven-gs-i-ph)
+
+[**Custom Built AMD Workstations For Photo Editing**](http://www.proxpc.com/workstation/content-creation/photo-editing)
+
+[Pro Maven GS A PE](https://www.proxpc.com/product-details/pro-maven-gs-a-pe)
+
+[Pro Maven GS A PM](https://www.proxpc.com/product-details/pro-maven-gs-a-pm)
+
+[Pro Maven GS A PH](https://www.proxpc.com/product-details/pro-maven-gs-a-ph)
+
+### 
+
+Share this article:Copy link
+
+[Written byPraveen kumar•January 3, 2025](/authors/praveen-kumar)
+
+---
+</chunk>
+</source>
+
+<source id="S1">
+<title>
+Adobe Photoshop on desktop technical requirements | Photoshop
+</title>
+<domain>helpx.adobe.com</domain>
+<published>2026-01-20T00:00:00Z</published>
+<fetched>2026-07-28T22:53:44+00:00</fetched>
+<chunk id="S1-C6" section="Adobe Photoshop on desktop technical requirements">
+Last updated on Jun 4, 2026 
+
+Understand the minimum requirements needed to install and run Adobe Photoshop. Use recommended system specifications for optimum performance.
+</chunk>
+<chunk id="S1-C8" section="Adobe Photoshop on desktop technical requirements &gt; Technical requirements for version 26.x">
+**Windows on Intel / AMD**
+
+ **Minimum**
+
+**Recommended**
+
+**Processor**
+
+Multicore Intel® , AMD, or WinARM processor
+
+**Operating system**
+
+Windows 10 v21H2 LTSC, Win 10 (V22H2); Win 11 (V21H2, V22H2, V23H2, V24H2)
+
+**RAM**
+
+8 GB
+
+16 GB or more
+
+**AVX**
+
+Intel or AMD CPUs having AVX2 support
+
+**SSE**
+
+Intel or AMD platforms having SSE 4.2 or higher support
+
+**Graphics card**
+
+- GPU with DirectX 12 ([feature level 12\_0 or later](https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-intro))
+- 1.5 GB of GPU memory
+- GPU newer than 7 years. Keep drivers updated with the latest from manufacturer's website. Adobe does not test with GPUs older than 7 years.
+
+- GPU with DirectX 12 support ([feature level 12\_0 or later](https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-intro))
+- 4 GB of GPU memory for 4k displays and greater
+
+See the [Photoshop graphics processor (GPU) card FAQ](/photoshop/kb/photoshop-cc-gpu-card-faq.html).
+
+**Monitor resolution**
+
+1280 x 800 at 100% scaling, or 1920 x 1080 at 150% scaling; 8, 16, and 32-bit color all supported.
+
+1920 x 1080 display or higher
+
+**Video RAM**
+
+1.5 GB
+
+2 GB
+
+**Hard disk space**
+
+10 GB of available hard disk space
+
+100 GB of available hard disk space- Fast internal SSD for app installation
+- Separate internal drive for [scratch disks](/photoshop/using/scratch-disks-preferences.html)
+
+**Internet**
+
+Internet connection and registration are necessary for required software activation, validation of subscriptions, and access to online services
+
+**Windows on ARM**
+
+ **Minimum****Recommended****Processor**ARM processor**Operating system**Windows 10 ARM device running Windows 10 64-bit (version 20H2) or later**RAM**8 GB16 GB or more**Graphics card**4 GB of GPU memory All the other aspects of ARM are the same as Intel 
+
+ **Minimum**
+
+**Recommended**
+
+**Processor**
+
+Multicore Intel® or Apple Silicon processor
+
+ARM-based Apple Silicon processor
+
+**Operating system**
+
+macOS v13, 14, v15
+
+macOS Sequoia (version 14.6.1)
+
+cannot be installed on macOS v11.x (Big Sur) or earlier
+
+**RAM**
+
+8 GB
+
+16 GB or more
+
+**AVX**
+
+Intel or AMD CPUs having AVX2 support
+
+**SSE**
+
+Intel or AMD platforms having SSE 4.2 or higher support
+
+**Graphics card**
+
+To find out if your computer supports Metal, see [Mac computers that support Metal](https://support.apple.com/en-us/102894)
+
+See the [Photoshop graphics processor (GPU) card FAQ](/photoshop/kb/photoshop-cc-gpu-card-faq.html)
+
+**Monitor resolution**
+
+1024 x 768 or higher; 8, 16, and 32-bit colors are all supported
+
+1920 x 1080 display or higher
+
+**Video RAM**
+
+1.5 GB**Hard disk space**
+
+10 GB of available hard disk space for installation; additional free space required during installation (cannot install on a volume that uses a case-sensitive file system)
+
+100 GB of available hard disk space
+
+- Fast internal SSD for app installation
+- Additional high-speed drive(s) or SSD to set up [scratch disks](/photoshop/using/scratch-disks-preferences.html)
+
+*Photoshop will not install on a volume that uses a case-sensitive file system.*
+
+**Internet**
+
+Internet connection and registration are necessary for required software activation, membership validation, and access to online services
+
+ ![Adobe Illustrator logo](/content/dam/help/mnemonics/ps_cc_app_RGB.svg)
+
+ ![Adobe Illustrator logo](/content/dam/help/mnemonics/ps_cc_app_RGB.svg)
+
+ **Create stunning images with Photoshop** Edit, retouch, and transform photos with the industry-leading creative tools you know and love.
+
+ [ Open the app ](https://www.adobe.com/download/photoshop) 
+
+ [ Open the app ](https://www.adobe.com/download/photoshop) 
+
+ Was this page helpful?
+
+Yes, thanksNot really
+
+ [ ](#) [ Next
+
+Use the graphics processor
+
+ ](/photoshop/desktop/get-started/technical-requirements-installation/enable-photoshop-to-use-the-graphics-processor.html) 
+
+ [### Learn
+
+ ![card-link-icon](/content/dam/help/icons/content-card-link.svg)
+
+Learn with step-by-step video tutorials and hands-on guidance right in the app.
+
+ ](https://www.adobe.com/learn)
+
+ [### Community
+
+ ![card-link-icon](/content/dam/help/icons/content-card-link.svg)
+
+Join discussions, find answers, learn from experts, and share your knowledge.
+
+ ](https://www.adobe.com/community)
+
+ [### Adobe Home
+
+ ![card-link-icon](/content/dam/help/icons/content-card-link.svg)
+
+Access your favorite Creative Cloud apps, services, file management, and more.
+
+ ](https://www.adobe.com)
+
+Language Navigation
+
+Language Navigation
+
+ [](#) 
+
+ Locale Modalv2
+
+We have detected you are visiting a different region on adobe.com
+
+[](#)&lt;a href="" tabindex="0"&gt;United States&lt;/a&gt;
+</chunk>
+<chunk id="S1-C7" section="Adobe Photoshop on desktop technical requirements &gt; Technical requirements for version 27.x and later">
+**Windows on Intel / AMD**
+
+ **Minimum**
+
+**Recommended**
+
+**Processor**
+
+Multicore Intel® , AMD, or WinARM processor
+
+**Operating system**
+
+Win 11 v24H2, v23H2, Win 10 v22H2, v21H2 LTSC
+
+**RAM**
+
+8 GB
+
+16 GB or more
+
+**AVX**
+
+Intel or AMD CPUs having AVX2 support
+
+**SSE**
+
+Intel or AMD platforms having SSE 4.2 or higher support
+
+**Graphics card**
+
+- GPU with DirectX 12 ([feature level 12\_0 or later](https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-intro))
+- 1.5 GB of GPU memory
+- GPU newer than 7 years. Keep drivers updated with the latest from manufacturer's website. Adobe does not test with GPUs older than 7 years.
+
+- GPU with DirectX 12 support ([feature level 12\_0 or later](https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-downlevel-intro))
+- 4 GB of GPU memory for 4k displays and greater
+
+See the [Photoshop graphics processor (GPU) card FAQ](/photoshop/kb/photoshop-cc-gpu-card-faq.html).
+
+**Monitor resolution**
+
+1280 x 800 at 100% scaling, or 1920 x 1080 at 150% scaling; 8, 16, and 32-bit color all supported
+
+1920 x 1080 display or higher
+
+**Video RAM**
+
+1.5 GB
+
+2 GB
+
+**Hard disk space**
+
+10 GB of available hard disk space
+
+100 GB of available hard disk space
+
+- Fast internal SSD for app installation
+- Separate internal drive for [scratch disks](/photoshop/using/scratch-disks-preferences.html)
+
+**Internet**
+
+Internet connection and registration are necessary for required software activation, validation of subscriptions, and access to online services
+
+**Windows on ARM**
+
+ **Minimum**
+
+**Recommended**
+
+**Processor**
+
+ARM Processor
+
+**Operating system**
+
+Windows 10 ARM device running Windows 10 64-bit (version 20H2) or later
+
+**RAM**
+
+8 GB
+
+16 GB or more
+
+**Graphics card**
+
+4 GB of GPU memory
+
+All other aspects for ARM are the same as Intel.
+
+ **Minimum**
+
+**Recommended**
+
+**Processor**
+
+Multicore Intel® or Apple Silicon processor
+
+ARM-based Apple Silicon processor
+
+**Operating system**
+
+macOS v26, v15.x, v14.x
+
+macOS Sequoia (version 15.6.1)
+
+cannot be installed on macOS v12.x.x (Monterey) or earlier
+
+**RAM**
+
+8 GB
+
+16 GB or more
+
+**AVX**
+
+Intel or AMD CPUs having AVX2 support
+
+**SSE**
+
+Intel or AMD platforms having SSE 4.2 or higher support
+
+**Graphics card**
+
+To find out if your computer supports Metal, see [Mac computers that support Metal](https://support.apple.com/en-us/HT205073)
+
+See the [Photoshop graphics processor (GPU) card FAQ](/photoshop/kb/photoshop-cc-gpu-card-faq.html)
+
+**Monitor resolution**
+
+1280 x 800 or higher
+
+1920 x 1080 display or higher
+
+**Video RAM**
+
+1.5 GB
+
+2 GB
+
+**Hard disk space**
+
+10 GB of available hard disk space for installation; additional free space required during installation (cannot install on a volume that uses a case-sensitive file system)
+
+100 GB of available hard disk space
+
+- Fast internal SSD for app installation
+- Additional high-speed drive(s) or SSD to set up [scratch disks](/photoshop/using/scratch-disks-preferences.html)
+
+*Photoshop will not install on a volume that uses a case-sensitive file system.*
+
+**Internet**
+
+Internet connection and registration are necessary for required software activation, membership validation, and access to online services
+</chunk>
+</source>
+
+<source id="S3">
+<title>
+Photoshop System Requirements: A Hands-On Guide - Udemy Blog
+</title>
+<domain>blog.udemy.com</domain>
+<published>2025-10-22T16:46:00+00:00</published>
+<fetched>2026-07-28T22:53:48+00:00</fetched>
+<chunk id="S3-C8" section="**Photoshop system requirements by component** &gt; **Processor (CPU)**">
+Your processor (CPU) is one of the biggest system components that impact Photoshop’s performance, but the choice of CPU is also a subject that divides Photoshop’s massive fanbase. The facts are as follows: in the past, Intel CPUs were by far the best choice, but in 2021, the differences between AMD and Intel processors for Adobe Photoshop use have become unnoticeable. Nowadays, you can go with your favorite brand and see extremely similar performance levels.
+
+As of this writing, the best CPU choice in terms of price versus performance is AMD’s 5600X. The second-best choice is Intel’s 10900K.
+
+Keep in mind that Photoshop can’t use multiple cores, so choosing a higher-end CPU won’t give you any noticeable boost in terms of performance. You don’t need to aim for a Threadripper or a Xeon CPU, for instance, as these won’t offer any additional improvement when running Adobe Photoshop.
+
+[This image is no longer available.](https://www.udemy.com/personal-plan/?utm_source=blog&amp;utm_medium=organic-referral&amp;utm_campaign=gmvpod)### **Memory (RAM)**
+
+In terms of memory storage (RAM components), always prioritize quantity over quality because that’s the most important part when using Adobe Photoshop — or any other creative program, for that matter. Don’t get distracted by higher frequencies, latency, RGB, or any other special features. Aim for 8 gigabytes (GB) as the bare minimum quantity for your RAM storage, but if your budget allows it, go up to 16 GB, as that will give you a significant boost.
+
+No matter your choice, keep in mind that your motherboard likely has only four memory slots. Therefore it’s essential you plan ahead for RAM system requirements.
+
+Say you’re looking for 16 GB of RAM currently, but you might want to upgrade to 32 GB in the future. In this case, it’s best to go with two sticks of memory of 8 GB (16 in total). This is considered a more flexible choice versus having four sticks of 4 GB each. While the total is still the same (16 GB), splitting it across only two sticks of RAM leaves two slots open in your motherboard, giving you room to upgrade.
+
+Keep in mind that if your computer doesn’t have enough RAM, Photoshop will start taking up disk space in order to continue running. This will cause a substantial drop in performance, so it’s best you stock up on RAM as soon as your budget allows in order to get the best results with Adobe Photoshop.
+
+Also note that working with large photo sizes will require more RAM. If you want to learn about resizing photos, please check out [this tutorial](https://blog.udemy.com/4-ways-to-resize-an-image-in-photoshop/).
+</chunk>
+<chunk id="S3-C3" section="**Photoshop system requirements at a glance**">
+We’ll start with an overview of the minimum requirements that your computer system needs to run Adobe Photoshop. Here is a breakdown for both Windows and macOS computers.
+</chunk>
+<chunk id="S3-C6" section="**Photoshop system requirements by component**">
+Now, let’s dive a little deeper into the specific components of your computer system and how important each one is to running Adobe Photoshop smoothly.
+</chunk>
+</source>

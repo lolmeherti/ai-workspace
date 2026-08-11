@@ -1,0 +1,1022 @@
+{
+    "query": "CrowdStrike Microsoft outage July 19 2024",
+    "results": [
+        {
+            "template": "default.html",
+            "title": "2024 CrowdStrike-related IT outages - Wikipedia",
+            "content": "On 19 July 2024, the American cybersecurity company CrowdStrike distributed a faulty update to its Falcon Sensor security software that caused widespread problems with Microsoft Windows computers running the software. As a result, roughly 8.5 million systems crashed and were unable to properly restart [1] in what has been called the largest outage in the history of information technology [2 ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                1,
+                2,
+                1
+            ],
+            "score": 7.5,
+            "category": "general",
+            "url": "https://en.wikipedia.org/wiki/2024_CrowdStrike-related_IT_outages",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "en.wikipedia.org",
+                "/wiki/2024_CrowdStrike-related_IT_outages",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Widespread IT Outage Due to CrowdStrike Update - CISA",
+            "content": "Initial Alert (11:30 a.m., EDT, July 19, 2024): CISA is aware of the widespread outage affecting Microsoft Windows hosts due to an issue with a recent CrowdStrike update and is working closely with CrowdStrike and federal, state, local, tribal and territorial (SLTT) partners, as well as critical infrastructure and international partners to ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                16,
+                2
+            ],
+            "score": 1.125,
+            "category": "general",
+            "url": "https://www.cisa.gov/news-events/alerts/2024/07/19/widespread-it-outage-due-crowdstrike-update",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.cisa.gov",
+                "/news-events/alerts/2024/07/19/widespread-it-outage-due-crowdstrike-update",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://www.tufin.com/blog/lasting-impact-of-crowdstrike-update-outage",
+            "title": "The Lasting Impact of the CrowdStrike Update Outage - Tufin",
+            "content": "05.06.2025 ... In July 2024, millions of Windows users were locked out of their systems due to a flaw in a CrowdStrike update. Let's examine the details of this massive ...",
+            "publishedDate": "2025-06-05T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "www.tufin.com",
+                "/blog/lasting-impact-of-crowdstrike-update-outage",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "positions": [
+                8,
+                13
+            ],
+            "score": 0.40384615384615385,
+            "category": "general",
+            "pubdate": "2025-06-05 00:00:00"
+        },
+        {
+            "url": "https://www.crowdstrike.com/en-us/blog/to-our-customers-and-partners/",
+            "title": "To Our Customers and Partners - CrowdStrike",
+            "content": "To Our Customers and Partners. July 19, 2024. • George Kurtz • Executive Viewpoint ... The outage was caused by a defect found in a Falcon content update ...",
+            "publishedDate": null,
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "www.crowdstrike.com",
+                "/en-us/blog/to-our-customers-and-partners/",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "positions": [
+                9,
+                14
+            ],
+            "score": 0.36507936507936506,
+            "category": "general"
+        },
+        {
+            "template": "default.html",
+            "title": "Crowdstrike-Computerausfall 2024 - Wikipedia",
+            "content": "Der Crowdstrike-Computerausfall war eine am 19. Juli 2024 weltweit auftretende Betriebsstörung von Rechnersystemen. Sie wurde durch eine fehlgeschlagene ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                3
+            ],
+            "score": 0.3333333333333333,
+            "category": "general",
+            "url": "https://de.wikipedia.org/wiki/Crowdstrike-Computerausfall_2024",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "de.wikipedia.org",
+                "/wiki/Crowdstrike-Computerausfall_2024",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Faulty CrowdStrike update causes major global IT outage, taking out ...",
+            "content": "The Microsoft spokesperson said that the previous Microsoft 365 service disruption overnight July 18 to 19 was unrelated to the widespread outage triggered by the CrowdStrike update.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                3
+            ],
+            "score": 0.3333333333333333,
+            "category": "general",
+            "url": "https://techcrunch.com/2024/07/19/faulty-crowdstrike-update-causes-major-global-it-outage-taking-out-banks-airlines-and-businesses-globally/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "techcrunch.com",
+                "/2024/07/19/faulty-crowdstrike-update-causes-major-global-it-outage-taking-out-banks-airlines-and-businesses-globally/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike-Microsoft Outage: What Caused the IT Meltdown - The New ...",
+            "content": "Airlines, hospitals and people's computers were affected after CrowdStrike, a cybersecurity company, sent out a flawed software update.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general",
+            "url": "https://www.nytimes.com/2024/07/19/business/microsoft-outage-cause-azure-crowdstrike.html",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.nytimes.com",
+                "/2024/07/19/business/microsoft-outage-cause-azure-crowdstrike.html",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike outage explained: What caused it and what's next",
+            "content": "What might be considered the largest IT outage in history was triggered by a botched software update from security vendor CrowdStrike, affecting millions of Windows systems around the world. Insurers estimate the outage will cost U.S. Fortune 500 companies $5.4 billion. The outage occurred July 19, 2024, with millions of Windows systems failing and showing the infamous blue screen of death ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5
+            ],
+            "score": 0.2,
+            "category": "general",
+            "url": "https://www.techtarget.com/WhatIs/feature/Explaining-the-largest-IT-outage-in-history-and-whats-next",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.techtarget.com",
+                "/WhatIs/feature/Explaining-the-largest-IT-outage-in-history-and-whats-next",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike outage: What you should know - IBM",
+            "content": "A faulty system update affected nearly 8.5 million Microsoft devices, causing major disruptions and estimated losses nearing $1 billion.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6
+            ],
+            "score": 0.16666666666666666,
+            "category": "general",
+            "url": "https://www.ibm.com/think/news/recent-crowdstrike-outage-what-you-should-know",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.ibm.com",
+                "/think/news/recent-crowdstrike-outage-what-you-should-know",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Helping our customers through the CrowdStrike outage",
+            "content": "On July 18, CrowdStrike, an independent cybersecurity company, released a software update that began impacting IT systems globally. Although this was not a Microsoft incident, given it impacts our ecosystem, we want to provide an update on the steps we've taken with CrowdStrike and others to remediate and support our customers. Since this event began,...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQeZoQPmvveZJAYlSawWlFxCoyRBHfes_H8w6sKdQeV9IthzfzwYNdSS3gc",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                2,
+                1,
+                8
+            ],
+            "score": 4.875,
+            "category": "general",
+            "url": "https://blogs.microsoft.com/blog/2024/07/20/helping-our-customers-through-the-crowdstrike-outage/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "blogs.microsoft.com",
+                "/blog/2024/07/20/helping-our-customers-through-the-crowdstrike-outage/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "(PDF) CrowdStrike Causes Global Microsoft Outage: A Case Study",
+            "content": "10.06.2025 ... The 2024 CrowdStrike Cybersecurity incident resulted in a worldwide IT disruption impacting millions of Microsoft Windows systems. In July 2024, ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSBV6pP7sTMFzJb-RlQ3wXG6xEoOnWAX8s24iU9mHiAuLZVwybVNSkygmGZ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4,
+                3
+            ],
+            "score": 1.1666666666666665,
+            "category": "general",
+            "url": "https://www.researchgate.net/publication/393170974_CrowdStrike_Causes_Global_Microsoft_Outage_A_Case_Study",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.researchgate.net",
+                "/publication/393170974_CrowdStrike_Causes_Global_Microsoft_Outage_A_Case_Study",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike: What the 2024 outage reveals about security",
+            "content": "17.12.2024 ... On 19 July 2024, American cybersecurity company CrowdStrike released an update to its CrowdStrike Falcon software that ultimately caused 8.5 million computers ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQFwA669vSXg-fDSblzaXgL2fEwxy-6dXmL23zAz7sV_oDl7JIwImpbv2UF",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5,
+                5
+            ],
+            "score": 0.8,
+            "category": "general",
+            "url": "http://privacyinternational.org/long-read/5507/crowdstrike-what-2024-outage-reveals-about-security",
+            "engine": "google cse",
+            "parsed_url": [
+                "http",
+                "privacyinternational.org",
+                "/long-read/5507/crowdstrike-what-2024-outage-reveals-about-security",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Case Study: Microsoft-CrowdStrike Outage on July 19, 2024 - LinkedIn",
+            "content": "06.08.2024 ... The Incident. On July 19, 2024, people around the world started having problems with Microsoft's cloud services and CrowdStrike's security tools ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQ-UYqxppQDRw3X7is2o_xAwqSw7nA2xXtE8CtopXgJNHHQ7HxYaXiWW8s",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                7,
+                4
+            ],
+            "score": 0.7857142857142857,
+            "category": "general",
+            "url": "https://www.linkedin.com/pulse/case-study-microsoft-crowdstrike-outage-july-19-2024-kondra-ueltc",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.linkedin.com",
+                "/pulse/case-study-microsoft-crowdstrike-outage-july-19-2024-kondra-ueltc",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike IT Outage: Impacts to Public Safety Systems and ...",
+            "content": "04.12.2024 ... On July 19, 2024, CrowdStrike, a U.S. cybersecurity firm, released a software update to their customers. The update caused certain computer ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSvf77cCsGgrae9jy5WU0Gxo7NtvKOaxuMhg2aY1P8jQTmTDhDtRt1tong",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6,
+                7
+            ],
+            "score": 0.6190476190476191,
+            "category": "general",
+            "url": "https://www.congress.gov/crs-product/IF12717",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.congress.gov",
+                "/crs-product/IF12717",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike, Microsoft Outage: Is Tech Too Vulnerable?",
+            "content": "25.07.2024 ... What exactly happened on Friday, July 19, 2024? ... Cybersecurity firm CrowdStrike pushed out a routine software update that inadvertently crashed ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTEIs6Tomd1bV9Sd4EYZhbKlyBrb3CS1h1RxZx5I_7ZAw25Tn0VHxCZZQ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9,
+                6
+            ],
+            "score": 0.5555555555555556,
+            "category": "general",
+            "url": "https://www.georgetown.edu/news/ask-a-professor-crowdstrike-outage/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.georgetown.edu",
+                "/news/ask-a-professor-crowdstrike-outage/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "The Day the Screens Went Blue: CrowdStrike Falcon's July 19, 2024 ...",
+            "content": "19.07.2024 ... On July 19, 2024, the digital world came to a standstill as a massive outage rippled through Microsoft Windows systems running CrowdStrike Falcon's Endpoint ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTz3iUrRmoEuleqmaaAvUcHfqZR7ix1ckEyqAfmEI9jxyr3jcsDevJZf0h9",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                8
+            ],
+            "score": 0.125,
+            "category": "general",
+            "url": "https://www.gatewatcher.com/en/resource/the-day-the-screens-went-blue-crowdstrike-falcons-july-19-2024-incident/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.gatewatcher.com",
+                "/en/resource/the-day-the-screens-went-blue-crowdstrike-falcons-july-19-2024-incident/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "The CrowdStrike Outage: What Happened and How to Move Forward",
+            "content": "July 30, 2024 - A recent failed software update, which occurred on July 19, 2024, caused an IT outage among the largest in history, affecting 8.5 million ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcR8foyHksolhMykGcQnamJR-JdNobq06O2GWoXOD1ARxOsqJuCa30OB5eUX",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "url": "https://www.citrincooperman.com/In-Focus-Resource-Center/The-CrowdStrike-Outage-What-Happened-and-How-to-Move-Forward",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.citrincooperman.com",
+                "/In-Focus-Resource-Center/The-CrowdStrike-Outage-What-Happened-and-How-to-Move-Forward",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Lessons From Crowdstrike's Outage | Octopus blog",
+            "content": "30.07.2024 ... Many people are now familiar with what happened on Friday, July 19, 2024. A bug in a Crowdstrike configuration file, or “Template Instances ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQBNJjJrsEHZrWWwTAU8XqvjbnnQQQuJaJwsKwWgPlPcSMPritXH_zz5Yc",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                11
+            ],
+            "score": 0.09090909090909091,
+            "category": "general",
+            "url": "https://octopus.com/blog/crowdstrike-takeaways",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "octopus.com",
+                "/blog/crowdstrike-takeaways",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Global IT outage live updates: Microsoft-CrowdStrike blackout",
+            "content": "People wait for their flight after a global outage at LaGuardia Airport in the Queens borough of New York, on July 19, 2024.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                7
+            ],
+            "score": 0.14285714285714285,
+            "category": "general",
+            "url": "https://www.cnbc.com/2024/07/19/latest-live-updates-on-a-major-it-outage-spreading-worldwide.html",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.cnbc.com",
+                "/2024/07/19/latest-live-updates-on-a-major-it-outage-spreading-worldwide.html",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike's Role In the Microsoft IT Outage, Explained - TIME",
+            "content": "Cybersecurity technology company CrowdStrike has apologized for the update that caused a major Microsoft IT outage.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9
+            ],
+            "score": 0.1111111111111111,
+            "category": "general",
+            "url": "https://time.com/7000476/microsoft-it-outage-crowdstrike-role-what-happened-explanation/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "time.com",
+                "/7000476/microsoft-it-outage-crowdstrike-role-what-happened-explanation/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://coverlink.com/cyber-liability-insurance/cyber-case-study-crowdstrike-outage/",
+            "title": "Cyber Case Study: CrowdStrike Outage - CoverLink Insurance",
+            "content": "CrowdStrike, a leading provider of endpoint protection, released a routine update to its Falcon Sensor software on July 19, 2024. This update ...",
+            "publishedDate": "2025-12-29T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "coverlink.com",
+                "/cyber-liability-insurance/cyber-case-study-crowdstrike-outage/",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "pubdate": "2025-12-29 00:00:00"
+        },
+        {
+            "template": "default.html",
+            "title": "CrowdStrike Outage Leads to Estimated Financial Loss of $5.4 Billion",
+            "content": "The incident on July 19, 2024, affected approximately 8.5 million Microsoft Windows devices worldwide and caused widespread disruptions across various industries. The outage was triggered by a faulty software update in CrowdStrike's Falcon platform, leading to system crashes and blue screen errors on Windows devices.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "url": "https://cybersecuritynews.com/crowdstrike-outage-loss-5-4-billion/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "cybersecuritynews.com",
+                "/crowdstrike-outage-loss-5-4-billion/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Consequences of Compliance: The CrowdStrike Outage of 19 July ...",
+            "content": "30.07.2024 ... The widespread outage that occurred on Friday 19 July as a result of a CrowdStrike configuration push that put Windows machines into a boot loop may well have ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQl9SXf2OKTMf2QEMM7eamF0nYeXSopYZFhoQoril5u7eH32T6YF1gYwO1l",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                12
+            ],
+            "score": 0.08333333333333333,
+            "category": "general",
+            "url": "https://www.usenix.org/publications/loginonline/consequences-compliance-crowdstrike-outage-19-july-2024",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.usenix.org",
+                "/publications/loginonline/consequences-compliance-crowdstrike-outage-19-july-2024",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Reflections on the CrowdStrike Global IT Outage - Quorum Cyber",
+            "content": "Organisations around the world are gradually recovering from the huge IT outage that disrupted computer systems on Friday 19th July 2024.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSHVQgx3CDWrJRj2Jwl0tarS4CgGCWwjBZzxmZx3A_oCDFaV7GRJorHK2uR",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                15
+            ],
+            "score": 0.06666666666666667,
+            "category": "general",
+            "url": "https://www.quorumcyber.com/insights/reflections-on-the-crowdstrike-global-it-outage/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.quorumcyber.com",
+                "/insights/reflections-on-the-crowdstrike-global-it-outage/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Microsoft to make Windows more resilient following 2024 IT outage",
+            "content": "26.06.2025 ... Microsoft plans to roll out key platform upgrades in July in an effort to build greater operational resilience into the Windows platform.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQ8vqHTAgYF65Ak2GSiu-h_K3lAUYngnbU4kfHuO1Z5A0eStbieIipSrCY",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                17
+            ],
+            "score": 0.058823529411764705,
+            "category": "general",
+            "url": "https://www.cybersecuritydive.com/news/microsoft-windows-resilient-2024-it-outage/751740/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.cybersecuritydive.com",
+                "/news/microsoft-windows-resilient-2024-it-outage/751740/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "(PDF) Unraveling the 2024 CrowdStrike Incident: How a Security ...",
+            "content": "27.03.2025 ... The 2024 CrowdStrike Cybersecurity incident resulted in a worldwide IT disruption impacting millions of Microsoft Windows systems. In July ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTJmD15DG8VwwP2cb1qiibgs2_AQM1XUgtyYk_uf3PMNtFH3RGbsKLOuBrk",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                18
+            ],
+            "score": 0.05555555555555555,
+            "category": "general",
+            "url": "https://www.researchgate.net/publication/390243161_Unraveling_the_2024_CrowdStrike_Incident_How_a_Security_Patch_Led_to_Global_System_Failure_and_Blue_Screen_of_Death",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.researchgate.net",
+                "/publication/390243161_Unraveling_the_2024_CrowdStrike_Incident_How_a_Security_Patch_Led_to_Global_System_Failure_and_Blue_Screen_of_Death",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Microsoft, CrowdStrike, and the Global BSOD Outage",
+            "content": "On July 19, 2024, a seemingly routine security update from CrowdStrike, a leading cybersecurity company, triggered a global wave of Blue Screen of Death ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQJv5fFu6uJNIKni85b751Qgi5DxmmouUdFhCN_GKbn2imIiPhy-UGpWFgu",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                19
+            ],
+            "score": 0.05263157894736842,
+            "category": "general",
+            "url": "https://www.qrcsolutionz.com/blog/microsoft-crowdstrike-and-the-global-bsod-outage",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.qrcsolutionz.com",
+                "/blog/microsoft-crowdstrike-and-the-global-bsod-outage",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "The July 19th Global IT Outages | Congress.gov",
+            "content": "23.07.2024 ... Separately, on July 18, 2024, Microsoft experienced a disruptive incident with its Azure cloud services. In this event, virtual machines (VM) ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSvf77cCsGgrae9jy5WU0Gxo7NtvKOaxuMhg2aY1P8jQTmTDhDtRt1tong",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                20
+            ],
+            "score": 0.05,
+            "category": "general",
+            "url": "https://www.congress.gov/crs-product/IN12392",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.congress.gov",
+                "/crs-product/IN12392",
+                "",
+                "",
+                ""
+            ]
+        }
+    ],
+    "answers": [],
+    "corrections": [],
+    "infoboxes": [],
+    "suggestions": [],
+    "unresponsive_engines": [
+        [
+            "brave",
+            "Suspended: too many requests"
+        ]
+    ]
+}

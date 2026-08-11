@@ -17,7 +17,7 @@ ob_flush(); flush();
 file_put_contents($logFile, date('H:i:s') . " started — reading {$file}\n", FILE_APPEND);
 
 $lastPos = 0;
-$timeout = 60;
+$timeout = 180;
 $started = time();
 $lineCount = 0;
 $skipCount = 0;

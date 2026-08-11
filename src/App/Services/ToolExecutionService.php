@@ -94,16 +94,25 @@ class ToolExecutionService
                 $toolData = array_merge(['tool' => $singleTool], $params);
                 $queryLabel = !empty($toolData['query']) ? ": {$toolData['query']}" : '';
 
-                \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$singleTool}{$queryLabel}", 'slate');
-
                 $result = $this->executeTool($singleTool, $toolData, $sessionId, $messages, $emit);
                 if (!empty($result)) {
                     $results[] = ['tool' => $singleTool, 'result' => $result];
                 }
+                $emit('trace', ['label' => "{$singleTool}{$queryLabel} completed.", 'color' => 'emerald']);
             }
         }
 
         return $results;
+    }
+
+    /**
+     * Force-execute a tool the model missed. Used to guarantee user-selected
+     * tools always run regardless of LLM output quality.
+     */
+    public function executeGuaranteed(string $toolName, string $query, int $sessionId, array $messages, callable $emit): string
+    {
+        $toolData = ['tool' => $toolName, 'query' => $query];
+        return $this->executeTool($toolName, $toolData, $sessionId, $messages, $emit);
     }
 
     private function matchToolName(string $response): ?string

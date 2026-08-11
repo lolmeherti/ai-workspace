@@ -1,0 +1,1094 @@
+{
+    "query": "prompt injection large language models LLM mechanism explanation",
+    "results": [
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks in Large Language Models and AI Agent ... - MDPI",
+            "content": "Large language models (LLMs) have rapidly transformed artificial intelligence applications across industries, yet their integration into production systems has unveiled critical security vulnerabilities, chief among them prompt injection attacks. This comprehensive review synthesizes research from 2023 to 2025, analyzing 45 key sources, industry security reports, and documented real-world ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                7,
+                1,
+                10
+            ],
+            "score": 3.728571428571428,
+            "category": "general",
+            "url": "https://www.mdpi.com/2078-2489/17/1/54",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.mdpi.com",
+                "/2078-2489/17/1/54",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks on Large Language Models: A Survey of Attack ...",
+            "content": "The escalating scale and complexity of large language models have led to a sharp increase in security threats. LLM security vulnerabilities can trigger systemic failures, causing significant losses and widespread impact. For instance, in 2023, a vulnerability was discovered in a ChatGPT plugin named \"Chat with Code\" where a prompt injection payload on a webpage could modify GitHub ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                1
+            ],
+            "score": 1,
+            "category": "general",
+            "url": "https://www.sciencedirect.com/org/science/article/pii/S1546221826001384",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.sciencedirect.com",
+                "/org/science/article/pii/S1546221826001384",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "PDF Prompt Injection Attacks on Large Language Models: A Survey of Attack ...",
+            "content": "1 Introduction The escalating scale and complexity of large language models have led to a sharp increase in security threats. LLM security vulnerabilities can trigger systemic failures, causing significant losses and widespread impact. For instance, in 2023, a vulnerability was discovered in a ChatGPT plugin named \"Chat with Code\" where a prompt injection payload on a webpage could modify ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                2
+            ],
+            "score": 0.5,
+            "category": "general",
+            "url": "https://cdn.techscience.press/files/cmc/2026/TSP_CMC-87-1/TSP_CMC_74081/TSP_CMC_74081.pdf",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "cdn.techscience.press",
+                "/files/cmc/2026/TSP_CMC-87-1/TSP_CMC_74081/TSP_CMC_74081.pdf",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Indirect Prompt Injection: Generative AI's Greatest Security Flaw",
+            "content": "01.11.2024 ... Simply defined, prompt injection occurs “when an attacker manipulates a large language model (LLM) through crafted inputs, causing the LLM ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                10,
+                9
+            ],
+            "score": 0.4222222222222222,
+            "category": "general",
+            "url": "https://cetas.turing.ac.uk/publications/indirect-prompt-injection-generative-ais-greatest-security-flaw",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "cetas.turing.ac.uk",
+                "/publications/indirect-prompt-injection-generative-ais-greatest-security-flaw",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Analysis of LLMs Against Prompt Injection and Jailbreak Attacks",
+            "content": "This work presents an empirical evaluation of jailbreak and prompt injection attacks on open-source large language models under realistic deployment conditions.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                3
+            ],
+            "score": 0.3333333333333333,
+            "category": "general",
+            "url": "https://arxiv.org/html/2602.22242v1",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "arxiv.org",
+                "/html/2602.22242v1",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "What is a prompt injection attack? | Definition & Defense Strategies",
+            "content": "Large language models (LLMs) are rapidly transforming how we interact with technology, offering unprecedented automation and intelligence capabilities.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general",
+            "url": "https://www.darktrace.com/cyber-ai-glossary/prompt-injections",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.darktrace.com",
+                "/cyber-ai-glossary/prompt-injections",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks in LLMs: Complete Guide for 2026",
+            "content": "What are Prompt Injection Attacks? Prompt injection is one of the most basic architectural vulnerabilities in large language models. The heart of the attack leverages the fact that an LLM cannot distinguish between trusted system instructions and untrusted user input.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                4
+            ],
+            "score": 0.25,
+            "category": "general",
+            "url": "https://www.getastra.com/blog/ai-security/prompt-injection-attacks/",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.getastra.com",
+                "/blog/ai-security/prompt-injection-attacks/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection attack against LLM-integrated Applications - arXiv",
+            "content": "29.12.2025 ... Large Language Models (LLMs), renowned for their superior proficiency in language comprehension and generation, stimulate a vibrant ecosystem of ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5
+            ],
+            "score": 0.2,
+            "category": "general",
+            "url": "https://arxiv.org/html/2306.05499v3",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "arxiv.org",
+                "/html/2306.05499v3",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "A Systematic Review of Prompt Injection Attacks on Large Language ...",
+            "content": "Large Language Models (LLMs) are increasingly integrated into various infrastructure and interactive applications. However, their inherent linguistic flexibility introduces security vulnerabilities, particularly through Prompt Injection (PI) attacks. This systematic review provides a comprehensive synthesis of the evolving landscape of PI attacks, including their development trends ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                5
+            ],
+            "score": 0.2,
+            "category": "general",
+            "url": "https://ieeexplore.ieee.org/document/11359704",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "ieeexplore.ieee.org",
+                "/document/11359704",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "LLM01:2025 Prompt Injection - OWASP Gen AI Security Project",
+            "content": "A Prompt Injection Vulnerability occurs when user prompts alter the LLM's behavior or output in unintended ways. These inputs can affect the model even if they are imperceptible to humans, therefore prompt injections do not need to be human-visible/readable, as long as the content is parsed by the model. Prompt Injection vulnerabilities exist in how […]",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcT5lh7XBLm-TqPBK8C0paGywJsEH1nhQ_eaAFh0tQpu5IkXzyPqnsLcvB2O",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                3,
+                2,
+                8
+            ],
+            "score": 2.875,
+            "category": "general",
+            "url": "https://genai.owasp.org/llmrisk/llm01-prompt-injection/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "genai.owasp.org",
+                "/llmrisk/llm01-prompt-injection/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "What Is a Prompt Injection Attack? - IBM",
+            "content": "A prompt injection is a type of cyberattack against large language models (LLMs). Hackers disguise malicious inputs as legitimate prompts.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTAcHICAMV3ceG6U2EHD3OlTKNKIeUNnNvYc1290FJeLmc5i9zWDaASOjlQ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                2,
+                4
+            ],
+            "score": 1.5,
+            "category": "general",
+            "url": "https://www.ibm.com/think/topics/prompt-injection",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.ibm.com",
+                "/think/topics/prompt-injection",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks in Large Language Models - Medium",
+            "content": "18.01.2026 ... The rapid adoption of large language models (LLMs) such as GPT-series, Gemini, and Claude has revolutionized industries, enabling applications ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQtmO9XL491kP5A9Pim1DH1pjLbvYFDhpyVRGg2pGcqqG_ihYo1enyuKqmt",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                1
+            ],
+            "score": 1,
+            "category": "general",
+            "url": "https://medium.com/@jannadikhemais/prompt-injection-attacks-in-large-language-models-vulnerabilities-exploitation-techniques-and-e00fe683f6d7",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "medium.com",
+                "/@jannadikhemais/prompt-injection-attacks-in-large-language-models-vulnerabilities-exploitation-techniques-and-e00fe683f6d7",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks on Large Language Models: A Survey of ...",
+            "content": "Large language models (LLMs) have revolutionized AI applications across diverse domains. However, their widespread deployment has introduced critical ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSXfSIMdU5kALkJT0C0gZL1jUZl8TrdRiwg_77p11E5IMZ0Bka1lpPZrcZI",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6,
+                3
+            ],
+            "score": 1,
+            "category": "general",
+            "url": "https://www.techscience.com/cmc/v87n1/66084/html",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.techscience.com",
+                "/cmc/v87n1/66084/html",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection: Impact, Attack Anatomy & Prevention - Oligo Security",
+            "content": "Prompt injection, jailbreaking, and data poisoning are related but distinct types of attacks on language models, each targeting different stages or mechanisms ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSP9YrD_T9VTuhQujoW-3FYWIvJi6uCqvGwaWGB0_k03mSf7-iau2VFlFht",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9,
+                6
+            ],
+            "score": 0.5555555555555556,
+            "category": "general",
+            "url": "https://www.oligo.security/academy/prompt-injection-impact-attack-anatomy-prevention",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.oligo.security",
+                "/academy/prompt-injection-impact-attack-anatomy-prevention",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "(PDF) Prompt Injection Attacks on Large Language Models",
+            "content": "Large language models (LLMs) have revolutionized AI applications across diverse domains. However, their widespread deployment has introduced critical ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTodJbMD0IBAfW2S3hLZvLGCg-OIj7-mSoo6SWqIi5DCyOUrxDeFa8GOveJ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "startpage"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                13,
+                5
+            ],
+            "score": 0.5538461538461539,
+            "category": "general",
+            "url": "https://www.researchgate.net/publication/398815983_Prompt_Injection_Attacks_on_Large_Language_Models_A_Survey_of_Attack_Methods_Root_Causes_and_Defense_Strategies",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.researchgate.net",
+                "/publication/398815983_Prompt_Injection_Attacks_on_Large_Language_Models_A_Survey_of_Attack_Methods_Root_Causes_and_Defense_Strategies",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Indirect prompt injection in large language models - Springer Nature",
+            "content": "Prompt injection recently appeared in the worldwide press [1], and attracted public attention to this technique, intended to deceive and manipulate the results of prompts to tools based on Large Language Models (LLM). This attack opens the gate to a wide range of issues, which could have disruptive effects on the effective quality of LLMs' results and user trust in Generative Artificial ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSzY6T6ZjQ1YkAwD6fFZrxgUhXYdd4pvaSol3I19WVOFpPLPPa_IZes",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse",
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                17,
+                7
+            ],
+            "score": 0.40336134453781514,
+            "category": "general",
+            "url": "https://link.springer.com/article/10.1007/s00521-026-12266-x",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "link.springer.com",
+                "/article/10.1007/s00521-026-12266-x",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "How Prompt Injection Works - NeuralTrust AI",
+            "content": "26.05.2025 ... Prompt injection attacks exploit Large Language Models (LLMs) by tricking them with specially crafted inputs that override original instructions.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQZjE5yrhKhUHIYuTsSMy-ljDc4tpNlXtOPZbQrRkC9h1UHs_4hsAerdXKJ",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                8
+            ],
+            "score": 0.125,
+            "category": "general",
+            "url": "https://neuraltrust.ai/blog/how-prompt-injection-works",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "neuraltrust.ai",
+                "/blog/how-prompt-injection-works",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection in LLMs: An In-Depth Technical Exploration | Medium",
+            "content": "19.10.2025 ... In the rapidly evolving domain of Generative AI, large language models (LLMs) like GPT-4, Claude, LLaMA, and Gemini are being integrated ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcQxovNVFng0mFZVh8QW04CMpigb8_7TMQQxoIgrOPIt8Z1Sk9blSkoimPpB",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                11
+            ],
+            "score": 0.09090909090909091,
+            "category": "general",
+            "url": "https://expl0it32.medium.com/prompt-injection-in-llms-an-in-depth-technical-exploration-ea286ac4b8b5",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "expl0it32.medium.com",
+                "/prompt-injection-in-llms-an-in-depth-technical-exploration-ea286ac4b8b5",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "LLM Prompt Injection Attacks: The Complete Security Guide for ...",
+            "content": "Deep dive into prompt injection vulnerabilities that threaten your AI applications. Learn direct and indirect attack vectors, real-world exploit patterns, defense-in-depth strategies, and production-ready security implementations to protect your LLM-powered systems.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                6
+            ],
+            "score": 0.16666666666666666,
+            "category": "general",
+            "url": "https://dev.to/pockit_tools/llm-prompt-injection-attacks-the-complete-security-guide-for-developers-building-ai-applications-bg9",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "dev.to",
+                "/pockit_tools/llm-prompt-injection-attacks-the-complete-security-guide-for-developers-building-ai-applications-bg9",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://arxiv.org/html/2509.05883v1",
+            "title": "Multimodal Prompt Injection Attacks: Risks and Defenses for Modern ...",
+            "content": "7 Sept 2025 ... Large Language Models (LLMs) have seen rapid adoption in recent years, with industries increasingly relying on them to maintain a ...",
+            "publishedDate": null,
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "arxiv.org",
+                "/html/2509.05883v1",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                7
+            ],
+            "score": 0.14285714285714285,
+            "category": "general"
+        },
+        {
+            "url": "https://www.linkedin.com/pulse/prompt-injection-attacks-large-language-models-mohit-sewak-ph-d--fjxrc",
+            "title": "Prompt Injection Attacks on Large Language Models - LinkedIn",
+            "content": "LLMs, or Large Language Models, are like that friend who can quote every movie line ever but sometimes mixes up characters. Trained on ...",
+            "publishedDate": "2024-12-10T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "www.linkedin.com",
+                "/pulse/prompt-injection-attacks-large-language-models-mohit-sewak-ph-d--fjxrc",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                8
+            ],
+            "score": 0.125,
+            "category": "general",
+            "pubdate": "2024-12-10 00:00:00"
+        },
+        {
+            "template": "default.html",
+            "title": "CMC | Prompt Injection Attacks on Large Language Models: A Survey of ...",
+            "content": "Large language models (LLMs) have revolutionized AI applications across diverse domains. However, their widespread deployment has introduced critical security vulnerabilities, particularly prompt injection attacks that manipulate model behavior through malicious instructions.",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "duckduckgo"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                9
+            ],
+            "score": 0.1111111111111111,
+            "category": "general",
+            "url": "https://www.techscience.com/cmc/v87n1/66084",
+            "engine": "duckduckgo",
+            "parsed_url": [
+                "https",
+                "www.techscience.com",
+                "/cmc/v87n1/66084",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "url": "https://www.nature.com/articles/s41598-026-43883-0",
+            "title": "Detection and analysis of prompt injection in indian multilingual ...",
+            "content": "With the use of Large Language Models (LLMs) becoming more significant in many applications, it has become a great need to ask the question ...",
+            "publishedDate": "2026-04-04T00:00:00",
+            "engine": "startpage",
+            "template": "default.html",
+            "parsed_url": [
+                "https",
+                "www.nature.com",
+                "/articles/s41598-026-43883-0",
+                "",
+                "",
+                ""
+            ],
+            "img_src": "",
+            "thumbnail": "",
+            "priority": "",
+            "engines": [
+                "startpage"
+            ],
+            "positions": [
+                10
+            ],
+            "score": 0.1,
+            "category": "general",
+            "pubdate": "2026-04-04 00:00:00"
+        },
+        {
+            "template": "default.html",
+            "title": "how-microsoft-defends-against-indirect-prompt-injection-attacks",
+            "content": "29.07.2025 ... The growing adoption of large language models (LLMs) in enterprise workflows has introduced a new class of adversarial techniques: indirect ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                19
+            ],
+            "score": 0.05263157894736842,
+            "category": "general",
+            "url": "https://www.microsoft.com/en-us/msrc/blog/2025/07/how-microsoft-defends-against-indirect-prompt-injection-attacks",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.microsoft.com",
+                "/en-us/msrc/blog/2025/07/how-microsoft-defends-against-indirect-prompt-injection-attacks",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "How to Red Team Prompt Injection Attacks on Multi-Modal LLM Agents",
+            "content": "Large Language Models (LLMs) treat the entire prompt (system instructions + user input + any context) as one sequence of tokens when generating a response ( ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSvvqWNGNg8zFO7bw8Fvzp49WIyUEq55UHBuezxbkSFTUpxvrdUCf5YOyA",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                12
+            ],
+            "score": 0.08333333333333333,
+            "category": "general",
+            "url": "https://www.testsavant.ai/how-to-red-team-prompt-injection/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.testsavant.ai",
+                "/how-to-red-team-prompt-injection/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection: An Analysis of Recent LLM Security Incidents",
+            "content": "26.08.2025 ... Model Context Protocol (MCP): A built-in functional framework of Cursor IDE, which mainly acts as a “bridge” between large language models and ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTxsmESI31wZRp5frIUSO6s5l4n46Vx1cEh3cqF2b5MJUVsWvgp98K_dsA",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                14
+            ],
+            "score": 0.07142857142857142,
+            "category": "general",
+            "url": "https://nsfocusglobal.com/prompt-word-injection-an-analysis-of-recent-llm-security-incidents/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "nsfocusglobal.com",
+                "/prompt-word-injection-an-analysis-of-recent-llm-security-incidents/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks in Large Language Models and AI Agent ...",
+            "content": "03.11.2025 ... Large Language Models (LLMs) have rapidly transformed artificial intelligence applica-tions across industries, yet their integration into ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSCi75DF-JZ0_lQDEl7FIotdxqTZbhzuNCwvv7_EZ7QJaof52XWDBCNeBkh",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                15
+            ],
+            "score": 0.06666666666666667,
+            "category": "general",
+            "url": "https://www.preprints.org/manuscript/202511.0088",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.preprints.org",
+                "/manuscript/202511.0088",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Prompt Injection Attacks: Types, Examples & Mitigations | CyCognito",
+            "content": "These malicious prompts might force Large Language Models (LLMs) to perform unauthorized actions. Prompt injection manipulates AI by treating untrusted, ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTRIzpTxfOGPpqrJT9SGF7xBwhmBwr5MlRE3JaYW3B2i_SnRD1dJCs7QEk",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                16
+            ],
+            "score": 0.0625,
+            "category": "general",
+            "url": "https://www.cycognito.com/learn/ai-security/prompt-injection/",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.cycognito.com",
+                "/learn/ai-security/prompt-injection/",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "What Is a Prompt Injection Attack? [Examples & Prevention]",
+            "content": "A prompt injection attack is a GenAI security threat where an attacker deliberately crafts and inputs deceptive text into a large language model (LLM) to ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcR7EkLPbco7p39H0b8EKL8mD4SzbXG_L3bufttnayztx_kiZaArj1gMN0P1",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                18
+            ],
+            "score": 0.05555555555555555,
+            "category": "general",
+            "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-a-prompt-injection-attack",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "www.paloaltonetworks.com",
+                "/cyberpedia/what-is-a-prompt-injection-attack",
+                "",
+                "",
+                ""
+            ]
+        },
+        {
+            "template": "default.html",
+            "title": "Analysis of LLMs Against Prompt Injection and Jailbreak Attacks",
+            "content": "31.05.2026 ... Prompt injection and jailbreak attacks have emerged as one of the most critical security vulnerabilities in instruction-following Large Language ...",
+            "img_src": "",
+            "iframe_src": "",
+            "audio_src": "",
+            "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSKs9V5CY2chb15QzL7yC58eYH5n132w4oNUOrgezB0FH6c2Eu3f20M5yg",
+            "publishedDate": null,
+            "pubdate": "",
+            "length": null,
+            "views": "",
+            "author": "",
+            "metadata": "",
+            "priority": "",
+            "engines": [
+                "google cse"
+            ],
+            "open_group": false,
+            "close_group": false,
+            "positions": [
+                20
+            ],
+            "score": 0.05,
+            "category": "general",
+            "url": "https://dl.acm.org/doi/10.1145/3803628.3807972",
+            "engine": "google cse",
+            "parsed_url": [
+                "https",
+                "dl.acm.org",
+                "/doi/10.1145/3803628.3807972",
+                "",
+                "",
+                ""
+            ]
+        }
+    ],
+    "answers": [],
+    "corrections": [],
+    "infoboxes": [],
+    "suggestions": [],
+    "unresponsive_engines": [
+        [
+            "brave",
+            "Suspended: too many requests"
+        ],
+        [
+            "wikipedia",
+            "timeout"
+        ]
+    ]
+}

@@ -1,0 +1,804 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S3">
+<title>
+MacBook Air vs. Pro: Which MacBook Should I Buy? - CNET
+</title>
+<domain>www.cnet.com</domain>
+<published>2026-03-12T18:12:00-04:00</published>
+<fetched>2026-07-28T22:51:26+00:00</fetched>
+<chunk id="S3-C4" section="MacBook Air vs. Pro: Weight and battery life">
+The Air wins on weight, but the Pro takes the crown for battery life.
+
+The 13.6-inch MacBook Air weighs 2.7 pounds, and the 15.3-inch Air weighs 3.3 pounds. The 14.2-inch MacBook Pro at 3.4 pounds weighs more than the larger Air. And it weighs appreciably more than the smaller Air, whose display is only 0.6 inches smaller.
+</chunk>
+<chunk id="S3-C5" section="MacBooks by size, weight and display">
+13-inch MacBook Air (M5)15-inch MacBook Air (M5)14-inch MacBook Pro (M5)16-inch MacBook Pro (M5 Pro)Screen size13.6 in15.3 in14.2 in16.2 inScreen resolution2,560×1,664 pixels2,880×1,864 pixels3,024×1,964 pixels3,456×2,234 pixelsWeight2.7 lbs3.3 lbs3.4 lbs4.7 lbsDimensions (HWD)0.44 x 11.97 x 8.46 in0.45 x 13.4 x 9.35 in0.61 x 12.31 x 8.71 in0.66 x 14.01 x 9.77 inConnectionsThunderbolt 4 x2, headphone, MagSafe 3Thunderbolt 4 x2, headphone, MagSafe 3Thunderbolt 4 x3, HDMI, SDXC card, headphone, MagSafe 3Thunderbolt 5 x3, HDMI, SDXC card, headphone, MagSafe 3Battery52.6-watt‑hour66.5-watt‑hour 72.4-watt-hour100-watt-hour
+
+I use a 14-inch Pro for work, and my daughter has a 13-inch Air for school. The difference in weight between the two is striking. I’m always jealous of the lighter carrying weight of the Air whenever I pack up my Pro for travel or just to take it down to my local coffee shop. The MacBook Air also takes up less space in a backpack. It’s just 0.44 inches thick, and the MacBook Pro is a chunkier 0.61 inches thick. The Neo sits in the middle at 0.5 inches thick.
+
+The added weight and thickness, however, allow Apple to pack a bigger battery inside the MacBook Pro than the Air. And the MacBook Air has a much bigger battery than the Neo. The Neo still has enough battery life to get students through a day of school, but the Air and Pro models run even longer.
+</chunk>
+<chunk id="S3-C7" section="MacBook Air vs. Pro: Display and speakers">
+MacBook Pro models have a slightly higher-resolution display and a higher pixels-per-inch count (224ppi on the Air to the Pro’s 254ppi), but the bigger differences between the displays are their brightness, HDR support and refresh rate.
+
+The Macbook Pro’s Liquid Retina XDR display is a mini-LED panel rated for 1,000 nits in SDR and 1,600 nits in HDR. The MacBook Air’s Liquid Retina display is rated for 500 nits, which is bright enough for most lighting environments but lacks the range and contrast to make HDR content pop.
+
+You’ll also get smoother movement in videos and games on the MacBook Pro’s 120Hz ProMotion panel. The MacBook Air offers a standard 60Hz refresh rate, which [makes me a little sad](https://www.cnet.com/tech/computing/i-want-apple-to-bring-this-macbook-pro-feature-to-the-macbook-air/).
+
+The MacBook Air and Pro each offer good audio output for a laptop, but the Pro’s sound is better. The MacBook Pro features a six-speaker array, and the Air has four speakers.
+
+![A side view of an open MacBook Pro sitting on a desk](https://www.cnet.com/wp-content/uploads/sites/2/0ccbff6e-1371-4e97-841a-59ef971cf4ec.jpg)The MacBook Pro has more ports and speakers than the MacBook Air.
+
+Lori Grunin/CNET## MacBook Air vs. Pro: Ports and fans
+
+The MacBook Pro features more external connections. It has an HDMI port and SD card slot — neither of which you’ll find on the Air — along with an extra Thunderbolt port. The M5 Pro-based models also support Thunderbolt 5 for faster data and support for more external monitors than you get with Thunderbolt 4 on an Air.
+
+The MacBook Air has the advantage in acoustics. It lacks a cooling fan and operates in complete silence.
+</chunk>
+<chunk id="S3-C6" section="MacBook battery life test results">
+MacBook Pro 14 (M5, late 2025)22 hr, 59 minMacBook Air 13 (M5, early 2026)17 hr, 2 minMacBook Air 15 (M4, early 2025)16 hr, 41 minMacBook Neo (early 2026)13 hr, 26 min
+</chunk>
+</source>
+
+<source id="S1">
+<title>
+MacBook Air 13-in. (M4) vs MacBook Pro 14-in. (M4) -  Apple
+</title>
+<domain>www.apple.com</domain>
+<fetched>2026-07-28T22:51:21+00:00</fetched>
+<chunk id="S1-C2" section="Compare Mac models">
+[shop mac](/us/shop/goto/buy_mac)
+
+Get help choosing. [Chat with a Specialist](https://contactretail.apple.com/?c=us&amp;l=en&amp;ap=COM&amp;pg=COM:mac_compare&amp;ag=FASTPASS)
+
+Help Me Choose
+
+MacBook Neo (A18 Pro)
+
+MacBook Air 13-in. (M5)
+
+MacBook Air 15-in. (M5)
+
+MacBook Pro 14-in. (M5)
+
+MacBook Pro 14-in. (M5 Pro)
+
+MacBook Pro 14-in. (M5 Max)
+
+MacBook Pro 16-in. (M5 Pro)
+
+MacBook Pro 16-in. (M5 Max)
+
+MacBook Air 13-in. (M4)
+
+MacBook Air 13-in. (M3)
+
+MacBook Air 13-in. (M2)
+
+MacBook Air 13-in. (M1, 2020)
+
+MacBook Air 15-in. (M4)
+
+MacBook Air 15-in. (M3)
+
+MacBook Air 15-in. (M2, 2023)
+
+MacBook Air (Intel, 2020)
+
+MacBook Air (Intel, 2017)
+
+MacBook Pro 13-in. (M2, 2022)
+
+MacBook Pro 13-in. (M1, 2020)
+
+MacBook Pro 13-in. (Intel, two ports, 2020)
+
+MacBook Pro 13-in. (Intel, four ports, 2020)
+
+MacBook Pro 14-in. (M4 Max)
+
+MacBook Pro 14-in. (M4 Pro)
+
+MacBook Pro 14-in. (M4)
+
+MacBook Pro 14-in. (M3)
+
+MacBook Pro 14-in. (M3 Pro or M3 Max)
+
+MacBook Pro 14-in. (M2 Pro or M2 Max, 2023)
+
+MacBook Pro 14-in. (M1 Pro or M1 Max, 2021)
+
+MacBook Pro 16-in. (M4 Max)
+
+MacBook Pro 16-in. (M4 Pro)
+
+MacBook Pro 16-in. (M3 Pro or M3 Max)
+
+MacBook Pro 16-in. (M2 Pro or M2 Max, 2023)
+
+MacBook Pro 16-in. (M1 Pro or M1 Max, 2021)
+
+MacBook Pro 16-in. (Intel, 2019)
+
+iMac (M4, two ports)
+
+iMac (M4, four ports)
+
+Mac mini (M4)
+
+Mac mini (M4 Pro)
+
+Mac Studio (M4 Max)
+
+Mac Studio (M3 Ultra)
+
+iMac (M3, two ports)
+
+iMac (M3, four ports)
+
+iMac 21.5-in. (Intel, 2019)
+
+iMac 21.5-in. (Intel, 2017)
+
+iMac 24-in. (M1, two ports, 2021)
+
+iMac 24-in. (M1, four ports, 2021)
+
+iMac 27-in. (Intel, 2020)
+
+iMac Pro (Intel, 2017)
+
+Mac mini (M2 or M2 Pro)
+
+Mac mini (M1, 2020)
+
+Mac mini (Intel, 2018)
+
+Mac Studio (M2 Max or M2 Ultra)
+
+Mac Studio (M1 Max or M1 Ultra, 2022)
+
+Mac Pro (M2 Ultra)
+
+Mac Pro (Intel, 2019)
+
+Dropdown
+
+Current Laptops
+
+Current Desktops
+
+More Laptops
+
+More Desktops
+
+Finish
+
+Blue
+
+Blue
+
+Purple
+
+Green
+
+Pink
+
+Pink
+
+Orange
+
+Yellow
+
+Green
+
+Sky Blue
+
+Silver
+
+Starlight
+
+Midnight
+
+Starlight
+
+Space Gray
+
+Space Black
+
+Silver
+
+Silver
+
+Yellow
+
+Orange
+
+Purple
+
+Gold
+
+Black
+
+Blush
+
+Citrus
+
+Indigo
+
+Price
+
+Badge
+
+{MBN_2026_MAIN}From $price.display.smart or $price.display.perMonth for $price.display.months mo.[\*](#footnote-asterisk)
+
+{MDH74}From $price.display.smart or $price.display.perMonth for $price.display.months mo.[\*](#footnote-asterisk)
+Lease from $price.display.poiPrice.display.perMonth for $price.display.poiPrice.display.months mo. with Apple Upgrade[◊](#footnote-diamond)
+
+{MDV94}From $price.display.smart or $price.display.perMonth for $price.display.months mo.[\*](#footnote-asterisk)
+Lease from $price.display.poiPrice.display.perMonth for $price.display.poiPrice.display.months mo. with Apple Upgrade[◊](#footnote-diamond)
+
+{MACBOOKPRO_M5_MAIN_2026}From $price.display.smart or $price.display.perMonth for $price.display.months mo.[\*](#footnote-asterisk)
+Lease from $price.display.poiPrice.display.perMonth for $price.display.poiPrice.display.months mo. with Apple Upgrade[◊](#footnote-diamond)
+
+{MGDN4}From $price.display.smart or $price.display.perMonth for $price.display.months mo.[\*](#footnote-asterisk)
+Lease from $price.display.poiPrice.display.perMonth for $price.display.poiPrice.display.months mo. with Apple Upgrade[◊](#footnote-diamond)
+</chunk>
+<chunk id="S1-C46" section="Compare Mac models">
+- 2rSRzZ-ac
+- 3XU2FAFpv
+
+ac- 1activitymap
+- 2engagement
+
+footnote- 1Screen size is measured diagonally.
+- 2Actual diagonal screen measure is 23.5 inches.
+- 31GB = 1 billion bytes and 1TB = 1 trillion bytes; actual formatted capacity less.
+- 4Size and weight vary by configuration and manufacturing process.
+- 5Battery life varies by use and configuration; see [apple.com/batteries](/batteries/) for more information.
+- 6Requires camera (sold separately).
+- 7Requires microphone (sold separately).
+- 8Screen size is measured diagonally. The display has rounded corners at the top. When measured as a standard rectangular shape, the screen is 13.0 inches diagonally (actual viewable area is less).
+- 9Screen size is measured diagonally. The displays on the 14-inch and 16-inch MacBook Pro have rounded corners at the top. When measured as a standard rectangular shape, the screens are 14.2 inches and 16.2 inches diagonally (actual viewable area is less).
+- 10In temperatures less than 25° C.
+- 11Screen size is measured diagonally. The displays on the 13-inch and 15-inch MacBook Air have rounded corners at the top. When measured as a standard rectangular shape, the screens are 13.6 inches and 15.3 inches diagonally (actual viewable area is less).
+- 12Wi-Fi 6E and Wi-Fi 7 available in countries and regions where supported.
+- 13Apple Intelligence is available in beta. Some features may not be available in all regions or languages. For feature and language availability and system requirements, see [support.apple.com/121115](https://support.apple.com/en-us/121115).
+- 14See [support.apple.com/en-us/102596](https://support.apple.com/en-us/102596) for supported models.
+
+MacBook Air 13-in. (M4)
+
+MacBook Pro 14-in. (M4)
+
+Dropdown
+
+Finish
+
+- Sky Blue
+- Silver
+- Starlight
+- Midnight
+
+- Space Black
+- Silver
+
+Quick Look
+
+13.6”Liquid Retina display[11](#footnote-11)
+
+14.2”Liquid Retina XDR display[9](#footnote-9)
+
+Apple M4 chip
+
+Apple M4 chip
+
+Apple Intelligence[13](#footnote-13)
+
+Apple Intelligence[13](#footnote-13)
+
+10-coreCPU
+
+10-coreCPU
+
+From8-coreGPU
+
+10-coreGPU
+
+From16GBunified memory
+
+From16GBunified memory
+
+From256GBstorage[3](#footnote-3)
+
+From512GBstorage[3](#footnote-3)
+
+Up to18 hrsbattery life[5](#footnote-5)
+
+Up to24 hrsbattery life[5](#footnote-5)
+
+Touch ID
+
+Touch ID
+
+Compute
+
+**System on Chip (SoC)
+M4 chip** 10-core CPU with 4 performance cores and 6 efficiency cores 
+Up to 10-core GPU
+Hardware-accelerated ray tracing
+16-core Neural Engine 
+120GB/s memory bandwidth
+
+**System on Chip (SoC)
+M4 chip** 10-core CPU with 4 performance cores and 6 efficiency cores
+ 10-core GPU
+ Hardware-accelerated ray tracing
+ 16-core Neural Engine
+ 120GB/s memory bandwidth
+
+**Media Engine** Hardware-accelerated H.264, HEVC, ProRes, and ProRes RAW 
+Video decode engine 
+Video encode engine 
+ProRes encode and decode engine
+AV1 decode
+
+**Media Engine** Hardware-accelerated H.264, HEVC, ProRes, and ProRes RAW
+Video decode engine
+Video encode engine
+ProRes encode and decode engine
+AV1 decode engine
+
+Apple Intelligence[13](#footnote-13)
+</chunk>
+<chunk id="S1-C48" section="Compare Mac models">
+Force Touch trackpad for precise cursor control and pressure-sensing capabilities; enables Force clicks, accelerators, pressure-sensitive drawing, and Multi-Touch gestures
+
+Force Touch trackpad for precise cursor control and pressure-sensing capabilities; enables Force clicks, accelerators, pressure-sensitive drawing, and Multi-Touch gestures
+
+Wireless
+
+Wi-Fi 6E (802.11ax)[12](#footnote-12)
+
+Wi-Fi 6E (802.11ax)[12](#footnote-12)
+
+Bluetooth 5.3
+
+Bluetooth 5.3
+
+Ports
+
+Two Thunderbolt 4 (USB-C) ports
+
+Three Thunderbolt 4 (USB-C) ports
+
+— Not available
+
+HDMI port
+
+— Not available
+
+SDXC card slot
+
+Secure Authentication
+
+Touch ID
+
+Touch ID
+
+Apple Pay
+
+Authorize payments using Touch ID
+
+Authorize payments using Touch ID
+
+Video Calling
+
+FaceTime video
+
+FaceTime video
+
+Initiate video calls over Wi-Fi to any FaceTime-enabled device
+
+Initiate video calls over Wi-Fi to any FaceTime-enabled device
+
+Audio Calling
+
+FaceTime audio
+
+FaceTime audio
+
+Initiate audio calls over Wi-Fi to any FaceTime-enabled device
+
+Initiate audio calls over Wi-Fi to any FaceTime-enabled device
+
+Wi-Fi calling
+
+Wi-Fi calling
+
+Siri
+
+Use your voice to send messages, set reminders, and more
+
+Use your voice to send messages, set reminders, and more
+
+Activate hands-free with only your voice using “Hey Siri” or just “Siri”
+
+Activate hands-free with only your voice using “Hey Siri” or just “Siri”
+
+Power and Battery[5](#footnote-5)
+
+Up to 15 hours wireless web
+
+Up to 16 hours wireless web
+
+Up to 18 hours video streaming
+
+Up to 24 hours video streaming
+
+Integrated 53.8-watt-hour lithium-polymer battery
+
+Integrated 72.4-watt-hour lithium-polymer battery
+
+30W USB-C Power Adapter (included with M4 with 8-core GPU)
+
+70W USB-C Power Adapter
+
+35W Dual USB-C Port Compact Power Adapter (included with M4 with 10-core GPU; configurable with M4 with 8-core GPU)
+
+— Not available
+
+Fast-charge capable with 70W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+MacBook Air 13-in. (M4)
+
+— Not available
+
+MacBook Pro 14-in. (M4)
+
+— Not available
+</chunk>
+<chunk id="S1-C45" section="Compare Mac models">
+Fast-charge capable with 70W USB-C Power Adapter or higher
+
+Fast-charge capable with 70W USB-C Power Adapter or higher
+
+Fast-charge capable with included 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with 96W USB-C Power Adapter or higher
+
+Fast-charge capable with included 140W USB-C Power Adapter
+
+Fast-charge capable with included 140W USB-C Power Adapter
+
+Fast-charge capable with included 140W USB-C Power Adapter
+
+Fast-charge capable with included 140W USB-C Power Adapter
+
+Fast-charge capable with included 140W USB-C Power Adapter
+
+Tech Specs
+
+Product
+
+MacBook Neo (A18 Pro)
+
+MacBook Air 13-in. (M5)
+
+MacBook Air 15-in. (M5)
+
+MacBook Pro 14-in. (M5)
+
+MacBook Pro 14-in. (M5 Pro)
+
+MacBook Pro 14-in. (M5 Max)
+
+MacBook Pro 16-in. (M5 Pro)
+
+MacBook Pro 16-in. (M5 Max)
+
+MacBook Air 13-in. (M4)
+
+MacBook Air 13-in. (M3)
+
+MacBook Air 13-in. (M2)
+
+MacBook Air 13-in (M1)
+
+MacBook Air 15-in. (M4)
+
+MacBook Air 15-in. (M3)
+
+MacBook Air 15-in. (M2)
+
+MacBook Air (Intel, 2020)
+
+MacBook Air (Intel, 2017)
+
+MacBook Pro 13-in. (M2, 2022)
+
+MacBook Pro 13-in. (M1, 2020)
+
+MacBook Pro 13-in. (Intel, two ports, 2020)
+
+MacBook Pro 13-in. (Intel, four ports, 2020)
+
+MacBook Pro 14-in.
+(M4 Max)
+
+MacBook Pro 14-in. (M4 Pro)
+
+MacBook Pro 14-in. (M4)
+
+MacBook Pro 14-in. (M3)
+
+MacBook Pro 14-in.
+(M3 Pro or M3 Max)
+
+MacBook Pro 14-in.
+ (M2 Pro or M2 Max, 2023)
+
+MacBook Pro 14-in. (M1 Pro or M1 Max, 2021)
+
+MacBook Pro 16-in.
+(M4 Max)
+
+MacBook Pro 16-in.
+(M4 Pro)
+
+MacBook Pro 16-in.
+(M3 Pro or M3 Max)
+
+MacBook Pro 16-in.
+(M2 Pro or M2 Max, 2023)
+
+MacBook Pro 16-in. (M1 Pro or M1 Max, 2021)
+
+MacBook Pro 16-in. (Intel, 2019)
+
+iMac (M4, two ports)
+
+iMac (M4, four ports)
+
+Mac mini (M4)
+
+Mac mini (M4 Pro)
+
+Mac Studio 
+(M4 Max)
+
+Mac Studio 
+(M3 Ultra)
+
+iMac (M3, two ports)
+
+iMac (M3, four ports)
+
+iMac 21.5-in. (Intel, 2019)
+
+iMac 21.5-in. (Intel, 2017)
+
+iMac 24-in. (M1, two ports, 2021)
+
+iMac 24-in. (M1, four ports, 2021)
+
+iMac 27-in. (Intel, 2020)
+
+iMac Pro (Intel, 2017)
+
+Mac mini (M2 or M2 Pro)
+
+Mac mini (M1, 2020)
+
+Mac mini (Intel, 2018)
+
+Mac Studio 
+(M2 Max or M2 Ultra)
+
+Mac Studio (M1 Max or M1 Ultra, 2022)
+
+Mac Pro (M2 Ultra)
+
+Mac Pro (Intel, 2019)
+
+Tech specs
+
+[Tech specs
+
+](/macbook-neo/specs/) [Learn more
+
+](/macbook-neo/)
+
+[Tech specs
+
+](/macbook-air/specs/) [Learn more
+
+](/macbook-air/)
+
+[Tech specs
+
+](/macbook-air/specs/) [Learn more
+
+](/macbook-air/)
+
+[Tech specs
+
+](/macbook-pro/specs/) [Learn more
+
+](/macbook-pro/)
+
+[Tech specs
+
+](/macbook-pro/specs/) [Learn more
+
+](/macbook-pro/)
+
+[Tech specs
+
+](/macbook-pro/specs/) [Learn more
+
+](/macbook-pro/)
+
+[Tech specs
+
+](/macbook-pro/specs/) [Learn more
+
+](/macbook-pro/)
+
+[Tech specs
+
+](/macbook-pro/specs/) [Learn more
+
+](/macbook-pro/)
+
+[Tech specs
+
+](/imac/specs/) [Learn more
+
+](/imac/)
+
+[Tech specs
+
+](/imac/specs/) [Learn more
+
+](/imac/)
+
+[Tech specs
+
+](/mac-mini/specs/) [Learn more
+
+](/mac-mini/)
+
+[Tech specs
+
+](/mac-mini/specs/) [Learn more
+
+](/mac-mini/)
+
+[Tech specs
+
+](/mac-studio/specs/) [Learn more
+
+](/mac-studio/)
+
+[Tech specs
+
+](/mac-studio/specs/) [Learn more
+
+](/mac-studio/)
+
+default-order- 1lp0n6AwB
+</chunk>
+</source>
+
+<source id="S2">
+<title>
+MacBook Air M4 vs MacBook Pro M4 After 2 Months - Why Pay More!? - YouTube
+</title>
+<domain>www.youtube.com</domain>
+<fetched>2026-07-28T22:51:24+00:00</fetched>
+<chunk id="S2-C1">
+&lt;?xml encoding="UTF-8"&gt;MacBook Air M4 vs MacBook Pro M4 After 2 Months - Why Pay More!? - YouTube
+
+&lt;a class="ytp-title-channel-logo" role="link" tabindex="0" target="_blank"&gt;&lt;/a&gt;&lt;a target="_blank"&gt;&lt;/a&gt;
+
+&lt;a class="ytp-title-link yt-uix-sessionlink ytp-title-fullerscreen-link" data-sessionlink="feature=player-title" tabindex="-1" target="_blank"&gt;MacBook Air M4 vs MacBook Pro M4 After 2 Months - Why Pay More!?&lt;/a&gt;&lt;a class="ytp-title-channel-name" href="" target="_blank"&gt;&lt;/a&gt;
+
+Ton einschalten 
+
+2-fach
+
+&lt;a class="ytp-suggested-action-container"&gt;
+
+&lt;/a&gt;
+
+[Enthält bezahlte Werbung](https://support.google.com/youtube?p=ppp&amp;nohelpkit=1)
+
+Link kopieren
+
+Info
+
+Shopping
+
+&lt;a class="ytp-featured-product-container"&gt;
+
+&lt;/a&gt;
+
+Falls die Wiedergabe nicht in Kürze beginnt, empfehlen wir dir, das Gerät neu zu starten.
+
+•
+
+Du bist nicht angemeldet
+
+Videos, die du dir ansiehst, werden möglicherweise zum TV-Wiedergabeverlauf hinzugefügt und können sich damit auf deine TV-Empfehlungen auswirken. Melde dich auf einem Computer in YouTube an, um das zu vermeiden.
+
+AbbrechenBestätigen
+
+Nächstes Video
+
+&lt;a class="ytp-autonav-endscreen-link-container" target=""&gt;
+
+Live
+
+Demnächst
+
+&lt;/a&gt;
+
+Abbrechen&lt;a aria-label="Nächstes Video starten" class="ytp-autonav-endscreen-upnext-button ytp-autonav-endscreen-upnext-play-button ytp-autonav-endscreen-upnext-button-rounded" role="button"&gt;Jetzt abspielen&lt;/a&gt;
+
+[Brandon Butch](https://www.youtube.com/channel/UCpZy-Hfqcxf-R7nQzlv9Bvw)
+
+Abonnieren
+
+Abonniert
+
+Subscribe for iOS 27 coverage, iPhone 18 news, tips &amp;amp; tricks, comparisons &amp;amp; more! The premier source for Apple + Tech reviews, tutorials, software update videos &amp;amp; news, since 2008! My goal? To provide the most in-depth, accurate, and fun videos on the latest iOS updates, the latest Apple products, and whatever else the future holds for this channel. Business inquiries: links.brandonbutch.com
+
+[MacBook Pro M4 - Review After 3 Months: This Feels Wrong.
+
+12:52](https://www.youtube.com/watch?v=a8Szdrnq0YM)
+
+[M4 MacBook Air (2025) - First 24 Things To Do! (Tips &amp;amp; Tricks)
+
+32:44](https://www.youtube.com/watch?v=GJsHirEbBFs)
+
+&lt;a class="ytp-playlist-menu-title-name"&gt;&lt;/a&gt;
+
+Teilen
+
+&lt;a class="ytp-share-panel-link ytp-no-contextmenu" target="_blank" title="Link teilen"&gt;&lt;/a&gt;Mit Playlist teilen
+
+Bei dem Versuch, Informationen zum Teilen abzurufen, ist ein Fehler aufgetreten. Versuche es bitte später noch einmal.
+
+0:00
+
+&lt;a aria-disabled="true" class="ytp-prev-button ytp-button" role="button" style="display: none;" tabindex="0"&gt;&lt;/a&gt;&lt;a aria-disabled="false" aria-keyshortcuts="SHIFT+n" aria-label="Weiter (SHIFT+n)" class="ytp-next-button ytp-button ytp-playlist-ui" data-title-no-tooltip="Weiter" data-tooltip-title="Weiter (SHIFT+n)" role="button" style="display: none;" tabindex="0"&gt;&lt;/a&gt;
+
+0:00 / 21:10
+
+Live
+
+•Vollständiges Video ansehen
+
+•
+
+•
+
+[](/ "YouTube")[](/ "YouTube")
+
+[Info](https://www.youtube.com/about/)[Presse](https://www.youtube.com/about/press/)[Urheberrecht](https://www.youtube.com/about/copyright/)[Kontakt](/t/contact_us/)[Creator](https://www.youtube.com/creators/)[Werben](https://www.youtube.com/ads/)[Entwickler](https://developers.google.com/youtube)[Impressum](https://www.youtube.com/t/impressum?hl=de&amp;gl=DE)[Nutzungsbedingungen](/t/terms)[Datenschutz](/t/privacy)[Richtlinien &amp;amp; Sicherheit](https://www.youtube.com/about/policies/)[Wie funktioniert YouTube?](https://www.youtube.com/howyoutubeworks?utm_campaign=ytgen&amp;utm_source=ythp&amp;utm_medium=LeftNav&amp;utm_content=txt&amp;u=https%3A%2F%2Fwww.youtube.com%2Fhowyoutubeworks%3Futm_source%3Dythp%26utm_medium%3DLeftNav%26utm_campaign%3Dytgen)[Neue Funktionen testen](/new)© 2026 Google LLC
+</chunk>
+</source>

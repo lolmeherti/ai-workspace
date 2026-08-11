@@ -1,0 +1,17 @@
+Based on the retrieved data, here is a comparison of the MacBook Air and MacBook Pro specifications:
+
+### Display
+*   **MacBook Air:** Features a 13.6-inch Liquid Retina display [S1-C45]. Generally, the Air's Liquid Retina display is rated for 500 nits and offers a standard 60Hz refresh rate [S3-C7].
+*   **MacBook Pro:** Features a 14.2-inch Liquid Retina XDR display [S1-C45]. This display has a higher pixels-per-inch count (254ppi) compared to the Air's 224ppi [S3-C7]. The Pro's display is rated for 1,000 nits in SDR and 1,600 nits in HDR, and it includes a 120Hz ProMotion panel [S3-C7].
+
+### Battery Life
+*   **MacBook Air M4:** Offers up to 18 hours of battery life [S1-C45].
+*   **MacBook Pro M4:** Offers up to 24 hours of battery life [S1-C45]. Generally, the MacBook Pro is noted for having superior battery life [S3-C4].
+
+### Weight and Size
+*   **Weight:** Specific weight data for the M4 models is not provided. However, general data indicates that the 13.6-inch MacBook Air weighs 2.7 pounds, while the 14.2-inch MacBook Pro weighs 3.4 pounds [S3-C4].
+*   **Thickness:** The MacBook Air is thinner at 0.44 inches, compared to the MacBook Pro's thickness of 0.61 inches [S3-C5].
+
+### Ports
+*   **MacBook Air M4:** Includes two Thunderbolt 4 (USB-C) ports [S1-C48].
+*   **MacBook Pro M4:** Includes three Thunderbolt 4 (USB-C) ports, an HDMI port, and an SDXC card slot [S1-C48].

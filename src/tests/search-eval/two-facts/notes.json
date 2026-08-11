@@ -1,0 +1,12 @@
+{
+  "question": "What is the population of Tokyo Japan and what is the average annual rainfall in Tokyo?",
+  "expected_domains": ["wikipedia.org", "data.jma.go.jp"],
+  "expected_terms": ["population", "million", "rainfall", "mm", "precipitation"],
+  "failure_modes_expected": ["two separate facts required", "multi-aspect retrieval", "different source types"],
+  "scoring": {
+    "correct_source_found": null,
+    "relevant_passage_retrieved": null,
+    "answer_supported_by_evidence": null,
+    "provenance_preserved": null
+  }
+}

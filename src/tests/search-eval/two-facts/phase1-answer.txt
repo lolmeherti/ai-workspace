@@ -1,0 +1,7 @@
+Based on the provided data, the population of Tokyo, Japan, is not mentioned.
+
+Regarding the rainfall in Tokyo, the data provides monthly rainfall levels for 2025 [S3-C4]. The total rainfall for the year is calculated by summing the monthly amounts:
+
+*   **Total Annual Rainfall (2025):** 419.0 mm
+
+The data also notes that rainfall is heaviest in the summer and autumn, particularly during the rainy season and due to typhoons [S3-C11].

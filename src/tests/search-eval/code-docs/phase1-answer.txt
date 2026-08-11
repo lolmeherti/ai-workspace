@@ -1,0 +1,52 @@
+Middleware is a fundamental concept in web application development that allows developers to process HTTP requests and responses in a modular and reusable way, providing a mechanism to add cross-cutting concerns like logging, authentication, or content validation [S1-C2]. In Go's `net/http` package, the standard library provides all the tools necessary to build powerful middleware components without external dependencies [S1-C2, S3-C1].
+
+### The Standard Middleware Pattern
+
+Middleware is essentially a function that wraps an existing HTTP handler, enabling code to execute both before and after the core handler processes the request [S1-C3]. Conceptually, middleware functions act as a series of concentric layers around the main business logic [S1-C3].
+
+The standard pattern for creating a middleware function is as follows:
+
+1.  **Signature:** The middleware function accepts an `http.Handler` as a parameter (often named `next`) and returns a new `http.Handler` that wraps the original [S1-C3, S2-C3].
+2.  **Implementation:** The returned handler is typically a closure that executes the middleware logic, and then calls the `next` handler's `ServeHTTP()` method to transfer control to the next handler in the chain [S2-C3].
+
+A conceptual example of this pattern is:
+
+```go
+func exampleMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Your middleware logic goes here...
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+### Execution and Composition
+
+*   **Execution Order:** Middleware executes in the order it is wrapped. The outermost middleware executes first on the way into the handler, and the innermost middleware executes last on the way out [S1-C3].
+*   **Access:** Each middleware has full access to both the request and the response, allowing it to inspect, modify, or halt the request [S1-C3].
+*   **Composability:** Because the pattern accepts an `http.Handler` and returns an `http.Handler`, it is possible to easily chain multiple middleware functions together, allowing one middleware function to wrap another [S1-C3, S2-C6].
+
+### Applying Middleware
+
+Middleware can be used in two primary ways:
+
+#### 1. Applying Middleware to Specific Routes
+
+To apply middleware to a specific route, you wrap the target handler function using the middleware function.
+
+If you have a handler (`barHandler`), you wrap it like this: `middlewareOne(http.HandlerFunc(barHandler))` [S2-C5].
+
+In this scenario, the flow of control for the wrapped route is: `http.ServeMux → middlewareOne → barHandler → middlewareOne → http.ServeMux` [S2-C5].
+
+#### 2. Applying Middleware to All Routes
+
+To ensure that middleware acts on every route, you can wrap the `http.ServeMux` itself, as the `http.ServeMux` implements the `http.Handler` interface [S2-C5].
+
+You pass the `http.ServeMux` instance into your middleware function: `middlewareOne(mux)` [S2-C6].
+
+When this is done, the flow of control for all routes becomes: `middlewareOne → http.ServeMux → fooHandler/barHandler → http.ServeMux → middlewareOne` [S2-C5].
+
+### Advanced Usage
+
+*   **Early Return:** Middleware can use an "early return" pattern. If a middleware function returns before calling `next.ServeHTTP(w, r)`, the next handler in the chain is never executed [S2-C9].
+*   **Chaining:** Due to the standard pattern, developers can create arbitrarily long chains by wrapping one middleware function with another [S2-C6].

@@ -1,0 +1,12 @@
+{
+  "question": "What are the system requirements for Adobe Photoshop 2025?",
+  "expected_domains": ["adobe.com", "helpx.adobe.com"],
+  "expected_terms": ["Windows", "macOS", "RAM", "GPU", "processor", "storage"],
+  "failure_modes_expected": ["blocked page with alternatives", "javascript-required page", "specification page"],
+  "scoring": {
+    "correct_source_found": null,
+    "relevant_passage_retrieved": null,
+    "answer_supported_by_evidence": null,
+    "provenance_preserved": null
+  }
+}

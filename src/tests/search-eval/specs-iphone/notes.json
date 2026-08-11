@@ -1,0 +1,12 @@
+{
+  "question": "What are the iPhone 16 Pro camera specifications?",
+  "expected_domains": ["apple.com"],
+  "expected_terms": ["48 MP", "megapixel", "sensor", "optical"],
+  "failure_modes_expected": ["answer in specification table", "primary source retrieval", "table extraction"],
+  "scoring": {
+    "correct_source_found": null,
+    "relevant_passage_retrieved": null,
+    "answer_supported_by_evidence": null,
+    "provenance_preserved": null
+  }
+}

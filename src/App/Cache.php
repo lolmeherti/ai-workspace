@@ -63,7 +63,8 @@ class Cache
             'query' => $query,
             'cache_key' => $cacheKey,
             'timestamp' => time(),
-            'human_time' => date('l, F j, Y g:i A')
+            'human_time' => date('l, F j, Y g:i A'),
+            'fetched_at' => date('c'),
         ]);
 
         $ledger = array_slice($ledger, 0, 50);

@@ -1,0 +1,20 @@
+On July 19, 2024, a widespread global disruption occurred due to a faulty update distributed by the cybersecurity company CrowdStrike [S1, S3].
+
+**Cause of the Outage**
+*   CrowdStrike released a faulty update to its Falcon Sensor security software [S1, S3]. This update was pushed to the Windows sensor’s content setup with the goal of collecting data on potential new attack methods [S3].
+*   The outage was caused by the CrowdStrike Falcon content update, not malicious cyber activity [S2].
+*   The flaw was a logic error associated with the "Channel File 291" incident [S3].
+*   The faulty configuration update was distributed on July 19, 2024, at 04:09 UTC [S1, S3]. The flaw was present only in versions of Channel File 291 with this specific timestamp [S3]. However, versions timestamped 2024-07-19 0527 UTC or later did not contain this flaw [S3].
+
+**Impact and Scope**
+*   The update caused millions of Windows users to be locked out of their systems [S3].
+*   The unexpected flaw resulted in a "Blue Screen of Death" (BSOD) for millions of users [S3].
+*   Roughly 8.5 million Microsoft Windows operating systems crashed worldwide, leading to global disruption of critical services [S1]. Microsoft estimated that 8.5 million devices were affected by the update on July 20 [S1].
+*   Windows virtual machines on the Microsoft Azure cloud platform began crashing and rebooting almost immediately after the update was distributed [S1].
+*   The outage affected Windows 10 and later systems, but did not impact Mac or Linux hosts [S2].
+*   It was noted that the outage was caused by the CrowdStrike update and was not directly an issue with Microsoft Windows itself [S3].
+
+**Aftermath**
+*   CISA was aware of the widespread outage affecting Microsoft Windows hosts [S2].
+*   While the outage was ongoing, threat actors continued to take advantage of the widespread IT outage for phishing and other malicious activity [S2, S3].
+*   CrowdStrike updated its guidance regarding impacts to specific environments, such as Azure and AWS, at 7:30 p.m., EDT, on July 19, 2024 [S2].

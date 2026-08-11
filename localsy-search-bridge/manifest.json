@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Localsy Search Bridge",
+  "version": "0.1.0",
+  "description": "Uses the user's Chromium browser as a local search discovery bridge for Localsy.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "permissions": [
+    "alarms",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://www.google.com/*",
+    "https://www.reddit.com/*",
+    "https://old.reddit.com/*",
+    "https://consent.google.com/*",
+    "<all_urls>"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "private-targets",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/*",
+        "https://consent.google.com/*"
+      ],
+      "js": ["google-serp.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
+      ],
+      "js": ["reddit-extractor.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["generic-extractor.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

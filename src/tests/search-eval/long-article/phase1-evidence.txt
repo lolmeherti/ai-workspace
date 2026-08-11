@@ -1,0 +1,267 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S1">
+<title>
+AI | 2024 Stack Overflow Developer Survey
+</title>
+<domain>survey.stackoverflow.co</domain>
+<fetched>2026-07-28T22:50:19+00:00</fetched>
+<chunk id="S1-C2" section="[AI tool sentiment ](#1-ai-tool-sentiment)">
+72% of all respondents are favorable or very favorable of AI tools for development. This is lower than last year's favorability of 77%; a decline in favorability could be due to disappointing results from usage.
+
+How favorable is your stance on using AI tools as part of your development workflow?
+
+[All Respondents ](#sentiment-and-usage-ai-sent)[Professional Developers ](#sentiment-and-usage-ai-sent-prof)[Learning to Code ](#sentiment-and-usage-ai-sent-learn)[Other Coders ](#sentiment-and-usage-ai-sent-other)
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sent-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent&amp;text=All%20Respondents&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=All%20Respondents&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent&amp;mini=true&amp;source=stackoverflow&amp;summary=All%20Respondents) 
+
+Responses: 45,873 (70.1%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sent-prof-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-prof&amp;text=Professional%20Developers&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Professional%20Developers&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-prof) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-prof&amp;mini=true&amp;source=stackoverflow&amp;summary=Professional%20Developers) 
+
+Responses: 35,142 (53.7%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sent-learn-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-learn&amp;text=Learning%20to%20Code&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Learning%20to%20Code&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-learn) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-learn&amp;mini=true&amp;source=stackoverflow&amp;summary=Learning%20to%20Code) 
+
+Responses: 5,102 (7.8%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sent-other-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-other&amp;text=Other%20Coders&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Other%20Coders&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-other) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sent-other&amp;mini=true&amp;source=stackoverflow&amp;summary=Other%20Coders) 
+
+Responses: 5,629 (8.6%)
+</chunk>
+<chunk id="S1-C1">
+&lt;?xml encoding="UTF-8"&gt;AI | 2024 Stack Overflow Developer Survey ### [AI tools in the development process ](#1-ai-tools-in-the-development-process)
+
+76% of all respondents are using or are planning to use AI tools in their development process this year, an increase from last year (70%). Many more developers are currently using AI tools this year, too (62% vs. 44%).
+
+Do you currently use AI tools in your development process? *
+
+[All Respondents ](#sentiment-and-usage-ai-select)[Professional Developers ](#sentiment-and-usage-ai-sel-prof)[Learning to Code ](#sentiment-and-usage-ai-sel-learn)[Other Coders ](#sentiment-and-usage-ai-sel-other)
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-select-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-select&amp;text=All%20Respondents&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=All%20Respondents&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-select) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-select&amp;mini=true&amp;source=stackoverflow&amp;summary=All%20Respondents) 
+
+Responses: 60,907 (93.1%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sel-prof-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-prof&amp;text=Professional%20Developers&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Professional%20Developers&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-prof) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-prof&amp;mini=true&amp;source=stackoverflow&amp;summary=Professional%20Developers) 
+
+Responses: 46,049 (70.4%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sel-learn-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-learn&amp;text=Learning%20to%20Code&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Learning%20to%20Code&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-learn) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-learn&amp;mini=true&amp;source=stackoverflow&amp;summary=Learning%20to%20Code) 
+
+Responses: 6,781 (10.4%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-sentiment-and-usage-ai-sel-other-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-other&amp;text=Other%20Coders&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Other%20Coders&amp;u=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-other) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#sentiment-and-usage-ai-sel-other&amp;mini=true&amp;source=stackoverflow&amp;summary=Other%20Coders) 
+
+Responses: 8,077 (12.3%)
+</chunk>
+<chunk id="S1-C6" section="[AI in the development workflow ](#2-ai-in-the-development-workflow)">
+Developers currently using AI tools mostly use them to write code (82%) and those who are interested but not yet using AI tools are mostly curious about testing code (46%). Developers with experience can trust AI tools to help write code to get started but perhaps know testing is a complex step best left to traditional processes.
+
+Which parts of your development workflow are you currently using AI tools for and which are you interested in using AI tools for over the next year? Please select all that apply.
+
+[Currently Using ](#developer-tools-ai-tool)[Interested in Using ](#developer-tools-ai-tool-interested)[Not Interested in Using ](#developer-tools-ai-tool-not)
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-tool-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool&amp;text=Currently%20Using&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Currently%20Using&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool&amp;mini=true&amp;source=stackoverflow&amp;summary=Currently%20Using) 
+
+Responses: 35,978 (55%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-tool-interested-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-interested&amp;text=Interested%20in%20Using&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Interested%20in%20Using&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-interested) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-interested&amp;mini=true&amp;source=stackoverflow&amp;summary=Interested%20in%20Using) 
+
+Responses: 35,978 (55%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-tool-not-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-not&amp;text=Not%20Interested%20in%20Using&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Not%20Interested%20in%20Using&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-not) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-tool-not&amp;mini=true&amp;source=stackoverflow&amp;summary=Not%20Interested%20in%20Using) 
+
+Responses: 35,978 (55%)
+</chunk>
+<chunk id="S1-C5" section="[AI tools' ability to handle complex tasks ](#2-ai-tools-ability-to-handle-complex-tasks)">
+The development workflow is complicated, as the abundance of questions and answers on Stack Overflow can attest to. Almost half (45%) of professional developers believe AI tools are bad or very bad at handling complex tasks.
+
+How well do the AI tools you use in your development workflow handle complex tasks?
+
+[All Respondents ](#developer-tools-ai-complex)[Professional Developers ](#developer-tools-ai-complex-prof)[Learning to Code ](#developer-tools-ai-complex-learn)[Other Coders ](#developer-tools-ai-complex-other)
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-complex-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex&amp;text=All%20Respondents&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=All%20Respondents&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex&amp;mini=true&amp;source=stackoverflow&amp;summary=All%20Respondents) 
+
+Responses: 37,021 (56.6%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-complex-prof-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-prof&amp;text=Professional%20Developers&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Professional%20Developers&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-prof) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-prof&amp;mini=true&amp;source=stackoverflow&amp;summary=Professional%20Developers) 
+
+Responses: 28,645 (43.8%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-complex-learn-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-learn&amp;text=Learning%20to%20Code&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Learning%20to%20Code&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-learn) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-learn&amp;mini=true&amp;source=stackoverflow&amp;summary=Learning%20to%20Code) 
+
+Responses: 4,166 (6.4%) 
+
+ Download
+
+I acknowledge that the downloaded file is licensed under the [Open Database License](https://opendatacommons.org/licenses/odbl/)
+
+ [ Download chart](/2024/charts/stackoverflow-dev-survey-2024-ai-developer-tools-ai-complex-other-social.png)
+
+ Share
+
+ [Twitter/X](https://twitter.com/intent/tweet?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-other&amp;text=Other%20Coders&amp;via=stackoverflow) [Facebook](https://www.facebook.com/sharer/sharer.php?text=Other%20Coders&amp;u=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-other) [LinkedIn](http://www.linkedin.com/shareArticle?url=https://survey.stackoverflow.co/2024/ai#developer-tools-ai-complex-other&amp;mini=true&amp;source=stackoverflow&amp;summary=Other%20Coders) 
+
+Responses: 4,210 (6.4%)
+</chunk>
+</source>
+
+<source id="S3">
+<title>
+Developers remain willing but reluctant to use AI: The 2025 Developer Survey results are here - Stack Overflow
+</title>
+<domain>stackoverflow.blog</domain>
+<fetched>2026-07-28T22:50:22+00:00</fetched>
+<chunk id="S3-C5" section="[](#h2-d7f772761d81 "Permalink to this heading")Career shifts, satisfaction, and what really matters">
+The survey reveals a developer workforce that is largely staying put, but not necessarily content. 46% of developers are "not looking" for a new job, but of those who are in a role, a combined 75% describe themselves as "complacent" or "not happy at work." Overall, there is an increase in happy developers compared to last year (24% vs. 20%).
+
+What contributes to job satisfaction? It's not just about the tech. The top drivers are "autonomy and trust," "competitive pay," and "solving real-world problems." This focus on fundamentals is also reflected in what makes developers endorse a new technology. A "reputation for quality" and a "robust and complete API" rank far higher than "AI integration," which came in second to last. The message is clear: Developers value tools that are reliable, functional, and solve real problems over those that simply ride the latest technology wave.
+
+**Developer salary shows an increase in pay**: This year, we have seen an increase in median pay for 20 of the roles we asked about, ranging from 5-29% compared to last year’s reported salaries per developer role.
+
+- The US was highest for job satisfaction (29%) and Germany was lowest (19%). We know from previous analysis that job satisfaction is tied to pay and job flexibility.
+- Autonomy and trust at work were ranked highest for reasons to be happy at work, but competitive pay, ranked second, was frequently ranked first, too.
+- US median salaries are higher than other countries’ median salaries. For example, compared to Germany, US cloud infrastructure engineers earned a 48% higher median salary in the past year.
+- The US recorded almost twice as many remote workers (45%) as Germany (23%).
+</chunk>
+<chunk id="S3-C6" section="[](#h2-16b0800c46e7 "Permalink to this heading")Developer insights are here">
+This year’s survey paints a picture of a community navigating the complexities of a new technological era. Developers are ready to push back on enterprise AI through a nuanced conversation about trust, reliability, and the enduring value of human expertise.
+
+The next generation of developer tools, who developers are, where they are working, and what they look for in developer communities is documented [here](https://survey.stackoverflow.co/2025?utm_medium=referral&amp;utm_source=blog&amp;utm_campaign=dev-survey-2025&amp;utm_content=launch-results). This data serves as a critical reminder that the future of technology will be built not just on powerful tools, but also on the trusted communities that use them.
+</chunk>
+<chunk id="S3-C1">
+&lt;?xml encoding="UTF-8"&gt;*\[Ed. note: While we take some time to rest up over the holidays and prepare for next year, we are re-publishing our top ten posts for the year. Please enjoy our favorite work this year and we’ll see you in 2026.\]*
+
+The Stack Overflow Developer Survey is full of new insights about technology, tools of the trade, community, careers, and more from 49,000+ developers from around the world, and we’re eager to share [how the data stacks up this year](https://survey.stackoverflow.co/2025/?utm_medium=referral&amp;utm_source=blog&amp;utm_campaign=dev-survey-2025&amp;utm_content=survey-results).
+
+No need to bury the lede: while the adoption of AI tools continues to increase, so does developers’ lack of trust in the output of those tools.
+
+The effect of AI on the developer ecosystem is everywhere in this survey, from the programming languages developers are using and want to use to the influence of AI on the tools developers used this year, as well as preferences for community platforms and content.
+</chunk>
+<chunk id="S3-C4" section="[](#h2-36598276cb4f "Permalink to this heading")New tricks for old dogs: insights on technology trends in 2025">
+The technology-focused questions got a major upgrade this year, but standard questions regarding programming languages, operating systems, and how developers learn to code stayed the same. New questions this year feature LLM models, agentic AI tools, and top frustrations with AI. From the old guard, we see the influence of AI in a few key areas:
+
+- Programming languages that are growing in popularity are also known to be AI-compatible: Python usage is up 7 percentage points, followed by Rust and Go (+2 percentage points), all of which are used in AI development and infrastructure now.
+- Android is the preferred operating system for personal use for 29% of developers. This is an increase of 11 percentage points since last year and has boosted Android personal use above Ubuntu for the first time in the survey. While this may not be directly related to AI, Android is known for having a more open-source platform that may allow developers flexibility to cater the amount of AI and the types of AI used on this OS.
+- Developers learning to code in the past year are continuing to use technical documentation more than other resources (68%) and are using AI tools more than they were last year (44%).
+
+New questions asked this year surface technologies that have found a niche in the AI space:
+
+- Among AI agent data storage tools, separately from databases we’ve asked developers about since 2017, respondents show a preference for Redis (43%) alongside GitHub MCP server (43%). While Redis has been on the survey as a database option since 2017, this year it shines as the top choice for AI agent data storage.
+- Developers are adapting their existing monitoring tools for agentic AI monitoring and observability with tools like Sentry (32%) and New Relic (13%), which have both been around for 20+ years.
+- For the first time this year we asked about specific LLMs instead of asking about AI search and development tools generally. We see OpenAI chat models still retain the most usage among developers (81%). Anthropic’s Claude Sonnet models are used more by professional developers (45%) than by those learning to code (30%).
+- Developers are not just learning to code; they are learning to code for AI: 67% of developers indicated they were learning to code for AI in the workplace or on personal projects.
+</chunk>
+</source>

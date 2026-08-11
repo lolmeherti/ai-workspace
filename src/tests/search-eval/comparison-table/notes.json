@@ -1,0 +1,12 @@
+{
+  "question": "Compare the MacBook Air M4 and MacBook Pro M4 specifications: display, battery life, weight, and ports",
+  "expected_domains": ["apple.com"],
+  "expected_terms": ["MacBook Air", "MacBook Pro", "M4", "display", "battery", "weight", "port", "Thunderbolt"],
+  "failure_modes_expected": ["comparison table", "multi-product table preservation", "structured data"],
+  "scoring": {
+    "correct_source_found": null,
+    "relevant_passage_retrieved": null,
+    "answer_supported_by_evidence": null,
+    "provenance_preserved": null
+  }
+}

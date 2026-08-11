@@ -1,0 +1,76 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S3">
+<domain>www.tufin.com</domain>
+<claim refs="S3-C2">
+In July 2024, millions of Windows users were locked out of their systems due to a flaw in a CrowdStrike update.
+</claim>
+<claim refs="S3-C2">
+On July 19th, 2024, CrowdStrike pushed an update to the Windows sensor’s content setup to collect data on potential new attack methods.
+</claim>
+<claim refs="S3-C2">
+This update was unexpectedly flawed, resulting in a “Blue Screen of Death” (BSOD) for millions of users.
+</claim>
+<claim refs="S3-C3">
+The outage was for Microsoft Windows, but it was not directly an issue with their system.
+</claim>
+<claim refs="S3-C3">
+The outage was caused by an update in CrowdStrike Falcon that prompted the “Blue Screen of Death” BSOD in Microsoft Windows.
+</claim>
+<claim refs="S3-C3">
+The flaw was part of the “Channel File 291” incident, where CrowdStrike introduced a logic error.
+</claim>
+<claim refs="S3-C3">
+The flaw was present only in versions of the Channel File 291 with a specific timestamp (2024-07-19 0409 UTC).
+</claim>
+<claim refs="S3-C3">
+Versions timestamped 2024-07-19 0527 UTC or later did not contain said flaw.
+</claim>
+<claim refs="S3-C3">
+The initial estimation of systems affected reached 8.5 million instances.
+</claim>
+<claim refs="S3-C5">
+A successful exploitation of a similar Windows vulnerability would have substantial impact and devastating consequences, similar to what was observed in detail on July 19th, 2024.
+</claim>
+</source>
+
+<source id="S2">
+<domain>www.cisa.gov</domain>
+<claim refs="S2-C3">
+CISA was aware of the widespread outage affecting Microsoft Windows hosts due to an issue with a recent CrowdStrike update on July 19, 2024.
+</claim>
+<claim refs="S2-C3">
+CrowdStrike confirmed the outage was due to the CrowdStrike Falcon content update and not to malicious cyber activity.
+</claim>
+<claim refs="S2-C3">
+The outage impacts Windows 10 and later systems, but does not impact Mac and Linux hosts.
+</claim>
+<claim refs="S2-C3">
+CISA observed threat actors taking advantage of this incident for phishing and other malicious activity.
+</claim>
+<claim refs="S2-C3">
+At 7:30 p.m., EDT, July 19, 2024, the CrowdStrike guidance was updated with additional guidance regarding impacts to specific environments, e.g., Azure, AWS.
+</claim>
+<claim refs="S2-C4">
+Threat actors continued to use the widespread IT outage for phishing and other malicious activity.
+</claim>
+</source>
+
+<source id="S1">
+<domain>en.wikipedia.org</domain>
+<claim refs="S1-C1">
+On 19 July 2024, the American cybersecurity company CrowdStrike distributed a faulty update to its Falcon Sensor security software that caused widespread problems with Microsoft Windows computers running the software.
+</claim>
+<claim refs="S1-C1">
+Roughly 8.5 million Microsoft Windows operating systems crashed worldwide, causing global disruption of critical services.
+</claim>
+<claim refs="S1-C3">
+On 19 July 2024 at 04:09 UTC, CrowdStrike distributed a faulty configuration update for its Falcon sensor software running on Windows PCs and servers.
+</claim>
+<claim refs="S1-C3">
+Almost immediately, Windows virtual machines on the Microsoft Azure cloud platform began rebooting and crashing.
+</claim>
+<claim refs="S1-C5">
+On 20 July, Microsoft estimated that 8.5 million devices were affected by the update.
+</claim>
+</source>

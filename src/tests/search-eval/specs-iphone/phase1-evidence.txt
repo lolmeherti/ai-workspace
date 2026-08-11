@@ -1,0 +1,335 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S2">
+<title>
+Apple iPhone 16 Pro - Full phone specifications
+</title>
+<domain>www.gsmarena.com</domain>
+<fetched>2026-07-28T22:49:15+00:00</fetched>
+<chunk id="S2-C6" section="Apple iPhone 16 Pro &gt; [Apple iPhone 16 Pro - user opinions and reviews](apple_iphone_16_pro-reviews-13315.php)">
+D
+
+- Davetee
+- Nu7
+- 05 Jul 2026
+
+Great Device
+
+- [Reply](postopinion.php3?idPhone=13315&amp;idOpinion=7064856)
+
+M
+
+- Mxuo
+- CF}
+- 15 Jun 2026
+
+Go to settings-----&amp;gt; Mobile services ----&amp;gt; Mobile data then choose the number of that sim card
+
+- [Reply](postopinion.php3?idPhone=13315&amp;idOpinion=7061234)
+
+G
+
+- [**Greatphone9000**](user.php3?idUser=1221542)
+- MUL
+- 13 Jun 2026
+
+Amazing, sadly i couldn't afford it :(
+
+- [Reply](postopinion.php3?idPhone=13315&amp;idOpinion=7060756)
+
+- [Read all opinions](apple_iphone_16_pro-reviews-13315.php)
+- [Post your opinion](postopinion.php3?idPhone=13315)
+
+Total user opinions: **278**
+
+Side-by-Side Reviews
+
+- [ iPhone 16 Pro vs. iPhone 15 Pro ](iphone_16_pro_vs_iphone_15_pro_review_battery_camera_price_compared-news-64931.php)
+- [ iPhone 16 Pro vs. iPhone 16 Pro Max ](iphone_16_pro_vs_iphone_16_pro_max_battery_camera_price_compared-news-64838.php)
+- [ Apple iPhone 16 Pro vs. iPhone 16 ](apple_iphone_16_pro_vs_iphone_16_battery_camera_price_compared-news-64815.php)
+- [ Samsung Galaxy S25 vs. Apple iPhone 16 Pro ](samsung_galaxy_s25_vs_apple_iphone_16_pro_review_battery_camera_price_compared-news-66490.php)
+
+ADVERTISEMENT 
+
+ Ads by [ ](http://www.playwire.com) 
+
+[Home](/)[News](news.php3)[Reviews](reviews.php3)[Compare](compare.php3)[Coverage](network-bands.php3)[Glossary](glossary.php3)[FAQ](faq.php3)[RSS](rss-news-reviews.php3)[Youtube](https://www.youtube.com/channel/UCbLq9tsbo8peV22VxbDAfXA?sub_confirmation=1)[Instagram](https://www.instagram.com/gsmarenateam/)[TikTok](https://www.tiktok.com/@gsmarenateam)[Facebook](https://www.facebook.com/gsmarenateam)[Twitter](https://twitter.com/gsmarena_com)
+
+© 2000-2026 [GSMArena.com](team.php3) [Mobile version](#)[Android app](https://play.google.com/store/apps/details?id=com.gsmarena.android)[Tools](tools.php3)[Contact us](contact.php3)[Merch store](https://merch.gsmarena.com/)[Privacy](privacy-policy.php3) [Terms of use](terms.php3)[](#)
+
+&lt;a class="gbutton new-tab" target="_blank" title="Open image in new tab"&gt;&lt;/a&gt;&lt;a class="facebook" title="Share on Facebook"&gt;&lt;/a&gt;&lt;a class="twitter" title="Share on Twitter"&gt;&lt;/a&gt;
+
+[](#prev)[](#next)
+
+[▲](#up)
+
+[▼](#down)
+
+Welcome to GSMArena
+</chunk>
+<chunk id="S2-C4" section="Apple iPhone 16 Pro">
+3DMark: 4898 (Wild Life Extreme)[Display](gsmarena_lab_tests-review-751p2.php)[1764 nits max brightness (measured)](apple_iphone_16_pro-review-2752p3.php#dt)[Loudspeaker](gsmarena_lab_tests-review-751p7.php)[-27.3 LUFS (Good)](apple_iphone_16_pro-review-2752p3.php#lt)[Battery](how_we_test_gsmarena_battery_life_test_v2-news-60429.php)[Active use score 14:17h](apple_iphone_16_pro-review-2752p3.php#bl)
+
+EU LABEL[Energy](glossary.php3?term=eu-energy-class)Class B[Battery](glossary.php3?term=eu-battery-endurance)37:00h endurance, 1000 cycles[Free fall](glossary.php3?term=eu-free-fall-class)Class C (90 falls)[Repairability](glossary.php3?term=eu-repairability-class)Class C
+
+**Disclaimer.** We can not guarantee that the information on this page is 100% correct. [Read more](glossary.php3?term=data-disclaimer)
+
+- [Review](apple_iphone_16_pro-review-2752.php)
+- [Prices](apple_iphone_16_pro-price-13315.php)
+- [Pictures](apple_iphone_16_pro-pictures-13315.php)
+- [Compare](compare.php3?idPhone1=13315)
+- [Opinions](apple_iphone_16_pro-reviews-13315.php)
+</chunk>
+<chunk id="S2-C2" section="Apple iPhone 16 Pro">
+- [
+
+](http://www.facebook.com/sharer.php?u=https%3A%2F%2Fwww.gsmarena.com%2Fapple_iphone_16_pro-13315.php "Facebook")
+- [
+
+](https://twitter.com/intent/tweet?text=Apple+iPhone+16+Pro&amp;url=https%3A%2F%2Fwww.gsmarena.com%2Fapple_iphone_16_pro-13315.php "Twitter")
+- [](#)
+
+[](apple_iphone_16_pro-pictures-13315.php)
+
+- Released 2024, September 20
+ 199g, 8.3mm thickness
+ iOS 18, up to iOS 26.6
+ 128GB/512GB/1TB storage, no card slot
+- **12%** 5,845,790 hits
+- &lt;a class="specs-fans" href=""&gt; **337** Become a fan &lt;/a&gt;
+- **6.3"**1206x2622 pixels
+- **48MP** 2160p
+- **8GB RAM**Apple A18 Pro
+- **3582mAh**PD2.025W
+
+- [Review](apple_iphone_16_pro-review-2752.php)
+- [Prices](apple_iphone_16_pro-price-13315.php)
+- [Pictures](apple_iphone_16_pro-pictures-13315.php)
+- [Compare](compare.php3?idPhone1=13315)
+- [Opinions](apple_iphone_16_pro-reviews-13315.php)
+
+Versions: A3293 (International); A3083 (USA); A3292 (Middle East, Canada, Mexico); A3294 (China, Hong Kong)
+
+Network[Technology](network-bands.php3)[GSM / CDMA / HSPA / EVDO / LTE / 5G](#)[2G bands](network-bands.php3)GSM 850 / 900 / 1800 / 1900 CDMA 800 / 1900 [3G bands](network-bands.php3)HSDPA 850 / 900 / 1700(AWS) / 1900 / 2100 CDMA2000 1xEV-DO [4G bands](network-bands.php3)1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 34, 38, 39, 40, 41, 42, 48, 53, 66 - A3293 1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 34, 38, 39, 40, 41, 42, 48, 53, 66, 71 - A3083 1, 2, 3, 4, 5, 7, 8, 11, 12, 13, 14, 17, 18, 19, 20, 21, 25, 26, 28, 29, 30, 32, 34, 38, 39, 40, 41, 42, 48, 53, 66, 71 - A3292 1, 2, 3, 4, 5, 7, 8, 12, 13, 17, 18, 19, 20, 25, 26, 28, 30, 32, 34, 38, 39, 40, 41, 42, 48, 66 - A3294[5G bands](network-bands.php3)1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 53, 66, 70, 75, 76, 77, 78, 79 SA/NSA/Sub6 - A3293 1, 2, 3, 5, 7, 8, 12, 14, 20, 25, 26, 28, 29, 30, 38, 40, 41, 48, 53, 66, 70, 71, 75, 76, 77, 78, 79, 258, 260, 261 SA/NSA/Sub6/mmWave - A3083 1, 2, 3, 5, 7, 8, 12, 14, 20, 25, 26, 28, 29, 30, 38, 40, 41, 48, 53, 66, 70, 71, 75, 76, 77, 78, 79 SA/NSA/Sub6 - A3292 1, 2, 3, 5, 7, 8, 12, 20, 25, 26, 28, 30, 38, 40, 41, 48, 66, 70, 75, 76, 77, 78, 79 SA/NSA/Sub6 - A3294[Speed](glossary.php3?term=3g)HSPA, LTE, 5G, EV-DO Rev.A 3.1 MbpsLaunch[Announced](glossary.php3?term=phone-life-cycle)2024, September 09[Status](glossary.php3?term=phone-life-cycle)Available. Released 2024, September 20Body[Dimensions](#)149.6 x 71.5 x 8.3 mm (5.89 x 2.81 x 0.33 in)[Weight](#)199 g (7.02 oz)[Build](glossary.php3?term=build)Glass front (Ceramic Shield), glass back, titanium frame (grade 5)[SIM](glossary.php3?term=sim)· Nano-SIM + [eSIM](glossary.php3?term=esim) + eSIM (max 2 at a time; International)---
+
+· eSIM + eSIM (8 or more, max 2 at a time; USA)---
+
+· Nano-SIM + Nano-SIM (China) IP68 dust tight and water resistant (immersible up to 6m for 30 min)---
+</chunk>
+<chunk id="S2-C5" section="Apple iPhone 16 Pro &gt; Pricing These are the best offers from our affiliate partners. We may get a commission from qualifying sales.">
+128GB 8GB RAM [€ 729.22](https://www.amazon.de/dp/B0DHYDBXJ9?tag=gsmarena0ca-21&amp;linkCode=osi&amp;th=1&amp;psc=1) [£ 612.00](https://www.amazon.co.uk/dp/B0DHYFYZ5K?tag=gsmcom-21&amp;linkCode=osi&amp;th=1&amp;psc=1)256GB 8GB RAM [€ 800.18](https://www.amazon.de/dp/B0DHYD679P?tag=gsmarena0ca-21&amp;linkCode=osi&amp;th=1&amp;psc=1) [£ 700.00](https://www.amazon.co.uk/dp/B0DHYD679P?tag=gsmcom-21&amp;linkCode=osi&amp;th=1&amp;psc=1)512GB 8GB RAM [€ 879.00](https://www.amazon.de/dp/B0DHYDFHH9?tag=gsmarena0ca-21&amp;linkCode=osi&amp;th=1&amp;psc=1) [£ 759.00](https://www.amazon.co.uk/dp/B0DHYF4DMY?tag=gsmcom-21&amp;linkCode=osi&amp;th=1&amp;psc=1)#### Similarly priced Popular recent phones in the same price range as Apple iPhone 16 Pro
+
+- [Apple iPhone 17€ 772.01](apple_iphone_17-14050.php)
+- [Samsung Galaxy S25 Ultra€ 736.03](samsung_galaxy_s25_ultra-13322.php)
+- [Xiaomi 17T Pro€ 739.99](xiaomi_17t_pro_5g-14651.php)
+- [Honor 600 Pro€ 724.00](honor_600_pro_5g-14604.php)
+- [Google Pixel 10 Pro€ 784.98](google_pixel_10_pro_5g-13987.php)
+
+ [](apple_iphone_16_pro-review-2752.php)### Apple iPhone 16 Pro review
+
+ This year, Apple has made the iPhone Pro interesting again. For starters - the iPhone 16 Pro feature set is identical to that of the Pro Max (yes, we mean cameras). But there is more - the...
+
+ Read
+</chunk>
+</source>
+
+<source id="S1">
+<title>
+iPhone 16 Pro - Tech Specs - Apple Support (BW)
+</title>
+<domain>support.apple.com</domain>
+<fetched>2026-07-28T22:49:12+00:00</fetched>
+<chunk id="S1-C10" section="iPhone 16 Pro - Tech Specs &gt; Camera">
+**Pro camera system**
+
+- 48MP Fusion: 24 mm, ƒ/1.78 aperture, second‑generation sensor‑shift optical image stabilization, 100% Focus Pixels, support for super‑high‑resolution photos (24MP and 48MP)
+- Also enables 12MP 2x Telephoto: 48 mm, ƒ/1.78 aperture, second generation sensor‑shift optical image stabilization, 100% Focus Pixels
+- 48MP Ultra Wide: 13 mm, ƒ/2.2 aperture and 120° field of view, Hybrid Focus Pixels, super-high-resolution photos (48MP)
+- 12MP 5x Telephoto: 120 mm, ƒ/2.8 aperture and 20° field of view, 100% Focus Pixels, seven-element lens, 3D sensor-shift optical image stabilization and autofocus, tetraprism design
+- 5x optical zoom in, 2x optical zoom out; 10x optical zoom range
+- Digital zoom up to 25x
+- Camera Control
+- Customizable default lens (Fusion)
+- Sapphire crystal lens cover
+- Adaptive True Tone flash
+- Photonic Engine
+- Deep Fusion
+- Smart HDR 5
+- Next-generation portraits with Focus and Depth Control
+- Portrait Lighting with six effects
+- Night mode
+- Night mode portraits enabled by LiDAR Scanner
+- Panorama (up to 63MP)
+- Latest-generation Photographic Styles
+- Spatial photos
+- 48MP macro photography
+- Apple ProRAW
+- Wide color capture for photos and Live Photos
+- Lens correction (Ultra Wide)
+- Advanced red-eye correction
+- Auto image stabilization
+- Burst mode
+- Photo geotagging
+- Image formats captured: HEIF, JPEG, and DNG
+</chunk>
+<chunk id="S1-C23" section="iPhone 16 Pro - Tech Specs &gt; External Buttons and Connectors">
+![121031-iphone-16-pro-portimage-1](https://cdsassets.apple.com/live/7WUAS350/images/tech-specs/121031-iphone-16-pro-portimage-1.png)![121031-iphone-16-pro-portimage-2](https://cdsassets.apple.com/live/7WUAS350/images/tech-specs/121031-iphone-16-pro-portimage-2.png)
+
+1. Front camera
+2. Side button
+3. Camera Control
+4. USB-C connector
+5. SIM tray (available on models purchased outside the U.S.)
+6. Volume buttons
+7. Action button
+8. Rear cameras
+9. Flash
+10. LiDAR Scanner
+
+**Action button features**
+
+- Silent Mode, Focus, Camera, Visual Intelligence15, Flashlight, Voice Memo, Recognize Music, Translate, Magnifier, Controls, Shortcut, or Accessibility
+
+**Camera controls**
+
+- Exposure, Depth, Zoom, Cameras, Styles, Tone
+</chunk>
+<chunk id="S1-C40" section="iPhone 16 Pro - Tech Specs &gt; In the Box">
+- **iPhone 16 Pro**
+- **USB‑C Charge Cable (1 m)**
+- **Documentation**
+
+As part of our efforts to reach [carbon neutrality by 2030](https://www.apple.com/environment), iPhone 16 Pro and iPhone 16 Pro Max do not include a power adapter or EarPods. Included in the box is a USB‑C Charge Cable that supports fast charging and is compatible with USB‑C power adapters and computer ports.
+
+We encourage you to use any compatible USB‑C power adapter. If you need a new Apple power adapter or headphones, they are available for purchase.
+</chunk>
+<chunk id="S1-C31" section="iPhone 16 Pro - Tech Specs &gt; SIM Card">
+- Dual eSIM (two active eSIMs; stores eight or more eSIMs)19
+- iPhone 16 Pro and iPhone 16 Pro Max use advanced eSIM technology for more convenience and security (Not compatible with physical SIM cards).
+
+[Learn more about eSIM](https://support.apple.com/en-us/HT212780)
+
+[Learn more about traveling with eSIM](https://support.apple.com/kb/HT213448)
+</chunk>
+</source>
+
+<source id="S3">
+<title>
+iPhone 16 Pro cameras: every camera on the Pro and Pro Max | TechRadar
+</title>
+<domain>www.techradar.com</domain>
+<published>2024-08-24T14:00:00Z</published>
+<fetched>2026-07-28T22:49:18+00:00</fetched>
+<chunk id="S3-C7">
+Such is the case with the [iPhone 16 Pro](https://www.techradar.com/phones/iphone/iphone-16-pro) and the [iPhone 16 Pro Max](https://www.techradar.com/phones/iphone/iphone-16-pro-max), which have some notable upgrades compared to their predecessors, and also have the base [iPhone 16](https://www.techradar.com/news/iphone-16) models beat.
+
+&lt;a id="elk-seasonal"&gt;&lt;/a&gt;Below, then, we've detailed all the iPhone 16 Pro and iPhone 16 Pro Max camera specs, and also included some sample photos.
+
+Latest Videos FromTechRadar
+
+[Watch full video here: ](https://www.techradar.com/phones/iphone/iphone-16-pro-cameras)
+
+&lt;a id="elk-iphone-16-pro-cameras"&gt;&lt;/a&gt;## iPhone 16 Pro cameras
+
+![Apple iPhone 16 Pro REVIEW](https://cdn.mos.cms.futurecdn.net/xJFExc6nyDyrDdNrAN5NgA.jpg)
+
+The iPhone 16 Pro (Image credit: Future / Lance Ulanoff)Swipe to scroll horizontally
+
+iPhone 16 Pro camera specsMain camera:48MP (f/1.8, 1/1.28-inch, 24mm)Ultra-wide camera:48MP (f/2.2, 13mm, 120-degree field of view)Telephoto camera:12MP,( f/2.8, 1/3.06-inch, 120mm, 5x optical zoom)Front camera: 12MP (f/1.9, 1/3.6-inch)
+
+The iPhone 16 Pro received two significant camera upgrades over the [iPhone 15 Pro](https://www.techradar.com/news/iphone-15-pro-latest-news-rumors-and-everything-we-know-so-far). The first of these is a new ultra-wide camera, with the iPhone 16 Pro having a 48MP sensor, in place of the 12MP one used by its predecessor. This lens also functions as a macro camera.
+
+The other major upgrade is a 5x telephoto camera in place of the iPhone 15 Pro’s 3x one. This is in some ways less exciting, though, as it’s exactly the same 5x camera as we’ve previously seen on the [iPhone 15 Pro Max](https://www.techradar.com/phones/iphone/iphone-15-pro-max) (that being a 12MP f/2.8 one).
+
+Beyond that, the iPhone 16 Pro also has a 48MP f/1.8 main camera, which can also take optical-quality 2x zoom photos at 12MP, and allows for video recording in up to [4K](https://www.techradar.com/tag/4k) quality at up to 120fps. Finally, the front-facing camera is the same 12MP one as last year.
+
+Of course, beyond improvements to some of the sensors, the iPhone 16 Pro also has [a Camera Control button](https://www.techradar.com/phones/iphone/as-a-photographer-its-the-iphone-16s-new-camera-control-button-that-has-captured-my-attention-heres-why), which gives you a dedicated hardware key for launching and controlling the camera.
+
+Get daily insight, inspiration and deals in your inbox
+
+Sign up for breaking news, reviews, opinion, top tech deals, and more.
+
+For an idea of how the cameras perform in practice, take a look at the samples below, taken from our [iPhone 16 Pro review](https://www.techradar.com/phones/iphone/iphone-16-pro-review).
+
+&lt;a id="elk-fe9b1629-9ce7-4104-a56d-72b54aeea6d5"&gt;&lt;/a&gt;## iPhone 16 Pro camera samples
+
+Image 1 of 17
+
+[](https://www.techradar.com/phones/iphone/iphone-16-pro-cameras#)[](https://www.techradar.com/phones/iphone/iphone-16-pro-cameras#)
+
+![Apple iPhone 16 Pro REVIEW](https://cdn.mos.cms.futurecdn.net/CKwTexXMQqkCasPxVwLM5h-1200-80.jpg)
+
+Macro looks quite good.(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro REVIEW](https://cdn.mos.cms.futurecdn.net/75ZVwWLVoow7zJ7ahwSnjj-1200-80.jpg)
+</chunk>
+<chunk id="S3-C10">
+The iPhone 16 Pro Max has exactly the same cameras as the iPhone 16 Pro, detailed above, but fewer upgrades, as its predecessor already had a 12MP 5x zoom camera.
+
+So that returns here, as does a 48MP main camera and a 12MP front-facing camera. The only major upgrade is to the ultra-wide, which moves from 12MP last year to 48MP here – a change which will also benefit macro shots.
+
+You can also now shoot video in up to 4K quality at up to 120fps, and as with the iPhone 16 Pro there's a Camera Control button, which makes it faster and easier than ever to access and operate the camera.
+
+One arguable advantage the iPhone 16 Pro Max does have over the Pro though its its much larger 6.9-inch screen, which gives you a larger window onto your photos. This could help with framing and viewing them.
+
+For more of a sense of how the cameras actually perform, check out the samples below, taken from our [iPhone 16 Pro Max review](https://www.techradar.com/phones/iphone/iphone-16-pro-max-review).
+
+&lt;a id="elk-ca69e7db-7f64-459e-99c4-db888f5746fe"&gt;&lt;/a&gt;## iPhone 16 Pro Max camera samples
+
+Image 1 of 14
+
+[](https://www.techradar.com/phones/iphone/iphone-16-pro-cameras#)[](https://www.techradar.com/phones/iphone/iphone-16-pro-cameras#)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/nDSgkepetMQkdc59JfoLzL-1200-80.jpg)
+
+Main Camera shot(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/5LpM6gMe8BTHbzGxRiAK7M-1200-80.jpg)
+
+12MP 5X optical zoom(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/QAHPQpUEH6THYH7Q9VwsKM-1200-80.jpg)
+
+2x(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/NofxKVzJsUv3znzfhM8QTM-1200-80.jpg)
+
+The portrait mode selfie game is strong with this phone(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/ubufSDWd7B929NT87GYXjM-1200-80.jpg)
+
+Ultrawide(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/DVv4pZcWN2guaG8dqCdX8N-1200-80.jpg)
+
+5x(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/9gHahk5B38htsJwy85spLN-1200-80.jpg)
+
+48MP Main camera(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/XMiyFRcNVjRZWJvCESboZN-1200-80.jpg)
+
+5x(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/qF2qRCMmW6UxAqP6bTqjnN-1200-80.jpg)
+
+5x(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/9SvwDREHWeiDKxvHkTGyzN-1200-80.jpg)
+
+5x(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/xiHk8p7ax3G4RsdMGrLRDP-1200-80.jpg)
+
+Ultrawide(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/8QeAq5adoTVD3cuTHpM5RP-1200-80.jpg)
+
+Main(Image credit: Future / Lance Ulanoff)
+
+![Apple iPhone 16 Pro Max Review](https://cdn.mos.cms.futurecdn.net/ENERtGDcCTDZgvhwKE2bYP-1200-80.jpg)
+
+(Image credit: Future / Lance Ulanoff)
+</chunk>
+</source>

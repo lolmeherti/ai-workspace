@@ -1,10 +1,10 @@
 package launcher
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,19 +12,20 @@ import (
 	"strings"
 	"time"
 
-	"localsy/internal/download"
-	"localsy/internal/env"
+	"localsy/internal/bridge"
 	"localsy/internal/llama"
 	"localsy/internal/models"
 	"localsy/internal/util"
 )
 
-func StartHTTPServer(tiers map[string]models.Tier, binDir, modelDir, searxngDir string) {
+func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware, binDir, modelDir, searxngDir string, relay *bridge.Relay) {
 	handler := &modelsHandler{
-		tiers:      tiers,
+		defs:       defs,
+		hw:         hw,
 		binDir:     binDir,
 		modelDir:   modelDir,
 		searxngDir: searxngDir,
+		relay:      relay,
 	}
 
 	go func() {
@@ -35,10 +36,12 @@ func StartHTTPServer(tiers map[string]models.Tier, binDir, modelDir, searxngDir 
 }
 
 type modelsHandler struct {
-	tiers      map[string]models.Tier
+	defs       map[string]models.ModelDefinition
+	hw         models.Hardware
 	binDir     string
 	modelDir   string
 	searxngDir string
+	relay      *bridge.Relay
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -52,41 +55,82 @@ func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleModelSwitch(w, r)
+	case "/bridge/status":
+		h.handleBridgeStatus(w, r)
+	case "/bridge/fetch":
+		h.handleBridgeFetch(w, r)
+	case "/bridge/search":
+		h.handleBridgeSearch(w, r)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
 type modelSwitchRequest struct {
+	ModelID   string `json:"model_id"`
 	ModelName string `json:"model_name"`
 	CtxSize   int    `json:"ctx_size,omitempty"`
 }
 
 func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) {
-	type modelEntry struct {
-		Name       string `json:"name"`
-		File       string `json:"file"`
-		URL        string `json:"url"`
-		CtxSize    int    `json:"ctx_size,omitempty"`
-		MMProjFile string `json:"mmproj_file,omitempty"`
+	type profileEntry struct {
+		ModelID    string  `json:"model_id"`
+		Name       string  `json:"name"`
+		ProfileID  string  `json:"profile_id"`
+		VRAMGroup  string  `json:"vram_group"`
+		VRAMMin    float64 `json:"vram_min"`
+		CtxSize    int     `json:"ctx_size"`
+		Vision     bool    `json:"vision"`
+		Speculative bool   `json:"speculative"`
 	}
 
-	entries := make([]modelEntry, 0, len(h.tiers))
-	for _, t := range h.tiers {
-		if t.Name == "" || t.File == "" {
+	entries := make([]profileEntry, 0)
+	for id, def := range h.defs {
+		if def.Model.File == "" || def.Model.URL == "" {
 			continue
 		}
-		entries = append(entries, modelEntry{
-			Name:       t.Name,
-			File:       t.File,
-			URL:        t.URL,
-			CtxSize:    t.CtxSize,
-			MMProjFile: t.MMProjFile,
-		})
+		speculative := def.Speculative != nil
+		if !speculative {
+			for _, p := range def.Profiles {
+				if p.Speculative != nil {
+					speculative = true
+					break
+				}
+			}
+		}
+		for pid, p := range def.Profiles {
+			entries = append(entries, profileEntry{
+				ModelID:    id,
+				Name:       def.Name,
+				ProfileID:  pid,
+				VRAMGroup:  vramGroupLabel(p.Requirements.VRAMMin),
+				VRAMMin:    p.Requirements.VRAMMin,
+				CtxSize:    p.CtxSize,
+				Vision:     def.Capabilities.Vision,
+				Speculative: speculative,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(entries)
+}
+
+func vramGroupLabel(vramMin float64) string {
+	switch {
+	case vramMin >= 32:
+		return "32GB+"
+	case vramMin >= 24:
+		return "24GB+"
+	case vramMin >= 16:
+		return "16GB+"
+	case vramMin >= 12:
+		return "12GB+"
+	case vramMin >= 8:
+		return "8GB+"
+	default:
+		return "Any"
+	}
 }
 
 func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request) {
@@ -97,132 +141,146 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 	}
 
 	var req modelSwitchRequest
-	if err := json.Unmarshal(body, &req); err != nil || req.ModelName == "" {
+	if err := json.Unmarshal(body, &req); err != nil || (req.ModelID == "" && req.ModelName == "") {
 		writeJSON(w, 400, map[string]string{"error": "invalid payload"})
 		return
 	}
 
-	var tier models.Tier
-	found := false
-	for _, t := range h.tiers {
-		if t.Name == req.ModelName {
-			tier = t
-			found = true
-			break
+	if req.ModelID == "" && req.ModelName != "" {
+		for id, def := range h.defs {
+			if def.Name == req.ModelName {
+				req.ModelID = id
+				break
+			}
+		}
+		if req.ModelID == "" {
+			writeJSON(w, 404, map[string]string{"error": "model not found: " + req.ModelName})
+			return
 		}
 	}
-	if !found {
-		writeJSON(w, 404, map[string]string{"error": fmt.Sprintf("model %q not found", req.ModelName)})
+
+	resolved, err := models.ResolveModel(req.ModelID, h.defs, h.hw, h.modelDir, nil)
+	if err != nil {
+		writeJSON(w, 404, map[string]string{"error": err.Error()})
 		return
 	}
 
-	modelPath := tier.File
-	if !isAbsolute(tier.File) {
-		modelPath = h.modelDir + "/" + tier.File
+	if req.CtxSize > 0 {
+		resolved.CtxSize = req.CtxSize
 	}
 
-	ctxSize := req.CtxSize
-	if ctxSize <= 0 {
-		ctxSize = tier.CtxSize
-	}
+	llama.KillIfRunning(&LlamaProcess)
 
-	// Download if missing
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		tmpPath := modelPath + ".tmp"
-		if err := download.File(tmpPath, tier.URL, nil); err != nil {
-			writeJSON(w, 500, map[string]string{"error": "download failed: " + err.Error()})
-			return
-		}
-		os.Rename(tmpPath, modelPath)
-	}
+	LlamaProcess = llama.StartServerWithFallback(h.binDir, resolved)
 
-	// Download mmproj if configured but missing
-	if tier.MMProjFile != "" {
-		mmprojPath := h.modelDir + "/" + tier.MMProjFile
-		if _, err := os.Stat(mmprojPath); os.IsNotExist(err) && tier.MMProjURL != "" {
-			tmpMmproj := mmprojPath + ".tmp"
-			if err := download.File(tmpMmproj, tier.MMProjURL, nil); err != nil {
-				log.Printf("[model-switch] failed to download mmproj %s: %v", tier.MMProjFile, err)
-				// Don't fail the switch — continue without mmproj
-			} else {
-				os.Rename(tmpMmproj, mmprojPath)
-			}
-		}
-	}
+	writeJSON(w, 200, map[string]interface{}{
+		"status":   "ok",
+		"name":     resolved.Name,
+		"ctx_size": resolved.CtxSize,
+	})
 
-	// Kill existing process
-	if LlamaProcess != nil && LlamaProcess.Process != nil {
-		LlamaProcess.Process.Kill()
-		LlamaProcess.Wait()
-		LlamaProcess = nil
-	}
-
-	// Start new server with same mmproj if it exists
-	mmprojPath := ""
-	if tier.MMProjFile != "" {
-		mmprojPath = h.modelDir + "/" + tier.MMProjFile
-	}
-
-	LlamaProcess = llama.StartServer(h.binDir, modelPath, mmprojPath, tier.Name, ctxSize)
-
-	// Wait for llama to be ready before responding
-	waitLlamaReady()
-
-	// Persist selection to env so it survives restart
 	workDir := filepath.Dir(h.modelDir)
 	envPath := filepath.Join(workDir, ".env")
 	if existing, err := os.ReadFile(envPath); err == nil {
 		lines := strings.Split(string(existing), "\n")
 		updated := make([]string, 0, len(lines))
-		hasCtxSize := false
+		hasModelID, hasModelName, hasCtxSize := false, false, false
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "LLM_MODEL_ID=") {
+				updated = append(updated, "LLM_MODEL_ID="+req.ModelID)
+				hasModelID = true
+				continue
+			}
 			if strings.HasPrefix(trimmed, "LLM_MODEL_NAME=") {
-				updated = append(updated, "LLM_MODEL_NAME="+env.QuoteEnvValue(tier.Name))
+				updated = append(updated, "LLM_MODEL_NAME="+resolved.Name)
+				hasModelName = true
 				continue
 			}
 			if strings.HasPrefix(trimmed, "LLM_CTX_SIZE=") {
-				updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(ctxSize))
+				updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(resolved.CtxSize))
 				hasCtxSize = true
 				continue
 			}
 			updated = append(updated, line)
 		}
-		if !hasCtxSize && ctxSize > 0 {
-			updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(ctxSize))
+		if !hasModelID {
+			updated = append(updated, "LLM_MODEL_ID="+req.ModelID)
+		}
+		if !hasModelName {
+			updated = append(updated, "LLM_MODEL_NAME="+resolved.Name)
+		}
+		if !hasCtxSize && resolved.CtxSize > 0 {
+			updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(resolved.CtxSize))
 		}
 		_ = os.WriteFile(envPath, []byte(strings.Join(updated, "\n")), 0644)
 	}
+}
 
-	writeJSON(w, 200, map[string]interface{}{
-		"status": "ok",
-		"name":   tier.Name,
-		"ctx_size": ctxSize,
+// ── bridge endpoints ──
+
+func (h *modelsHandler) handleBridgeStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]bool{
+		"connected": h.relay.IsConnected(),
 	})
 }
+
+func (h *modelsHandler) handleBridgeFetch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeJSON(w, 405, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		URL       string `json:"url"`
+		RequestID string `json:"request_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
+		writeJSON(w, 400, map[string]string{"error": "url required"})
+		return
+	}
+	if req.RequestID == "" {
+		req.RequestID = fmt.Sprintf("%x", time.Now().UnixNano())
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+
+	result, _ := h.relay.Fetch(ctx, req.URL, req.RequestID)
+	writeJSON(w, 200, result)
+}
+
+func (h *modelsHandler) handleBridgeSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeJSON(w, 405, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		Query     string `json:"query"`
+		RequestID string `json:"request_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Query == "" {
+		writeJSON(w, 400, map[string]string{"error": "query required"})
+		return
+	}
+	if req.RequestID == "" {
+		req.RequestID = fmt.Sprintf("s-%x", time.Now().UnixNano())
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, _ := h.relay.Search(ctx, req.Query, req.RequestID)
+	writeJSON(w, 200, result)
+}
+
+// ── helpers ──
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
-}
-
-// waitLlamaReady blocks until llama is ready (max 10s).
-func waitLlamaReady() {
-	client := http.Client{Timeout: 2 * time.Second}
-	for i := 0; i < 10; i++ {
-		resp, err := client.Get("http://127.0.0.1:1234/health")
-		if err == nil && resp != nil {
-			body := make([]byte, 512)
-			n, _ := resp.Body.Read(body)
-			resp.Body.Close()
-			var status struct{ Status string }
-			if json.Unmarshal(body[:n], &status) == nil && status.Status == "ok" {
-				return
-			}
-		}
-		time.Sleep(1 * time.Second)
-	}
 }
 
 func isAbsolute(p string) bool {
