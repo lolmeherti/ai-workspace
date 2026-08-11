@@ -1,0 +1,226 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S1">
+<title>
+Tape measure - Wikipedia
+</title>
+<domain>en.wikipedia.org</domain>
+<published>2004-03-08T18:19:35Z</published>
+<fetched>2026-07-28T22:55:27+00:00</fetched>
+<chunk id="S1-C5" section="History">
+\[[edit](/w/index.php?title=Tape_measure&amp;action=edit&amp;section=3 "Edit section: History")\]
+
+Prior to the advent of standardized measuring tapes, tailors employed cloth tapes without any markings. These tapes were manually inscribed with notches to denote specific measurements, enabling tailors to record the proportions of their clients.[\[5\]](#cite_note-g701-5)
+
+[![](//upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Chesterman_Tape_Measure.jpg/250px-Chesterman_Tape_Measure.jpg)](https://en.wikipedia.org/wiki/File:Chesterman_Tape_Measure.jpg)A Chesterman tape measureJames Chesterman, a British metalworker, is credited with the invention of the first retractable tape measure in 1821.[\[6\]](#cite_note-f814-6) His design consisted of a spring-loaded cloth strip with marked measurements, housed within a compact case. Building upon his prior design, Chesterman would patent the first steel tape measure.[\[7\]](#cite_note-l825-7) By capitalizing on the declining popularity of [pannier](https://en.wikipedia.org/wiki/Pannier_(clothing) "Pannier (clothing)") dresses, Chesterman repurposed the surplus flat wire used in the dresses to create the flexible measuring tape.[\[8\]](#cite_note-w490-8)
+
+On 6 December 1864, William H. Bangs received a patent for the first design of a spring return tape measure.[\[9\]](#cite_note-9)[\[10\]](#cite_note-p340-10) Bang's design would later be improved upon by Alvin J. Fellows on July 14, 1868. Fellows' design differed from Bang's by allowing the tape to be held in place via a spring-click mechanism.[\[11\]](#cite_note-r299-11)
+
+The first patented long tape measure in the United States was granted on 10 July 1860 to William H. Paine, and produced by George M. Eddy and Company.[\[12\]](#cite_note-:0-12) This design lacked any measurement points on it. Instead, it functioned as a singular unit of measurement, with the entire length of the tape representing a fixed distance.[\[13\]](#cite_note-j216-13) A brass piece, attached at the end of the tape, served as a reference marker. The length corresponding to the tape's full extension was then indicated on the case or crank mechanism.[\[12\]](#cite_note-:0-12)
+
+[![](//upload.wikimedia.org/wikipedia/en/thumb/b/b1/H._A._Farrand_with_Farrand_Rapid_Rule.jpg/250px-H._A._Farrand_with_Farrand_Rapid_Rule.jpg)](https://en.wikipedia.org/wiki/File:H._A._Farrand_with_Farrand_Rapid_Rule.jpg)Hiram A. Farrand with the Farrand Rapid RuleIn 1871, Justus Roe introduced a cost cutting technique to the tape measure.[\[14\]](#cite_note-l8252-14) Employing rivets to attach small brass washers to the tape, he could mark inches and feet. To further enhance readability, small brass tags were affixed at five-foot intervals, each bearing a number indicating the total number of feet to that point.[\[15\]](#cite_note-x0842-15) While this technique was not patented, Justus Roe and Sons popularized this design in their "Roe Electric Reel Tape Measures" during the late 19th and early 20th centuries. To compete with other products, they transitioned to etching or stamping increments and numbers directly onto the tape, eliminating the need for rivets and washers.[\[10\]](#cite_note-p340-10) The "electric" moniker was a marketing term and did not signify any electrical functionality.
+
+On 3 January 1922, Hiram A. Farrand patented his concave-convex tape.[\[16\]](#cite_note-16) The concave nature of his design allowed the tape to stay rigid, even when extended.[\[17\]](#cite_note-l059-17) Their product was later sold to [Stanley Black &amp;amp; Decker](https://en.wikipedia.org/wiki/Stanley_Works "Stanley Works").[\[15\]](#cite_note-x0842-15)
+
+[![](//upload.wikimedia.org/wikipedia/commons/thumb/a/af/Tape_measure_No_1.jpg/250px-Tape_measure_No_1.jpg)](https://en.wikipedia.org/wiki/File:Tape_measure_No_1.jpg)TALmeter showing the three scales on the measuring tape.In 1947, the Swedish engineer Ture Anders Ljungberg began developing an improved version and in 1954 the *TALmeter* was introduced. It features edges at both the end of the tape and the mouth to cut marks so measures (including arcs) can be transferred without reading the scale, as well as a fold-out metal tongue at the rear, also with an edge, to be used when taking internal measures. The tape has three scales: the normal metric, the internal scale and a diameter scale used for instance to measure sheet metal to be rolled into a cylinder of a certain diameter. It was produced by his own company T A Ljungberg AB until 2005, when it was bought by Hultafors in 2005, who retained the name "Talmeter" for the product they now refer to as a *märkmeter* (marker-meter).[\[18\]](#cite_note-18)
+
+In March 1963, [Stanley Tools](https://en.wikipedia.org/wiki/Stanley_Hand_Tools "Stanley Hand Tools") introduced the PowerLock tape measure series.[\[19\]](#cite_note-19) It was the first to use a molded ABS case, thumb actuated tape lock, and riveted end hook. By 1989, Stanley was producing more than 200,000 tape measures every day.[\[20\]](#cite_note-20)
+
+The first commercialized Digital Tape Measure was released by [Starrett](https://en.wikipedia.org/wiki/L._S._Starrett_Company "L. S. Starrett Company") in 1995 under the DigiTape brand.
+</chunk>
+<chunk id="S1-C6" section="Design">
+\[[edit](/w/index.php?title=Tape_measure&amp;action=edit&amp;section=4 "Edit section: Design")\]
+
+[![](//upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Tape_measure_riveted_hook.svg/250px-Tape_measure_riveted_hook.svg.png)](https://en.wikipedia.org/wiki/File:Tape_measure_riveted_hook.svg)A loosely riveted hook lets a tape measure measure inner (1) and outer (2) lengthsThe basic design on which all modern spring tape measures are built can trace its origins back to an 1864 patent by a [Meriden, Connecticut](https://en.wikipedia.org/wiki/Meriden,_Connecticut "Meriden, Connecticut") resident named William H. Bangs Jr. According to the text of his patent, Bang's tape measure was an improvement on other versions previously designed.[\[21\]](#cite_note-21)
+
+The spring tape measure has existed in the U.S. since Bang's patent in 1864, but its usage did not become very popular due to the difficulty in communication from one town to another and the expense of the tape measure. In the late 1920s, carpenters began slowly adopting H. A. Farrand's design as the one more commonly used. Farrand's new design was a concave/convex tape made of metal which would stand straight out a distance of four to six feet. This design is the basis for most modern pocket tape measures used today.
+
+With the mass production of the [integrated circuit](https://en.wikipedia.org/wiki/Integrated_circuit "Integrated circuit") (IC) the tape measure has also entered into the digital age with the digital tape measure. Some incorporate a digital screen to give measurement readouts in multiple formats. An early patent for this type of measure was published in 1977.[\[22\]](#cite_note-22)
+
+There are also other styles of tape measures that have incorporated [lasers](https://en.wikipedia.org/wiki/Laser "Laser") and ultrasonic technology to measure the distance of an object with fairly reliable accuracy.
+
+Tape measures often have black and red measurements on a yellow background as this is the optimal color combination for readability.[\[23\]](#cite_note-23)
+</chunk>
+<chunk id="S1-C4" section="Types &gt; Cased measuring tape">
+\[[edit](/w/index.php?title=Tape_measure&amp;action=edit&amp;section=2 "Edit section: Cased measuring tape")\]
+
+There are two basic types of cased measuring tapes: spring return tape measures and manual return tape measures. While spring return tape measures are compact and self-retracting, manual return measures are designed for longer distances and often require manual winding, often via hand crank.
+
+- [![A self retractable measuring tape that is locked open](//upload.wikimedia.org/wikipedia/commons/thumb/1/17/Measuring-tape.jpg/330px-Measuring-tape.jpg)](https://en.wikipedia.org/wiki/File:Measuring-tape.jpg "Self retracting measuring tape")
+
+ Self retracting measuring tape
+- [![A cased measuring tape with a hand crank](//upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Retractable_twenty_meter_tape_measure_2.jpg/250px-Retractable_twenty_meter_tape_measure_2.jpg)](https://en.wikipedia.org/wiki/File:Retractable_twenty_meter_tape_measure_2.jpg "Manual return tape measure")
+
+ Manual return tape measure
+</chunk>
+<chunk id="S1-C11" section="Accuracy and standardisation">
+\[[edit](/w/index.php?title=Tape_measure&amp;action=edit&amp;section=9 "Edit section: Accuracy and standardisation")\]
+
+[![](//upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Magnusson_ruban_8_m_25_mm_07.jpg/250px-Magnusson_ruban_8_m_25_mm_07.jpg)](https://en.wikipedia.org/wiki/File:Magnusson_ruban_8_m_25_mm_07.jpg)Red EC classification symbols printed on a Class II measure, calibrated at 20°C.The accuracy of a tape measure is dependent on the ends of the tape and the markings printed onto the tape. The accuracy for the end of a retractable tape measure is dependent on the hook's sliding mechanism and thickness.
+
+The [European Commission](https://en.wikipedia.org/wiki/European_Commission "European Commission") (EC) has standardised a non-compulsory classification system for certifying tape measure accuracy, with certified tapes falling into one of three classes of accuracy: Classes I, II, and III.[\[31\]](#cite_note-31) For example, under specific conditions the tolerances for 10 m long tapes are:
+
+- Class I: accurate to ± 1.10 mm over 10 m length
+- Class II: accurate to ± 2.30 mm over 10 m length
+- Class III: accurate to ± 4.60 mm over 10 m length
+
+If a tape measure has been certified then the class rating is printed onto the tape alongside other symbols including the nominal length of the tape, the year of manufacture, the country of manufacture, and the name of the manufacturer.[\[32\]](#cite_note-32) For retractable tapes, Class I are the most accurate and tend to be the most expensive, while Class II tapes are the most common class available.[\[33\]](#cite_note-33)
+</chunk>
+</source>
+
+<source id="S2">
+<title>
+Connecticut Old Churches Houses Bridges Mills | July 14 in Connecticut History: A Measurable Improvement in Tape Measures | Facebook
+</title>
+<domain>www.facebook.com</domain>
+<fetched>2026-07-28T22:55:29+00:00</fetched>
+<chunk id="S2-C2" section="[Connecticut Old Churches Houses Bridges Mills](/groups/439504127191333/?__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=-UC%2CP-R) · Beitreten">
+Grzegorz Dawidowicz
+
+ · Admin
+
+ · [14. Juli um 13:15](https://www.facebook.com/groups/439504127191333/?multi_permalinks=1753146942493705&amp;hoisted_section_header_type=recently_seen&amp;__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=%2CO%2CP-R) · 
+
+July 14 in Connecticut History: A Measurable Improvement in Tape Measures
+
+On July 14, 1868, Alvin Fellows of New Haven, Connecticut received a patent for his unique spring-loaded, locking tape measure design. While Fellows certainly wasn’t the first to conceive of using demarcated strips of metal tape as a measuring tool, his unique design featured significant improvements over previous tape measures and was the first to resemble the common handyman’s tool found in households around the world today.
+
+The first spring-loaded tape measure had been invented in England in the 1820s, but was far too expensive for the typical American craftsman to afford at the price of $17 (over $400 in today’s dollars). With necessity — or in this case, affordability — serving as the mother of invention, a number of American inventors sought to patent their own, more cost-effective versions of the tape measure. In 1864, just four years before Fellows secured his patent, another Connecticut man became the first American to obtain a patent for a spring-loaded tape measure: William Bangs, Jr. of Meriden. Fellows then improved upon Bangs’ design in two ways: first, by adding a locking mechanism that would hold the measuring tape in place until the user pressed a button to release it, and second, by enclosing the entire tape measure (including the locking mechanism) in an all-in-one compact metal case. A measurable improvement for toolboxes across America, thanks to a double-dose of Connecticut ingenuity, on this day in Connecticut history.
+
+Source/more info:
+
+[https://todayincthistory.com/.../july-14-a-tale-of.../amp/](https://l.facebook.com/l.php?u=https%3A%2F%2Ftodayincthistory.com%2F2020%2F07%2F14%2Fjuly-14-a-tale-of-two-tape-measures-2%2Famp%2F&amp;h=AUAtQRQ1WSBAP78v7t7HzwS0XskHwB8ijJ--ylqWz3mFMZgjnjmSI6Qya1kKfUPSPAqQiwuG4i_zSRj7DHUotdIY-TcMC-vNpZjkn7nthJJCBXbSKutvUOPVfxWOSoUYx-e-9Cqq43t1qJc1Fos7vPGN&amp;__tn__=-UK-R&amp;c%5B0%5D=AUAS327ezKfoj7MMogImmX5uAlihVA5bqD8EOZoaoiK75M5fn447pGuB90DTQpl6P5ua0ahxULWSQZU5YCwIbIkZ94oui5X4lq1WXbnkAob3rTrWXI9ur70OSfMKOGnKBMawgEe9QySr46XXtxaEhjUm9RnqpKTgs3T8a1DIw5rGgGKpxUzmoYG8cVCusnUrTSyBm89OpR37lP1pVfQqlFfW7b_H)
+
+This post is intended for: Connecticut Old Churches Houses Bridges Mills Facebook group. 
+
+[Connecticut Old Churches Houses Bridges Mills](https://www.facebook.com/groups/439504127191333/?__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=-UK-R)
+
+[](https://www.facebook.com/photo/?fbid=10233895467354912&amp;set=gm.1753146942493705&amp;idorvanity=439504127191333&amp;__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=EH-R)
+
+Alle Reaktionen:
+
+66
+
+5 Kommentare
+
+9 Mal geteilt
+
+Gefällt mir
+
+Kommentieren
+
+Teilen
+
+Relevanteste zuerst﻿
+
+[](#)
+
+Bill Lynch
+
+A lot of tape measures came out of CT
+</chunk>
+<chunk id="S2-C1">
+&lt;?xml encoding="UTF-8"&gt;Connecticut Old Churches Houses Bridges Mills | July 14 in Connecticut History: A Measurable Improvement in Tape Measures | Facebook
+
+Alvin Fellows' spring-loaded tape measure patent on July 14, 1868 | Connecticut
+
+Basierend auf dem Beitrag unten von KI zusammengefasst
+
+[](/groups/439504127191333/?__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=%3C%3C%2CP-R)
+</chunk>
+<chunk id="S2-C3" section="[Connecticut Old Churches Houses Bridges Mills](/groups/439504127191333/?__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=-UC%2CP-R) · Beitreten">
+- [2 Wo.](https://www.facebook.com/groups/439504127191333/posts/1753146942493705/?comment_id=1753172089157857&amp;__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=R%5D-R)
+
+1
+
+[](#)
+
+Peter Walsh
+
+This design was recently made obsolete by electronic measuring devices and Asian-made double-sided tapes. Stanley Black &amp;amp; Decker closed its tape measure factory in New Britain, CT, in 2026, its last home-town manufacturing facility, laying off 300 workers.
+
+- [2 Wo.](https://www.facebook.com/groups/439504127191333/posts/1753146942493705/?comment_id=1753427582465641&amp;__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=R%5D-R)
+
+[](#)
+
+Grzegorz Dawidowicz
+
+Verfasser/in
+
+Admin
+
+Source
+
+[https://todayincthistory.com/.../july-14-a-tale-of.../amp/](https://l.facebook.com/l.php?u=https%3A%2F%2Ftodayincthistory.com%2F2020%2F07%2F14%2Fjuly-14-a-tale-of-two-tape-measures-2%2Famp%2F&amp;h=AUCJiPFP11sWaL3V-DaIYwyyJNP38NiiPgWWUdiealDS56fboTajA7jvy5kMij6x11pxzf_J4yOJlvfEJ0SyPHeO6eenG7UCwLFDhpW20ABNaOfCIsXQrdapdE2y4qW2BMk8I_M_p9mfisG2uo_nCrze&amp;__tn__=R%5D-R&amp;c%5B0%5D=AUAS327ezKfoj7MMogImmX5uAlihVA5bqD8EOZoaoiK75M5fn447pGuB90DTQpl6P5ua0ahxULWSQZU5YCwIbIkZ94oui5X4lq1WXbnkAob3rTrWXI9ur70OSfMKOGnKBMawgEe9QySr46XXtxaEhjUm9RnqpKTgs3T8a1DIw5rGgGKpxUzmoYG8cVCusnUrTSyBm89OpR37lP1pVfQqlFfW7b_H)
+
+TODAYINCTHISTORY.COM
+
+July 14: A Measurable Improvement in Tape Measures
+
+[## July 14: A Measurable Improvement in Tape Measures](https://l.facebook.com/l.php?u=https%3A%2F%2Ftodayincthistory.com%2F2020%2F07%2F14%2Fjuly-14-a-tale-of-two-tape-measures-2%2Famp%2F&amp;h=AUDlAE6zuBKB-HqA0xgKdzsLItHUHgzB0nBc80Hjg1s6r19BqKBjQS4uLySxv6wRiLw33nlZ3V1b3i4aGwQ2BvkpBCPICUkjenjLNaor4TQfL8-Xsa7RC-ZE9DOHvsZe2FG3Wy11d0LCv5-rGphZQkPq&amp;__tn__=R%5D-R&amp;c%5B0%5D=AUAS327ezKfoj7MMogImmX5uAlihVA5bqD8EOZoaoiK75M5fn447pGuB90DTQpl6P5ua0ahxULWSQZU5YCwIbIkZ94oui5X4lq1WXbnkAob3rTrWXI9ur70OSfMKOGnKBMawgEe9QySr46XXtxaEhjUm9RnqpKTgs3T8a1DIw5rGgGKpxUzmoYG8cVCusnUrTSyBm89OpR37lP1pVfQqlFfW7b_H)
+
+- [2 Wo.](https://www.facebook.com/groups/439504127191333/posts/1753146942493705/?comment_id=1753147475826985&amp;__cft__%5B0%5D=AZbAKclYw7pX9de7PxUQMKgKKYOQ4H8ADNncorLoNEaglB63sj3fJ-I5aV0xPaTUpqAWMEjsZq3uR2k18pEZepDB_V4LCCBTsiNz3ffJL4HSqXBvDElVrPZnraAsDz7Izl_tFlLf4dkWLDthy2l4BhJFd4RwQ1RNyUTr-vya6Ost0VQb32eq6XrMAiEGg_Aoq8EQzuRI1Ol7jrKNMxxu9a6l&amp;__tn__=R%5D-R)
+
+1
+
+2 weitere Kommentare ansehen
+
+3 von 5
+
+Die Verwendung von Cookies durch Facebook in diesem Browser erlauben?
+
+Wir verwenden Cookies und ähnliche Technologien, um Inhalte in [Meta-Produkten](https://www.facebook.com/help/1561485474074139) bereitzustellen und zu verbessern. Darüber hinaus verwenden wir sie, um mithilfe der durch Cookies auf und außerhalb von Facebook empfangenen Informationen die Sicherheit zu verbessern sowie um Meta-Produkte für Personen, die ein Konto haben, bereitzustellen und zu verbessern.
+
+Erforderliche Cookies: Diese Cookies sind notwendig für die Nutzung von Meta-Produkten und die ordnungsgemäße Funktion unserer Websites.
+
+Cookies anderer Unternehmen: Wir verwenden diese Cookies, um dir Werbeanzeigen außerhalb von Meta-Produkten zu zeigen und Funktionen wie Karten oder Videos in Meta-Produkten anbieten zu können. Hierbei handelt es sich um optionale Cookies.
+
+Du bestimmst, welche optionalen Cookies wir verwenden dürfen. In unserer [Cookie-Richtlinie](https://www.facebook.com/policies/cookies/) erfährst du mehr über Cookies und wie wir sie verwenden. Dort kannst du deine Auswahl außerdem jederzeit überprüfen oder ändern.
+
+Infos zu Cookies
+
+Was sind Cookies?
+
+Mehr dazu
+
+Warum verwenden wir Cookies?
+
+Mehr dazu
+
+Was sind Meta-Produkte?
+
+Mehr dazu
+
+Deine Cookie-Auswahl
+
+Mehr dazu
+
+Cookies anderer Unternehmen
+
+Wir verwenden Cookies [anderer Unternehmen](https://www.facebook.com/privacy/policies/cookies/?annotations%5B0%5D=explanation%2F3_companies_list), um dir Werbeanzeigen außerhalb von unseren Produkten zu zeigen und Funktionen wie Karten, Zahlungsdienste oder Videos anbieten zu können.
+
+Cookies nach Kategorie auswählen
+
+So verwenden wir diese Cookies
+
+Wenn du diese Cookies erlaubst:
+
+Wenn du diese Cookies nicht erlaubst:
+
+Andere Möglichkeiten, um deine Informationen zu kontrollieren
+
+Personalisiere dein Werbeerlebnis in der Kontenübersicht
+
+Weitere Informationen zu Onlinewerbung
+
+Cookies über die Browser-Einstellungen kontrollieren
+
+Alle Cookies erlauben
+
+Optionale Cookies ablehnen
+
+Alle Cookies erlauben
+
+Optionale Cookies ablehnen
+</chunk>
+</source>

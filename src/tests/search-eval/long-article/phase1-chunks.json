@@ -1,0 +1,78 @@
+[
+    {
+        "chunkId": "S1-C2",
+        "domain": "survey.stackoverflow.co",
+        "title": "AI | 2024 Stack Overflow Developer Survey",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[AI tool sentiment ](#1-ai-tool-sentiment)"
+        ],
+        "textLen": 3685
+    },
+    {
+        "chunkId": "S3-C5",
+        "domain": "stackoverflow.blog",
+        "title": "Developers remain willing but reluctant to use AI: The 2025 Developer Survey results are here - Stack Overflow",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[](#h2-d7f772761d81 \"Permalink to this heading\")Career shifts, satisfaction, and what really matters"
+        ],
+        "textLen": 1696
+    },
+    {
+        "chunkId": "S1-C1",
+        "domain": "survey.stackoverflow.co",
+        "title": "AI | 2024 Stack Overflow Developer Survey",
+        "sectionType": "paragraph",
+        "headingPath": [],
+        "textLen": 3814
+    },
+    {
+        "chunkId": "S1-C6",
+        "domain": "survey.stackoverflow.co",
+        "title": "AI | 2024 Stack Overflow Developer Survey",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[AI in the development workflow ](#2-ai-in-the-development-workflow)"
+        ],
+        "textLen": 3044
+    },
+    {
+        "chunkId": "S1-C5",
+        "domain": "survey.stackoverflow.co",
+        "title": "AI | 2024 Stack Overflow Developer Survey",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[AI tools' ability to handle complex tasks ](#2-ai-tools-ability-to-handle-complex-tasks)"
+        ],
+        "textLen": 3677
+    },
+    {
+        "chunkId": "S3-C6",
+        "domain": "stackoverflow.blog",
+        "title": "Developers remain willing but reluctant to use AI: The 2025 Developer Survey results are here - Stack Overflow",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[](#h2-16b0800c46e7 \"Permalink to this heading\")Developer insights are here"
+        ],
+        "textLen": 707
+    },
+    {
+        "chunkId": "S3-C1",
+        "domain": "stackoverflow.blog",
+        "title": "Developers remain willing but reluctant to use AI: The 2025 Developer Survey results are here - Stack Overflow",
+        "sectionType": "paragraph",
+        "headingPath": [],
+        "textLen": 1023
+    },
+    {
+        "chunkId": "S3-C4",
+        "domain": "stackoverflow.blog",
+        "title": "Developers remain willing but reluctant to use AI: The 2025 Developer Survey results are here - Stack Overflow",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[](#h2-36598276cb4f \"Permalink to this heading\")New tricks for old dogs: insights on technology trends in 2025"
+        ],
+        "textLen": 2323
+    }
+]

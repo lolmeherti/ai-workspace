@@ -11,6 +11,7 @@ use App\Cache;
 use App\Config;
 use App\Scraper;
 use App\Search;
+use App\Search\CitationValidator;
 use App\Services\FileAttachmentService;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
@@ -165,25 +166,32 @@ class ChatManager
         ]);
 
         // Handle cache_action resubmits from ask_user card
+        // Evidence injected as separate untrusted-data message — never system role.
+        $validSourceIds = []; // populated by structured evidence pipeline in later phase
+        $evidenceBlock = '';
         if ($cacheAction === 'use_cache' && !empty($cacheKeyToUse)) {
             $cachedContent = Cache::get($cacheKeyToUse) ?? '';
             if (!empty($cachedContent)) {
-                $currentMessages[] = [
-                    'role' => 'system',
-                    'content' => "[LIVE WEB SEARCH CONTEXT — CACHED]\n\n" . $cachedContent
-                ];
+                $evidenceBlock = $cachedContent;
                 $usedCache = true;
             }
         } elseif ($cacheAction === 'force_live') {
             if ($this->contextCondenserService !== null) {
-                $condensed = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService, $sessionId);
-                if (!empty($condensed) && !str_starts_with($condensed, 'Web search for')) {
-                    $currentMessages[] = [
-                        'role' => 'system',
-                        'content' => "[LIVE WEB SEARCH CONTEXT]\n\n" . $condensed
-                    ];
+                $result = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService, $sessionId);
+                if (!empty($result['evidence']) && !str_starts_with($result['evidence'], 'Web search for')) {
+                    $evidenceBlock = $result['evidence'];
+                    $validSourceIds = $result['sourceIds'] ?? [];
                 }
             }
+        }
+
+        if (!empty($evidenceBlock)) {
+            // Rebuild messages with evidence injected as proper untrusted block
+            $currentMessages = $this->promptAssemblyService->buildMessagesArray(
+                $systemPrompt, $history, $firstTool, '', $usedCache, $query,
+                $evidenceBlock, $validSourceIds
+            );
+            $currentMessages = $this->cleanMessagesArray($currentMessages);
         }
 
         $emit('generating', []);
@@ -260,6 +268,39 @@ class ChatManager
                 ? $this->toolExecutionService->parseAndExecuteToolLines($aiRawResponse, $sessionId, $currentMessages, $emit)
                 : [];
 
+            // Guarantee: every user-selected tool MUST execute. If the model
+            // skipped any, force-execute them with the full user query.
+            // Only on the tool-parsing pass (shouldParse), not the streaming pass.
+            if ($shouldParse && !empty($activeTools)) {
+                $matchedNames = array_column($toolResults, 'tool');
+                $calendarTools = ['get_todoist_tasks', 'create_todoist_task', 'update_todoist_task', 'delete_todoist_task'];
+                $calendarMatched = !empty(array_intersect($matchedNames, $calendarTools));
+
+                foreach ($activeTools as $tool) {
+                    if ($tool === 'calendar') {
+                        if (!$calendarMatched) {
+                            $emit('status', ['text' => 'Fetching calendar...']);
+                            \App\ProgressWriter::write($sessionId, 'tool_start', 'Executing get_todoist_tasks (forced)', 'amber');
+                            $forced = $this->toolExecutionService->executeGuaranteed('get_todoist_tasks', $query, $sessionId, $currentMessages, $emit);
+                            if (!empty($forced)) {
+                                $toolResults[] = ['tool' => 'get_todoist_tasks', 'result' => $forced];
+                            }
+                            \App\ProgressWriter::write($sessionId, 'tool_done', 'get_todoist_tasks completed (forced).', 'amber');
+                            $emit('trace', ['label' => 'get_todoist_tasks (forced) completed.', 'color' => 'emerald']);
+                        }
+                    } elseif (!in_array($tool, $matchedNames)) {
+                        $emit('status', ['text' => "Executing {$tool}..."]);
+                        \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$tool} (forced)", 'amber');
+                        $forced = $this->toolExecutionService->executeGuaranteed($tool, $query, $sessionId, $currentMessages, $emit);
+                        if (!empty($forced)) {
+                            $toolResults[] = ['tool' => $tool, 'result' => $forced];
+                        }
+                        \App\ProgressWriter::write($sessionId, 'tool_done', "{$tool} completed (forced).", 'amber');
+                        $emit('trace', ['label' => "{$tool} (forced) completed.", 'color' => 'emerald']);
+                    }
+                }
+            }
+
             if ($isToolTurn && $executionCount === 0 && empty($toolResults)) {
                 \App\Logger::logEvent('tool_name_missed', 'Tool turn: model response contained no parseable tool names', [
                     'session_id' => $sessionId,
@@ -329,6 +370,19 @@ class ChatManager
                 // All tools executed — rebuild for natural streaming response
                 $pendingTools = [];
                 $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+
+                // Extract source IDs from data_fetching messages so CitationValidator can fire
+                if (empty($validSourceIds)) {
+                    foreach ($updatedHistory as $row) {
+                        if (($row['message_type'] ?? '') === 'data_fetching') {
+                            $msg = $row['message'] ?? '';
+                            if (preg_match_all('/<source\s+id="([^"]+)"/', $msg, $m)) {
+                                $validSourceIds = array_values(array_unique($m[1]));
+                            }
+                        }
+                    }
+                }
+
                 $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, [], '', false, $query);
                 $currentMessages = $this->cleanMessagesArray($currentMessages);
 
@@ -373,6 +427,13 @@ class ChatManager
         }
 
         $cleanResponse = $finalResponse;
+
+        // Strip hallucinated source IDs from final answer
+        if (!empty($validSourceIds)) {
+            $citationValidator = new CitationValidator();
+            $cleanResponse = $citationValidator->sanitizeCitations($cleanResponse, $validSourceIds);
+        }
+
         $usage = $this->agent->lastUsage;
         $assistantTokens = (int)(mb_strlen($cleanResponse) / 4);
 
@@ -490,21 +551,13 @@ class ChatManager
     {
         if (count($history) !== 1) return null;
 
-        $systemPrompt = "Generate a short, descriptive title (max 6 words) for a conversation that starts with this message. Output ONLY the title, no quotes, no other text.";
-        $messages = [
-            ['role' => 'system', 'content' => $systemPrompt],
-            ['role' => 'user', 'content' => $query]
-        ];
+        $title = mb_strlen($query) > 60
+            ? mb_substr($query, 0, 57) . '...'
+            : $query;
 
-        try {
-            $title = $this->agent->chat($messages, false, null, 0.3);
-            if (!empty($title) && mb_strlen($title) < 100) {
-                $this->db->update('chat_sessions', ['title' => $title], ['id' => $sessionId]);
-                $emit('title_updated', ['title' => $title]);
-                return $title;
-            }
-        } catch (\Throwable $e) {}
-        return null;
+        $this->db->update('chat_sessions', ['title' => $title], ['id' => $sessionId]);
+        $emit('title_updated', ['title' => $title]);
+        return $title;
     }
 
     private function streamAgentResponse(array $messages, callable $emit): string

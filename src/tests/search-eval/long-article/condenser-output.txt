@@ -1,0 +1,60 @@
+### **Stack Overflow Developer Survey: AI Tool Usage Findings (2024–2025)**
+
+**Usage & Adoption Trends**
+* **Adoption & Workflow Integration:** 
+    * **2024:** 76% adoption rate (planning/using).
+    * **2025:** 80% of developers now use AI tools in their workflows.
+* **Current Usage Patterns:**
+    * **2024:** 62% are currently using AI tools.
+    * **2025:** 51% of professional developers report using AI tools **daily**.
+* **Learning & AI:**
+    * **AI-Assisted Learning:** 44% of developers learned with the help of AI-enabled tools in 2025 (up from 37% in 2024).
+    * **Learning for AI:** 36% of developers learned to code specifically for AI in the last year; 67% indicate they are learning to code for AI in the workplace or personal projects.
+* **AI Agents & "Vibe Coding":**
+    * **Adoption:** Not yet mainstream. 52% of developers say agents have affected how they complete work, but many still stick to simpler tools.
+    * **Vibe Coding (Generating entire apps from prompts):** Not a professional standard; 72% say it is not part of their professional work, and 5% emphatically do not participate.
+
+**Sentiment & Trust**
+* **Overall Favorability:** 
+    * **2024:** 72% favorable.
+    * **2025:** 60% favorable (a continued decline).
+* **Accuracy & Trust (2025):** 
+    * **General:** Trust in AI accuracy has fallen significantly, from 40% in previous years to just 29% in 2025.
+    * **Human Fallback:** 75% of developers say they would still ask another person for help when they do not trust an AI's answer.
+    * **Experience Level:** Experienced developers are the most cautious, reporting the highest "highly distrust" rate (20%) and the lowest "highly trust" rate (2.6%).
+* **Job Security:** 
+    * **2024:** 70% of professional developers did **not** perceive AI as a threat.
+    * **2025:** 64% do not see AI as a threat (down from 68% in 2024).
+
+**Benefits, Workflow & Impact**
+* **Primary Benefit (2024):** 81% identify increased productivity as the biggest benefit.
+* **AI Agent Impact (2025):** 
+    * **Productivity:** 69% agree agents increase productivity; 70% agree they reduce time spent on specific tasks.
+    * **Collaboration:** Only 17% agree agents improve team collaboration.
+* **Workflow Integration (2024):** 82% of users primarily use AI to write code.
+
+**Models, Languages & Technology**
+* **Large Language Models (2025):**
+    * **OpenAI GPT:** Remains the leader, with 81% of developers using OpenAI chat models for development work.
+    * **Anthropic Claude Sonnet:** The most admired LLM and second most desired (33%). It is used more by professionals (45%) than learners (30%).
+* **AI-Compatible Language Trends:** Popularity is growing in languages used for AI development and infrastructure:
+    * **Python:** Up 7 percentage points.
+    * **Rust & Go:** Up 2 percentage points.
+* **AI Agent Infrastructure (2025):**
+    * **Data Storage:** Developers show a preference for **Redis (43%)** and **GitHub MCP server (43%)** for AI agent data storage.
+    * **Monitoring & Observability:** Leading tools include **Sentry (32%)** and **New Relic (13%)**.
+
+**Challenges, Frustrations & Barriers**
+* **Technical Frustrations (2025):**
+    * **"Almost Right":** The #1 frustration (cited by 45%) is dealing with "AI solutions that are almost right, but not quite."
+    * **Debugging Burden:** 66% of developers report spending more time fixing these "almost-right" AI-generated solutions.
+* **Complexity (2024):** 45% of professional developers believe AI is "bad" or "very bad" at handling complex tasks.
+* **Ethical & Implementation Concerns (2024):** Top concerns include misinformation (79%) and source attribution (65%).
+* **Technology Rejection Reasons (2025):** The top three "deal-breakers" are:
+    1. Security or privacy concerns.
+    2. Prohibitive pricing.
+    3. Availability of better alternatives.
+
+**The Role of Community & Stack Overflow**
+* **Community Platforms:** Developers rely on a portfolio of resources: Stack Overflow (84%), GitHub (67%), and YouTube (61%).
+* **AI Troubleshooting:** Stack Overflow is serving as a "human-verified source of truth" for AI-generated code; approximately 35% of developers visit the site specifically due to AI-related issues.

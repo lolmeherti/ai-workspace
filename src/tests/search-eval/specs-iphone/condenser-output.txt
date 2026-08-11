@@ -1,0 +1,34 @@
+No new, relevant information was found in the provided web text to update the existing notes. The text consisted primarily of website boilerplate, JavaScript code, and membership promotional content.
+
+### **iPhone 16 Pro Camera Specifications**
+
+#### **Pro Camera System (Rear)**
+*   **48MP Fusion:** 24 mm, ƒ/1.78 aperture, 1/1.28" sensor, 1.22µm pixels, 2nd-gen sensor-shift OIS, 100% Focus Pixels; supports 24MP and 48MP super-high-resolution photos.
+*   **12MP 2x Telephoto:** 48 mm, ƒ/1.78 aperture, 1/3.06" sensor, 1.12µm pixels, 2nd-gen sensor-shift OIS, 100% Focus Pixels.
+*   **48MP Ultra Wide:** 13 mm, ƒ/2.2 aperture, 1/2.55" sensor, 0.7µm pixels, 120° field of view, Hybrid Focus Pixels; supports 48MP super-high-resolution photos.
+*   **12MP 5x Telephoto:** 120 mm, ƒ/2.8 aperture, 20° field of view, 100% Focus Pixels, seven-element lens, 3D sensor-shift OIS and autofocus, tetraprism design.
+*   **Zoom:** 5x optical zoom in, 2x optical zoom out; 10x optical zoom range; up to 25x digital zoom.
+
+#### **Video Recording**
+*   **4K Dolby Vision:** 24, 25, 30, 60, 100, or 120 fps (Fusion).
+*   **1080p Dolby Vision:** 25, 30, 60, 120, or 240 fps (Fusion).
+*   **Cinematic Mode:** Up to 4K Dolby Vision at 30 fps.
+*   **Action Mode:** Up to 2.8K Dolby Vision at 60 fps.
+*   **ProRes:** Up to 4K at 120 fps (with external recording).
+*   **Log Video:** Academy Color Encoding System.
+*   **Spatial Video:** 1080p at 30 fps.
+*   **Slo-mo:** 1080p up to 240 fps; 4K Dolby Vision up to 120 fps (Fusion).
+*   **Other Video:** Macro video (including slo-mo/time-lapse), Night mode Time-lapse, QuickTake (up to 4K Dolby Vision at 60 fps).
+*   **Stabilization:** 2nd-gen sensor-shift (Fusion); 3D sensor-shift (Telephoto).
+*   **Audio:** Spatial Audio, stereo recording, four studio-quality mics, wind noise reduction, Audio Mix, and audio zoom.
+
+#### **Key Camera Features**
+*   **Hardware:** Camera Control button, Sapphire crystal lens cover, Adaptive True Tone flash, LiDAR Scanner (TOF 3D).
+*   **Processing:** Photonic Engine, Deep Fusion, Smart HDR 5, Apple ProRAW.
+*   **Photography Modes:** Next-generation portraits (Focus and Depth Control), Portrait Lighting (6 effects), Night mode (with LiDAR), Panorama (up to 63MP), Photographic Styles, Spatial photos, 48MP macro photography.
+*   **Formats:** HEIF, JPEG, and DNG.
+
+#### **TrueDepth Camera (Front)**
+*   **Specs:** 12MP, 23 mm (wide), ƒ/1.9 aperture, 1/3.6" sensor, 1.0µm pixels, Autofocus with Focus Pixels, OIS SL 3D (depth/biometrics sensor), Retina Flash.
+*   **Video:** 4K Dolby Vision (up to 60 fps), 1080p up to 120 fps, Cinematic mode (up to 4K at 30 fps), ProRes (up to 4K at 60 fps with external recording).
+*   **Features:** Photonic Engine, Deep Fusion, Smart HDR 5, Night mode, Apple ProRAW, and Spatial Audio.

@@ -1,0 +1,148 @@
+RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:
+
+<source id="S1">
+<title>
+Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies | by Adolfo | Towards Dev
+</title>
+<domain>towardsdev.com</domain>
+<published>2025-12-08T06:10:11.286Z</published>
+<fetched>2026-07-28T22:56:22+00:00</fetched>
+<chunk id="S1-C4" section="Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies &gt; Developing Middleware in Go">
+Let’s examine a practical implementation that demonstrates how to build and compose middleware components using only Go’s standard library.
+</chunk>
+<chunk id="S1-C10" section="Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies &gt; Conclusion">
+Go’s standard library provides a powerful, elegant foundation for building middleware without requiring third-party frameworks. The `http.Handler` interface and the ability to wrap handlers through closures create a flexible system that scales from simple logging to complex authentication pipelines.
+
+The middleware pattern demonstrated here offers several advantages: complete control over the request/response lifecycle, zero external dependencies, excellent performance, and the ability to compose functionality in a clean, maintainable way. Whether you’re building a microservice, a REST API, or a full web application, understanding how to implement middleware from first principles gives you the flexibility to create exactly the processing pipeline your application needs.
+
+As you build more complex applications, consider extracting common middleware patterns into reusable functions, implementing proper error handling and recovery, and adding observability through structured logging and metrics collection — all achievable with Go’s standard library and the middleware pattern we’ve explored.
+</chunk>
+<chunk id="S1-C2" section="Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies">
+[![Adolfo](https://miro.medium.com/v2/resize:fill:64:64/1*2Gux-0OARM8qSp5jo-Fxbg@2x.jpeg)](https://medium.com/@FitoMAD?source=post_page---byline--0f7727f36764---------------------------------------)
+
+[Adolfo](https://medium.com/@FitoMAD?source=post_page---byline--0f7727f36764---------------------------------------)
+
+Follow
+
+4 min read·
+
+Dec 7, 2025
+
+[](https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fvote%2Ftowardsdev%2F0f7727f36764&amp;operation=register&amp;redirect=https%3A%2F%2Ftowardsdev.com%2Fbuilding-http-middleware-in-go-a-practical-guide-without-third-party-dependencies-0f7727f36764&amp;user=Adolfo&amp;userId=75869a8757f0&amp;source=---header_actions--0f7727f36764---------------------clap_footer------------------)
+
+[](https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Frepost%2Fp%2F0f7727f36764&amp;operation=register&amp;redirect=https%3A%2F%2Ftowardsdev.com%2Fbuilding-http-middleware-in-go-a-practical-guide-without-third-party-dependencies-0f7727f36764&amp;user=Adolfo&amp;userId=75869a8757f0&amp;source=---header_actions--0f7727f36764---------------------repost_header------------------)
+
+[](https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2F_%2Fbookmark%2Fp%2F0f7727f36764&amp;operation=register&amp;redirect=https%3A%2F%2Ftowardsdev.com%2Fbuilding-http-middleware-in-go-a-practical-guide-without-third-party-dependencies-0f7727f36764&amp;source=---header_actions--0f7727f36764---------------------bookmark_footer------------------)
+
+[Listen](https://medium.com/m/signin?actionUrl=https%3A%2F%2Fmedium.com%2Fplans%3Fdimension%3Dpost_audio_button%26postId%3D0f7727f36764&amp;operation=register&amp;redirect=https%3A%2F%2Ftowardsdev.com%2Fbuilding-http-middleware-in-go-a-practical-guide-without-third-party-dependencies-0f7727f36764&amp;source=---header_actions--0f7727f36764---------------------post_audio_button------------------)
+
+Share
+
+Press enter or click to view image in full size![](https://miro.medium.com/v2/resize:fit:700/1*i2zfvBCB5eKBQXAR2bHb1g.jpeg)
+
+Middleware is a fundamental concept in web application development that allows developers to process HTTP requests and responses in a modular, reusable way. In Go’s `net/http` package, middleware provides an elegant mechanism to add cross-cutting concerns such as logging, authentication, content validation, and header manipulation without cluttering your handler logic.
+
+While many Go web frameworks offer middleware systems, Go’s standard library provides all the tools necessary to build powerful, production-ready middleware components. This article demonstrates how to develop custom middleware in Go using only the standard library, giving you complete control over your application’s request processing pipeline without external dependencies.
+</chunk>
+<chunk id="S1-C3" section="Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies &gt; What is Middleware?">
+Middleware is a function that wraps an HTTP handler, allowing you to execute code before and after the handler processes a request. Think of middleware as a series of concentric layers surrounding your core business logic — each layer can inspect, modify, or even halt the request before it reaches the handler, and similarly process the response on its way back to the client.
+
+The middleware pattern in Go follows a simple signature:
+
+This function takes an `http.Handler` as input and returns a new `http.Handler` that wraps the original. This design enables elegant composition where multiple middleware components can be chained together, each adding its own functionality to the request processing pipeline.
+
+**Key characteristics of middleware:**
+
+- **Execution order**: Middleware executes in the order it’s wrapped, with the outermost middleware executing first on the way in and last on the way out.
+- **Request/response access**: Each middleware has full access to both the request and response, allowing for inspection, modification, or early termination.
+- **Composability**: Multiple middleware functions can be composed together, creating a flexible processing pipeline.
+</chunk>
+</source>
+
+<source id="S2">
+<title>
+Making and Using HTTP Middleware in Go– Alex Edwards
+</title>
+<domain>www.alexedwards.net</domain>
+<fetched>2026-07-28T22:56:24+00:00</fetched>
+<chunk id="S2-C9" section="Using middleware on specific routes">
+`&lt;pre class="language-go hljs"&gt;&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt; &lt;span class="hljs-title"&gt;requireJSON&lt;/span&gt;&lt;span class="hljs-params"&gt;(next http.Handler)&lt;/span&gt;&lt;/span&gt; http.Handler {	&lt;span class="hljs-keyword"&gt;return&lt;/span&gt; http.HandlerFunc(&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt;&lt;span class="hljs-params"&gt;(w http.ResponseWriter, r *http.Request)&lt;/span&gt;&lt;/span&gt; {		contentType := r.Header.Get(&lt;span class="hljs-string"&gt;"Content-Type"&lt;/span&gt;)		&lt;span class="hljs-comment"&gt;// If the content type is not application/json, send an error message and&lt;/span&gt;		&lt;span class="hljs-comment"&gt;// return from the middleware. By returning before next.ServeHTTP(w, r)&lt;/span&gt;		&lt;span class="hljs-comment"&gt;// is called, it means that the next handler in the chain is never executed.&lt;/span&gt;		&lt;span class="hljs-keyword"&gt;if&lt;/span&gt; contentType != &lt;span class="hljs-string"&gt;"application/json"&lt;/span&gt; {			http.Error(w, &lt;span class="hljs-string"&gt;"Content-Type header must be application/json"&lt;/span&gt;, http.StatusUnsupportedMediaType)			&lt;span class="hljs-keyword"&gt;return&lt;/span&gt;		}		&lt;span class="hljs-comment"&gt;// Otherwise, if the content type is application/json, call the next handler&lt;/span&gt;		&lt;span class="hljs-comment"&gt;// in the chain as normal.&lt;/span&gt;		next.ServeHTTP(w, r)	})}&lt;/pre&gt;`## A more realistic example
+
+Now that we've covered the theory, let's look at a more practical example to give you a taste for using middleware in a real application.
+
+In this code, we'll create two middleware functions that we want to use on all routes:
+
+- A `serverHeader` middleware that adds the `Server: Go` header to HTTP responses.
+- A `logRequest` middleware that uses the `log/slog` package to log the details of the current request.
+
+And we'll also create a `GET /admin` route that is guarded by a `requireBasicAuthentication` middleware function, which requires the client to authenticate via HTTP basic authentication. This is another example where we will use the 'early return' pattern that we just talked about.
+</chunk>
+<chunk id="S2-C5" section="Using middleware on specific routes">
+- We've created a middleware function called `middlewareOne`, which uses the standard pattern that we talked about above. The middleware logs a message, calls the `next` handler, and then logs another message.
+- We've made two normal handler functions, `fooHandler` and `barHandler`, which both log a message and send a `200 OK` response.
+- In the route `mux.Handle("GET /foo", http.HandlerFunc(fooHandler))`, we use the `http.HandlerFunc()` function to convert `fooHandler` to a `http.Handler`, and use it as normal *with no middleware*.
+- In the route `mux.Handle("GET /bar", middlewareOne(http.HandlerFunc(barHandler)))`, we use the `http.HandlerFunc()` function to convert `barHandler` to a `http.Handler`, and then pass it to the `middlewareOne` function as the `next` argument. Or in simpler terms — we wrap `barHandler` with the `middlewareOne` middleware function.
+
+If you run this application and make a request to `http://localhost:3000/foo`, you should see some log output containing only the message from `fooHandler`:
+
+`&lt;pre class="plain"&gt;$ go run main.go&lt;samp&gt;2025/07/05 19:00:56 listening on :3000...2025/07/05 19:01:09 /foo executing fooHandler&lt;/samp&gt;&lt;/pre&gt;`In contrast, if you make a request to `http://localhost:3000/bar`, you should also see the log messages from `middlewareOne`, demonstrating that the middleware is successfully being used on that route.
+
+`&lt;pre class="plain"&gt;&lt;samp&gt;...2025/07/05 19:02:43 /bar executing middlewareOne2025/07/05 19:02:43 /bar executing barHandler2025/07/05 19:02:43 /bar executing middlewareOne again&lt;/samp&gt;&lt;/pre&gt;`This log output also nicely illustrates the flow of control through the application code. We can see that any code in `middlewareOne` which comes *before* `next.ServeHTTP(w, r)` runs before `barHandler` is executed — and any code which comes *after* `next.ServeHTTP(w, r)` runs after `barHandler` has returned.
+
+So the flow of control through the application for the `GET /bar` route looks like this:
+
+`&lt;pre class="plain"&gt;http.ServeMux → middlewareOne → barHandler → middlewareOne → http.ServeMux&lt;/pre&gt;`## Using middleware on all routes
+
+In the previous example, we used our middleware to wrap a specific handler in a specific route. But if you want your middleware to act on *all* routes, you can wrap `http.ServeMux` itself so that the flow of control looks like this:
+
+`&lt;pre class="plain"&gt;middlewareOne → http.ServeMux → fooHandler/barHandler → http.ServeMux → middlewareOne&lt;/pre&gt;`This works because Go's `http.ServeMux` implements the `http.Handler` interface — it has the necessary [`ServeHTTP()`](https://pkg.go.dev/net/http#ServeMux.ServeHTTP) method. And as a result, we can directly pass an `http.ServeMux` into a middleware function as the `next` parameter.
+
+Let's update our example code to do this:
+</chunk>
+<chunk id="S2-C6" section="Using middleware on specific routes">
+main.go`&lt;pre class="hljs language-go"&gt;&lt;span class="hljs-keyword"&gt;package&lt;/span&gt; main...&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt; &lt;span class="hljs-title"&gt;main&lt;/span&gt;&lt;span class="hljs-params"&gt;()&lt;/span&gt;&lt;/span&gt; {	mux := http.NewServeMux()	&lt;span class="hljs-comment"&gt;// We don't use any middleware on the individual routes.&lt;/span&gt;	mux.Handle(&lt;span class="hljs-string"&gt;"GET /foo"&lt;/span&gt;, http.HandlerFunc(fooHandler))	mux.Handle(&lt;span class="hljs-string"&gt;"GET /bar"&lt;/span&gt;, http.HandlerFunc(fooHandler))	log.Println(&lt;span class="hljs-string"&gt;"listening on :3000..."&lt;/span&gt;)	&lt;span class="hljs-comment"&gt;// Wrap the http.ServeMux with the middlewareOne function.&lt;/span&gt;	err := http.ListenAndServe(&lt;span class="hljs-string"&gt;":3000"&lt;/span&gt;, middlewareOne(mux))	log.Fatal(err)}&lt;/pre&gt;`And if you run the application and make the same requests to `/foo` and `/bar` again, you should see from the log output that `middlewareOne` is now being used on all routes.
+
+`&lt;pre class="plain"&gt;$ go run main.go&lt;samp&gt;2025/07/05 19:04:48 listening on :3000...2025/07/05 19:04:54 /foo executing middlewareOne2025/07/05 19:04:54 /foo executing fooHandler2025/07/05 19:04:54 /foo executing middlewareOne again2025/07/05 19:04:58 /bar executing middlewareOne2025/07/05 19:04:58 /bar executing fooHandler2025/07/05 19:04:58 /bar executing middlewareOne again&lt;/samp&gt;&lt;/pre&gt;`## Chaining middleware
+
+Because the standard middleware function pattern accepts a `http.Handler` as a parameter, and it returns a `http.Handler`, that makes it possible to easily create arbitrarily long *chains of middleware*. Put simply, one middleware function can wrap another middleware function.
+
+To illustrate this, let's add some more middleware functions to our example and chain them together.
+</chunk>
+<chunk id="S2-C3" section="The standard pattern">
+Before we talk about middleware, please take a moment to consider the structure of the `messageHandler` function in the following code:
+
+`&lt;pre class="language-go hljs"&gt;&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt; &lt;span class="hljs-title"&gt;main&lt;/span&gt;&lt;span class="hljs-params"&gt;()&lt;/span&gt;&lt;/span&gt; {	mux := http.NewServeMux()	mux.Handle(&lt;span class="hljs-string"&gt;"GET /"&lt;/span&gt;, messageHandler(&lt;span class="hljs-string"&gt;"Hello world!"&lt;/span&gt;))	log.Print(&lt;span class="hljs-string"&gt;"listening on :3000..."&lt;/span&gt;)	err := http.ListenAndServe(&lt;span class="hljs-string"&gt;":3000"&lt;/span&gt;, mux)	log.Fatal(err)}&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt; &lt;span class="hljs-title"&gt;messageHandler&lt;/span&gt;&lt;span class="hljs-params"&gt;(message &lt;span class="hljs-type"&gt;string&lt;/span&gt;)&lt;/span&gt;&lt;/span&gt; http.Handler {	&lt;span class="hljs-keyword"&gt;return&lt;/span&gt; http.HandlerFunc(&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt;&lt;span class="hljs-params"&gt;(w http.ResponseWriter, r *http.Request)&lt;/span&gt;&lt;/span&gt; {		w.Write([]&lt;span class="hljs-type"&gt;byte&lt;/span&gt;(message))	})}&lt;/pre&gt;`In this code we put our `messageHandler` logic — which is just a call to `w.Write()` — in an anonymous function which 'closes over' the `message` variable to form a *closure*. We then convert the closure to an `http.Handler` with the [`http.HandlerFunc()`](https://pkg.go.dev/net/http/#HandlerFunc) adapter, and then return it.
+
+We can use this same general pattern to help us create a *middleware function*. Instead of passing a `string` into the closure (like above), you can pass another `http.Handler` as a parameter, and then transfer control to this handler by calling its `ServeHTTP()` method. Like so:
+
+`&lt;pre class="language-go hljs"&gt;&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt; &lt;span class="hljs-title"&gt;exampleMiddleware&lt;/span&gt;&lt;span class="hljs-params"&gt;(next http.Handler)&lt;/span&gt;&lt;/span&gt; http.Handler {	&lt;span class="hljs-keyword"&gt;return&lt;/span&gt; http.HandlerFunc(&lt;span class="hljs-function"&gt;&lt;span class="hljs-keyword"&gt;func&lt;/span&gt;&lt;span class="hljs-params"&gt;(w http.ResponseWriter, r *http.Request)&lt;/span&gt;&lt;/span&gt; {		&lt;span class="hljs-comment"&gt;// Your middleware logic goes here...&lt;/span&gt;		next.ServeHTTP(w, r)	})}&lt;/pre&gt;`Essentially, the `exampleMiddleware` function accepts a `next` handler as a parameter, and it returns a closure which is also a handler. When this closure is executed, any code in the closure will be run and then the `next` handler will be called.
+</chunk>
+</source>
+
+<source id="S3">
+<title>
+Building a net/http Middleware Chain From Scratch in Go - DEV Community
+</title>
+<domain>dev.to</domain>
+<published>2026-06-03T17:10:51Z</published>
+<fetched>2026-07-28T22:56:25+00:00</fetched>
+<chunk id="S3-C38" section="[ ](#when-to-reach-for-a-framework) When to Reach for a Framework">
+This pattern scales well. But there are cases where the standard library genuinely falls short:
+
+- **Path parameters**: `net/http`'s `ServeMux` gained basic wildcard support in Go 1.22 (`/users/{id}`), but complex routing (regex, optional segments) still requires a router like Chi or httprouter.
+- **Middleware on route groups**: applying middleware to `/api/` but not `/healthz` requires careful mux setup or a router that supports route groups natively.
+
+For most APIs, the standard library plus a lightweight router like Chi (which uses this exact middleware pattern under the hood) is the right call.
+
+---
+</chunk>
+<chunk id="S3-C1">
+&lt;?xml encoding="UTF-8"&gt;Every Go web framework ships with middleware. Chi has it. Gin has it. Echo has it. And every tutorial shows you how to use it.
+
+But almost none of them show you how it actually works.
+
+This article builds a production-grade middleware chain using nothing but the Go standard library. No framework, no magic. By the end you will have written request logging, authentication, panic recovery, and timeout middleware from scratch, and you will understand exactly why the pattern works the way it does.
+
+---
+</chunk>
+</source>

@@ -3,16 +3,127 @@
 namespace App;
 
 use DOMDocument;
+use App\Search\FetchSafety;
+use App\Search\FetchResult;
+use App\Search\OutboundScheduler;
 
 class Scraper
 {
+    private static ?OutboundScheduler $scheduler = null;
+
+    private static function scheduler(): OutboundScheduler
+    {
+        return self::$scheduler ??= new OutboundScheduler();
+    }
     /**
-     * Fetches a webpage via FlareSolverr, cleans it, and truncates it.
+     * Fetch via direct curl first. Fall back to FlareSolverr only
+     * when direct fetch fails, returns a challenge page, or produces
+     * insufficient content. Records fetch method for coverage measurement.
      *
      * @param string $targetUrl The URL to scrape
+     * @param string &$fetchMethod Out-param: 'curl' or 'flaresolverr'
      * @return string The cleaned, truncated text
      */
-    public static function fetchAndClean(string $targetUrl, ?int $maxTokens = null): string
+    public static function fetchAndClean(string $targetUrl, ?int $maxTokens = null, ?string &$fetchMethod = null): string
+    {
+        // 2b: Try direct curl first
+        try {
+            $result = FetchSafety::safeFetchUrl($targetUrl);
+            if (FetchSafety::isUseful($result)) {
+                $fetchMethod = 'curl';
+                return self::cleanAndTruncate($result->body, $maxTokens);
+            }
+        } catch (\App\Search\UnsafeUrlException $e) {
+            // URL validation failed — don't fall through to FlareSolverr
+            // (private IP, credentials, bad scheme, etc.)
+            error_log("Scraper: unsafe URL rejected — {$e->getMessage()}");
+            return "";
+        } catch (\App\Search\FetchException $e) {
+            // DNS failure, too many redirects, curl error — fall through to FlareSolverr
+            error_log("Scraper: direct fetch failed for {$targetUrl} — {$e->getMessage()}, falling back to FlareSolverr");
+        }
+
+        // Fall back to FlareSolverr
+        $fetchMethod = 'flaresolverr';
+        return self::fetchViaFlareSolverr($targetUrl, $maxTokens);
+    }
+
+    /**
+     * Fetch raw HTML body via HTTP-first + FlareSolverr fallback.
+     * Returns FetchResult on success, null when both paths fail.
+     * Same safety logic as fetchAndClean() — no strip/truncate.
+     */
+    public static function fetchRaw(string $targetUrl, ?string &$fetchMethod = null): ?FetchResult
+    {
+        $host = parse_url($targetUrl, PHP_URL_HOST) ?: 'unknown';
+        self::scheduler()->waitForSlot($host);
+
+        try {
+            $result = FetchSafety::safeFetchUrl($targetUrl);
+            if (FetchSafety::isUseful($result)) {
+                $fetchMethod = 'curl';
+                return $result;
+            }
+        } catch (\App\Search\UnsafeUrlException $e) {
+            error_log("Scraper: unsafe URL rejected — {$e->getMessage()}");
+            return null;
+        } catch (\App\Search\FetchException $e) {
+            error_log("Scraper: direct fetch failed for {$targetUrl} — {$e->getMessage()}, falling back to FlareSolverr");
+        }
+
+        $fetchMethod = 'flaresolverr';
+        $html = self::fetchViaFlareSolverrRaw($targetUrl);
+        if ($html === null || empty(trim($html))) {
+            return null;
+        }
+
+        return new FetchResult(
+            statusCode: 200,
+            body: $html,
+            finalUrl: $targetUrl,
+            resolvedIp: '',
+            contentType: 'text/html',
+        );
+    }
+
+    /**
+     * Fetch via FlareSolverr, return raw HTML string (no cleaning).
+     */
+    private static function fetchViaFlareSolverrRaw(string $targetUrl): ?string
+    {
+        $flareHost = rtrim(getenv('FLARESOLVERR_HOST') ?: 'http://flaresolverr:8191', '/');
+        $endpoint = $flareHost . '/v1';
+
+        $payload = json_encode([
+            "cmd" => "request.get",
+            "url" => $targetUrl,
+            "maxTimeout" => 15000,
+            "disableMedia" => true
+        ]);
+
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if (!$response) {
+            return null;
+        }
+
+        $data = json_decode($response, true);
+        return $data['solution']['response'] ?? null;
+    }
+
+    /**
+     * Fetch via FlareSolverr (headless Chromium). Used as fallback when
+     * direct curl fails, returns a challenge page, or the page requires JS.
+     */
+    private static function fetchViaFlareSolverr(string $targetUrl, ?int $maxTokens = null): string
     {
         $flareHost = rtrim(getenv('FLARESOLVERR_HOST') ?: 'http://flaresolverr:8191', '/');
         $endpoint = $flareHost . '/v1';

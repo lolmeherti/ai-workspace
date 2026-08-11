@@ -20,37 +20,45 @@
             <!-- Model Switcher Section -->
             <div class="px-6 pt-4 flex gap-4 items-end">
                 <div class="flex-1">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" for="model_name">Model</label>
-                    <!-- FIX: Removed overriding inline styles to let custom select CSS take charge cleanly -->
-                    <select name="model_name" id="model_name" class="input-futuristic w-full rounded-lg px-3 py-2 text-sm">
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" for="model_id">Model</label>
+                    <select name="model_id" id="model_id" class="input-futuristic w-full rounded-lg px-3 py-2 text-sm">
                         <option value="">— Select a model —</option>
                         <?php 
                         $envPath = __DIR__ . '/../.env';
-                        $currentModelName = '';
+                        $currentModelId = '';
                         if (file_exists($envPath)) {
                             $envData = (new \App\EnvEditor($envPath))->read();
-                            $currentModelName = trim($envData['LLM_MODEL_NAME'] ?? '', '"\' ');
+                            $currentModelId = trim($envData['LLM_MODEL_ID'] ?? '', '"\'\' ');
                         }
-                        
-                        $currentModelClean = strtolower(preg_replace('/-Q\d+(_\d+|_K_M)?$/i', '', preg_replace('/\.gguf$/i', '', $currentModelName)));
 
-                        foreach ($modelsList as $m): 
-                            $filename = $m['file'] ?? '';
-                            $modelValueClean = preg_replace('/\.gguf$/i', '', $filename);
-                            $modelValueClean = preg_replace('/-Q\d+(_\d+|_K_M)?$/i', '', $modelValueClean);
-                            $modelValueClean = strtolower($modelValueClean);
+                        $grouped = [];
+                        foreach ($modelsList as $m) {
+                            $grouped[$m['vram_group'] ?? 'Any'][] = $m;
+                        }
 
-                            $isSelected = (
-                                strtolower($currentModelName) === strtolower($m['name']) || 
-                                strtolower($currentModelName) === strtolower($modelValueClean) ||
-                                $currentModelClean === $modelValueClean
-                            ) ? 'selected' : '';
+                        $groupOrder = ['32GB+', '24GB+', '16GB+', '12GB+', '8GB+', 'Any'];
+                        foreach ($groupOrder as $group):
+                            if (empty($grouped[$group])) continue;
                         ?>
-                            <option value="<?php echo htmlspecialchars($m['name']); ?>" 
-                                    data-ctx="<?php echo (int)($m['ctx_size'] ?? 0); ?>"
-                                    <?php echo $isSelected; ?>>
-                                <?php echo htmlspecialchars($m['name']); ?>
-                            </option>
+                            <optgroup label="<?php echo htmlspecialchars($group); ?>">
+                            <?php foreach ($grouped[$group] as $m): 
+                                $mId = $m['model_id'] ?? '';
+                                $mName = $m['name'] ?? $mId;
+                                $ctxSize = (int)($m['ctx_size'] ?? 0);
+                                $label = $mName;
+                                if ($ctxSize >= 1000) {
+                                    $label .= ' — ' . number_format($ctxSize) . ' ctx';
+                                }
+                                $isSelected = ($mId !== '' && $mId === $currentModelId) ? 'selected' : '';
+                            ?>
+                                <option value="<?php echo htmlspecialchars($mId); ?>"
+                                        data-ctx="<?php echo $ctxSize; ?>"
+                                        data-name="<?php echo htmlspecialchars($mName); ?>"
+                                        <?php echo $isSelected; ?>>
+                                    <?php echo htmlspecialchars($label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                            </optgroup>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -59,7 +67,7 @@
                     <?php 
                     $currentCtxSize = '';
                     if (file_exists($envPath)) {
-                        $currentCtxSize = trim($envData['LLM_CTX_SIZE'] ?? '', '"\' ');
+                        $currentCtxSize = trim($envData['LLM_CTX_SIZE'] ?? '', '"\'\' ');
                     }
                     ?>
                     <input type="number" name="ctx_size" id="ctx_size" value="<?php echo htmlspecialchars($currentCtxSize); ?>" class="input-futuristic w-full rounded-lg px-3 py-2 text-sm">
@@ -90,14 +98,14 @@
             
             <div class="flex justify-between items-center gap-3 p-6 border-t border-slate-800 bg-slate-900/40 shrink-0">
                 <button type="submit" name="switch_model" value="1" 
-                        onclick="const opt = document.querySelector('#model_name option:checked'); if (!opt) return false; const v = parseInt(opt.dataset.ctx); if (!isNaN(v) && v > 0) { document.getElementById('ctx_size').value = v; } return true;"
+                        onclick="const opt = document.querySelector('#model_id option:checked'); if (!opt || !opt.value) return false; const v = parseInt(opt.dataset.ctx); if (!isNaN(v) && v > 0) { document.getElementById('ctx_size').value = v; } return true;"
                         class="px-5 py-2 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md transition-colors">
                     Switch Model & Restart
                 </button>
                 <div class="flex gap-3">
                     <button type="button" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors uk-modal-close">Cancel</button>
                     <button type="submit" name="save_settings" value="1" 
-                            onclick="document.getElementById('model_name').value=''; document.getElementById('ctx_size').value=''"
+                            onclick="document.getElementById('model_id').value=''; document.getElementById('ctx_size').value=''"
                             class="btn-futuristic px-5 py-2 rounded-lg text-sm font-semibold">Save Configuration</button>
                 </div>
             </div>
@@ -107,16 +115,14 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const modelSelect = document.getElementById('model_name');
+    const modelSelect = document.getElementById('model_id');
     if (modelSelect) {
         modelSelect.addEventListener('change', function() {
             const opt = this.options[this.selectedIndex];
             const ctxInput = document.getElementById('ctx_size');
             if (opt && opt.dataset.ctx && parseInt(opt.dataset.ctx) > 0) {
-                if (!ctxInput.value || parseInt(ctxInput.value) < 512) {
-                    ctxInput.value = opt.dataset.ctx;
-                }
-            } else {
+                ctxInput.value = opt.dataset.ctx;
+            } else if (opt && !opt.value) {
                 ctxInput.value = '';
             }
         });

@@ -6,15 +6,31 @@ import (
 	"path/filepath"
 )
 
-func LoadConfig(data []byte, workDir string) map[string]Tier {
-	tiers := make(map[string]Tier)
+type ModelsFile struct {
+	Models map[string]ModelDefinition `json:"models"`
+}
+
+func LoadConfig(data []byte, workDir string) map[string]ModelDefinition {
+	var file ModelsFile
 
 	userPath := filepath.Join(workDir, "models.json")
 	if userBytes, err := os.ReadFile(userPath); err == nil && len(userBytes) > 0 {
-		_ = json.Unmarshal(userBytes, &tiers)
-	} else {
-		_ = json.Unmarshal(data, &tiers)
+		if json.Unmarshal(userBytes, &file) == nil && len(file.Models) > 0 {
+			return ValidateAndDerive(file.Models)
+		}
 	}
 
-	return tiers
+	if json.Unmarshal(data, &file) == nil && len(file.Models) > 0 {
+		return ValidateAndDerive(file.Models)
+	}
+
+	return nil
+}
+
+func ValidateAndDerive(defs map[string]ModelDefinition) map[string]ModelDefinition {
+	for id, def := range defs {
+		def.Capabilities.Vision = def.MMProj != nil && def.MMProj.File != "" && def.MMProj.URL != ""
+		defs[id] = def
+	}
+	return defs
 }

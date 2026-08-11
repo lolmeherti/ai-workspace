@@ -85,6 +85,23 @@ class TypewriterEffect {
     get displayedText() { return this.displayed; }
 }
 
+let stickToBottom = true;
+let scrollTrackingAttached = false;
+
+function ensureScrollTracking(chatWindow) {
+    if (scrollTrackingAttached) return;
+    scrollTrackingAttached = true;
+    chatWindow.addEventListener('scroll', () => {
+        stickToBottom = chatWindow.scrollTop + chatWindow.clientHeight >= chatWindow.scrollHeight - 80;
+    });
+}
+
+function scrollIfStuck(chatWindow) {
+    if (stickToBottom && chatWindow) {
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+}
+
 export async function streamResponse(formData, originalMessage) {
     state.isGenerating = true;
     
@@ -108,6 +125,14 @@ export async function streamResponse(formData, originalMessage) {
         </div>
 
         <details class="w-full mb-4 overflow-hidden group trace-accordion rounded-xl border border-emerald-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(16,185,129,0.05),inset_0_1px_0_rgba(16,185,129,0.04)] transition-all duration-300" open>
+            <style>
+                @keyframes trace-scan { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+                @keyframes trace-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+                @keyframes trace-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+                .trace-active-task { animation: trace-fadein 0.2s ease-out; }
+                .trace-active-task .trace-scan-overlay { background: linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.08) 45%, rgba(16,185,129,0.15) 50%, rgba(16,185,129,0.08) 55%, transparent 100%); background-size: 200% 100%; animation: trace-scan 2s linear infinite; }
+                .trace-cursor { animation: trace-blink 1s step-end infinite; }
+            </style>
             <summary class="flex items-center justify-between px-5 py-3 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200">
                 <span class="flex items-center gap-3">
                     <span class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.12)]">
@@ -128,6 +153,13 @@ export async function streamResponse(formData, originalMessage) {
                 </span>
             </summary>
             <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
+                <div class="trace-active-task hidden mb-2 px-2 py-1.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 font-mono text-[0.7rem] relative overflow-hidden flex items-center">
+                    <div class="trace-scan-overlay absolute inset-0 pointer-events-none"></div>
+                    <span class="uk-spinner uk-spinner-sm animate-spin text-emerald-400 shrink-0 mr-1.5 trace-spinner" uk-spinner="ratio:0.6"></span>
+                    <span class="trace-active-check mr-1.5 text-emerald-400 hidden">\u2713</span>
+                    <span class="trace-active-label text-emerald-300/90"></span>
+                    <span class="trace-cursor text-emerald-400 ml-0.5">\u2588</span>
+                </div>
                 <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono">
                     <div class="scraping-container flex flex-col gap-1 mt-1 hidden w-full"></div>
                 </div>
@@ -165,6 +197,8 @@ export async function streamResponse(formData, originalMessage) {
         <div class="file-choices-placeholder-container w-full"></div>
     `;
     chatWindow.appendChild(aiNode);
+    ensureScrollTracking(chatWindow);
+    stickToBottom = true;
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
     const traceAccordion = aiWrapper.querySelector('.trace-accordion');
@@ -192,24 +226,56 @@ export async function streamResponse(formData, originalMessage) {
     let traceStepCount = 0;
     const traceStepCounter = aiWrapper.querySelector('.trace-step-counter');
     const tracePulseDot = aiWrapper.querySelector('.trace-pulse-dot');
+    const traceActiveTask = aiWrapper.querySelector('.trace-active-task');
+    const traceActiveLabel = aiWrapper.querySelector('.trace-active-label');
+    const traceSpinner = aiWrapper.querySelector('.trace-spinner');
+    const traceActiveCheck = aiWrapper.querySelector('.trace-active-check');
+    const traceCursor = aiWrapper.querySelector('.trace-cursor');
+    const traceScanOverlay = aiWrapper.querySelector('.trace-scan-overlay');
+
+    const TRACE_COLORS = {
+        cyan:    { text: 'text-cyan-400',    accent: 'bg-cyan-500/50' },
+        blue:    { text: 'text-blue-400',    accent: 'bg-blue-500/50' },
+        amber:   { text: 'text-amber-400',   accent: 'bg-amber-500/50' },
+        emerald: { text: 'text-emerald-400', accent: 'bg-emerald-500/50' },
+        indigo:  { text: 'text-indigo-400',  accent: 'bg-indigo-500/50' },
+        rose:    { text: 'text-rose-400',    accent: 'bg-rose-500/50' },
+        slate:   { text: 'text-slate-300',   accent: 'bg-slate-500/40' },
+    };
+
+    function setActiveTask(label, color = 'slate') {
+        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
+        traceActiveTask.classList.remove('hidden');
+        traceActiveTask.className = traceActiveTask.className.replace(/bg-\w+-\d+\/\d+/g, `bg-${color === 'slate' ? 'slate' : color}-500/5`);
+        traceActiveTask.className = traceActiveTask.className.replace(/border-\w+-\d+\/\d+/g, `border-${color === 'slate' ? 'slate' : color}-500/20`);
+        traceActiveLabel.className = `trace-active-label ${c.text}`;
+        traceActiveLabel.textContent = label;
+        if (traceSpinner) { traceSpinner.classList.remove('hidden'); traceSpinner.classList.add('animate-spin'); }
+        if (traceActiveCheck) traceActiveCheck.classList.add('hidden');
+        if (traceCursor) traceCursor.classList.remove('hidden');
+        if (traceScanOverlay) traceScanOverlay.style.display = '';
+        traceActiveTask.style.animation = 'none';
+        traceActiveTask.offsetHeight;
+        traceActiveTask.style.animation = '';
+    }
+
+    function completeActiveTask() {
+        if (traceActiveTask.classList.contains('hidden')) return;
+        if (traceSpinner) traceSpinner.classList.add('hidden');
+        if (traceActiveCheck) traceActiveCheck.classList.remove('hidden');
+        if (traceCursor) traceCursor.classList.add('hidden');
+        if (traceScanOverlay) traceScanOverlay.style.display = 'none';
+        traceActiveLabel.className = 'trace-active-label text-emerald-300/90';
+    }
 
     function addTraceEntry(label, color = 'slate') {
-        const colors = {
-            cyan:   { text: 'text-cyan-400',   accent: 'bg-cyan-500/50' },
-            blue:   { text: 'text-blue-400',   accent: 'bg-blue-500/50' },
-            amber:  { text: 'text-amber-400',  accent: 'bg-amber-500/50' },
-            emerald:{ text: 'text-emerald-400',accent: 'bg-emerald-500/50' },
-            indigo: { text: 'text-indigo-400', accent: 'bg-indigo-500/50' },
-            rose:   { text: 'text-rose-400',   accent: 'bg-rose-500/50' },
-            slate:  { text: 'text-slate-300',  accent: 'bg-slate-500/40' },
-        };
-        const c = colors[color] || colors.slate;
+        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
 
         const row = document.createElement('div');
         row.className = `flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150`;
         row.innerHTML = `
             <span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span>
-            <span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u25b8 ${label}</span>
+            <span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u2713 ${label}</span>
         `;
         traceContent.appendChild(row);
 
@@ -318,7 +384,7 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'tool_start') {
                             const toolLabel = data.label || data.tool;
-                            addTraceEntry(`Executing \u2014 ${toolLabel}`, 'slate');
+                            setActiveTask(`Executing \u2014 ${toolLabel}`, 'slate');
 
                             const badge = document.createElement('span');
                             badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
@@ -328,6 +394,7 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'tool_done') {
                             const doneLabel = data.label || 'Done.';
+                            completeActiveTask();
                             addTraceEntry(`Completed \u2014 ${doneLabel}`, 'emerald');
                         }
 
@@ -384,7 +451,7 @@ export async function streamResponse(formData, originalMessage) {
                             };
 
                             chatWindow.appendChild(askNode);
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                             return;
                         }
 
@@ -402,7 +469,7 @@ export async function streamResponse(formData, originalMessage) {
                                 <span class="truncate max-w-full text-[0.7rem]">${data.url}</span>
                             `;
                             scrapingContainer.appendChild(linkRow);
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                         if (event === 'scraping_done') {
@@ -423,7 +490,7 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'generating') {
                             loadingText.textContent = "Thinking...";
                             aiBubble.classList.add('shadow-[0_0_15px_rgba(6,182,212,0.15)]', 'border-cyan-500/30');
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                         if (event === 'context_assembled') {
@@ -452,7 +519,7 @@ export async function streamResponse(formData, originalMessage) {
                             traceAccordion.open = false;
                             if (tracePulseDot) tracePulseDot.classList.add('hidden');
                             renderSuperAbilitiesCard(data.session_id, data.query, aiBubble);
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                             return;
                         }
 
@@ -479,7 +546,7 @@ export async function streamResponse(formData, originalMessage) {
                             }
                             thinkingAccordion.classList.remove('hidden');
                             thinkingTypewriter.push(data.chunk);
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                         if (event === 'thought_complete') {
@@ -616,7 +683,7 @@ export async function streamResponse(formData, originalMessage) {
                             }
 
                             if (!thinkingAccordion.classList.contains('open')) {
-                                chatWindow.scrollTop = chatWindow.scrollHeight;
+                                scrollIfStuck(chatWindow);
                             }
                         }
 
@@ -698,7 +765,7 @@ export async function streamResponse(formData, originalMessage) {
                                 }
                             }
 
-                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                     } catch (e) {}
@@ -739,19 +806,23 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
 
     state.isGenerating = true;
     let markdownBuffer = textContainer.getAttribute('data-prior-text') || '';
-    let isFirstEvent = true;
 
-    const removeSpinner = () => {
-        if (isFirstEvent && cardElement) {
-            isFirstEvent = false;
-            cardElement.remove();
-        }
-    };
+    if (cardElement) {
+        cardElement.remove();
+    }
 
     // --- Trace accordion ---
     let traceAccordion = aiBubble.querySelector('.trace-accordion');
     if (!traceAccordion) {
         const traceHtml = `
+            <style>
+                @keyframes trace-scan { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+                @keyframes trace-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+                @keyframes trace-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+                .trace-active-task { animation: trace-fadein 0.2s ease-out; }
+                .trace-active-task .trace-scan-overlay { background: linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.08) 45%, rgba(16,185,129,0.15) 50%, rgba(16,185,129,0.08) 55%, transparent 100%); background-size: 200% 100%; animation: trace-scan 2s linear infinite; }
+                .trace-cursor { animation: trace-blink 1s step-end infinite; }
+            </style>
             <details class="trace-accordion group mb-3 w-full rounded-xl border border-emerald-500/15 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.04),inset_0_1px_0_rgba(16,185,129,0.03)] transition-all duration-300" open>
                 <summary class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200 rounded-t-xl">
                     <span class="flex items-center gap-2 text-[0.7rem] text-emerald-400/80 font-semibold tracking-wider uppercase">
@@ -766,6 +837,13 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                     <svg class="w-3.5 h-3.5 text-emerald-500/50 transition-transform duration-300 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </summary>
                 <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
+                    <div class="trace-active-task hidden mb-2 px-2 py-1.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 font-mono text-[0.7rem] relative overflow-hidden flex items-center">
+                        <div class="trace-scan-overlay absolute inset-0 pointer-events-none"></div>
+                        <span class="uk-spinner uk-spinner-sm animate-spin text-emerald-400 shrink-0 mr-1.5 trace-spinner" uk-spinner="ratio:0.6"></span>
+                        <span class="trace-active-check mr-1.5 text-emerald-400 hidden">\u2713</span>
+                        <span class="trace-active-label text-emerald-300/90"></span>
+                        <span class="trace-cursor text-emerald-400 ml-0.5">\u2588</span>
+                    </div>
                     <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono"></div>
                 </div>
             </details>`;
@@ -776,27 +854,62 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
     }
 
     const traceContent = traceAccordion.querySelector('.trace-content');
+    const traceActiveTask = traceAccordion.querySelector('.trace-active-task');
+    const traceActiveLabel = traceAccordion.querySelector('.trace-active-label');
+    const traceSpinner = traceAccordion.querySelector('.trace-spinner');
+    const traceActiveCheck = traceAccordion.querySelector('.trace-active-check');
+    const traceCursor = traceAccordion.querySelector('.trace-cursor');
+    const traceScanOverlay = traceAccordion.querySelector('.trace-scan-overlay');
     let traceStepCount = 0;
     const traceStepCounter = traceAccordion.querySelector('.trace-step-counter');
     const tracePulseDot = traceAccordion.querySelector('.trace-pulse-dot');
+    let activeTaskKey = null;
+
+    const TRACE_COLORS = {
+        cyan:    { text: 'text-cyan-400',    accent: 'bg-cyan-500/50',   icon: 'text-cyan-400' },
+        blue:    { text: 'text-blue-400',    accent: 'bg-blue-500/50',   icon: 'text-blue-400' },
+        amber:   { text: 'text-amber-400',   accent: 'bg-amber-500/50',  icon: 'text-amber-400' },
+        emerald: { text: 'text-emerald-400', accent: 'bg-emerald-500/50',icon: 'text-emerald-400' },
+        indigo:  { text: 'text-indigo-400',  accent: 'bg-indigo-500/50', icon: 'text-indigo-400' },
+        rose:    { text: 'text-rose-400',    accent: 'bg-rose-500/50',   icon: 'text-rose-400' },
+        slate:   { text: 'text-slate-300',   accent: 'bg-slate-500/40',  icon: 'text-slate-400' },
+    };
+
+    function setActiveTask(label, color = 'slate') {
+        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
+        traceActiveTask.classList.remove('hidden');
+        traceActiveTask.className = traceActiveTask.className.replace(/bg-\w+-\d+\/\d+/g, `bg-${color === 'slate' ? 'slate' : color}-500/5`);
+        traceActiveTask.className = traceActiveTask.className.replace(/border-\w+-\d+\/\d+/g, `border-${color === 'slate' ? 'slate' : color}-500/20`);
+        traceActiveLabel.className = `trace-active-label ${c.text}`;
+        traceActiveLabel.textContent = label;
+        // pending state: spinner on, checkmark hidden, cursor + scan visible
+        if (traceSpinner) { traceSpinner.classList.remove('hidden'); traceSpinner.classList.add('animate-spin'); }
+        if (traceActiveCheck) traceActiveCheck.classList.add('hidden');
+        if (traceCursor) traceCursor.classList.remove('hidden');
+        if (traceScanOverlay) traceScanOverlay.style.display = '';
+        // restart fade-in animation
+        traceActiveTask.style.animation = 'none';
+        traceActiveTask.offsetHeight;
+        traceActiveTask.style.animation = '';
+        activeTaskKey = label;
+    }
+
+    function completeActiveTask() {
+        if (traceActiveTask.classList.contains('hidden')) return;
+        // spinner → checkmark, hide cursor + scan
+        if (traceSpinner) traceSpinner.classList.add('hidden');
+        if (traceActiveCheck) traceActiveCheck.classList.remove('hidden');
+        if (traceCursor) traceCursor.classList.add('hidden');
+        if (traceScanOverlay) traceScanOverlay.style.display = 'none';
+        traceActiveLabel.className = 'trace-active-label text-emerald-300/90';
+    }
 
     function addTraceEntry(label, color = 'slate') {
-        const colors = {
-            cyan:   { text: 'text-cyan-400',   accent: 'bg-cyan-500/50' },
-            blue:   { text: 'text-blue-400',   accent: 'bg-blue-500/50' },
-            amber:  { text: 'text-amber-400',  accent: 'bg-amber-500/50' },
-            emerald:{ text: 'text-emerald-400',accent: 'bg-emerald-500/50' },
-            indigo: { text: 'text-indigo-400', accent: 'bg-indigo-500/50' },
-            rose:   { text: 'text-rose-400',   accent: 'bg-rose-500/50' },
-            slate:  { text: 'text-slate-300',  accent: 'bg-slate-500/40' },
-        };
-        const c = colors[color] || colors.slate;
-
+        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
         const row = document.createElement('div');
-        row.className = `flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150`;
-        row.innerHTML = `<span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span><span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u25b8 ${label}</span>`;
+        row.className = 'flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150';
+        row.innerHTML = `<span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span><span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u2713 ${label}</span>`;
         traceContent.appendChild(row);
-
         traceStepCount++;
         if (traceStepCounter) traceStepCounter.textContent = `${traceStepCount} step${traceStepCount !== 1 ? 's' : ''}`;
     }
@@ -811,16 +924,38 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
             try {
                 const data = JSON.parse(e.data);
                 progressEventCount++;
+                console.log('[progress]', data.event, data.label, `(#${progressEventCount})`);
                 if (data.event === 'done') {
+                    console.log('[progress] done — closing');
+                    completeActiveTask();
                     progressSource.close();
                     if (tracePulseDot) tracePulseDot.classList.add('hidden');
                     return;
                 }
-                if (data.event === 'ready' || data.event === 'tool_start') return;
+                if (data.event === 'ready') return;
+
+                // In-progress: set as active task with animation
+                if (data.event === 'tool_start' || data.event === 'search_querying' || data.event === 'scraping_start' || data.event === 'condensing') {
+                    console.log('[progress] setActiveTask →', data.label);
+                    setActiveTask(data.label, data.color || 'slate');
+                    return;
+                }
+
+                // Completion: freeze active bar with checkmark, then log
+                if (data.event === 'tool_done' || data.event === 'search_done' || data.event === 'scraping_done') {
+                    console.log('[progress] completeActiveTask ←', data.label);
+                    completeActiveTask();
+                    addTraceEntry(data.label, data.color || 'emerald');
+                    return;
+                }
+
+                // Other events (no_results, cache_hit, etc.) — just trace
                 addTraceEntry(data.label, data.color || 'slate');
             } catch (_) {}
         });
         progressSource.onerror = () => {
+            console.log('[progress] onerror — completing task');
+            completeActiveTask();
             progressSource.close();
         };
     } else {
@@ -858,16 +993,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                         const event = payload.event;
                         const data = payload.data;
 
-                        if (event === 'reasoning') {
-                            removeSpinner();
-                        }
-
-                        if (event === 'status') {
-                            removeSpinner();
-                        }
-
                         if (event === 'token') {
-                            removeSpinner();
                             markdownBuffer += data.chunk;
 
                             let htmlContent = marked.parse(markdownBuffer);
@@ -884,11 +1010,10 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                             });
 
                             const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                         if (event === 'file_choices') {
-                            removeSpinner();
                             let fcContainer = aiBubble.querySelector('.file-choices-placeholder-container');
                             if (!fcContainer) {
                                 fcContainer = document.createElement('div');
@@ -916,10 +1041,6 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                             addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
                         }
 
-                        if (event === 'generating') {
-                            removeSpinner();
-                        }
-
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
@@ -937,7 +1058,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                             }
 
                             if (data.session_id) {
-                                const sessionIdInputs = document.querySelectorAll('input[name="session_id"]');
+                                const sessionIdInputs = document.querySelectorAll('input[name=session_id]');
                                 sessionIdInputs.forEach(input => {
                                     input.value = data.session_id;
                                 });
@@ -946,7 +1067,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                             traceAccordion.open = false;
                             if (tracePulseDot) tracePulseDot.classList.add('hidden');
                             const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+                            scrollIfStuck(chatWindow);
                         }
 
                     } catch (e) {}

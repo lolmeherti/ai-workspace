@@ -1,17 +1,23 @@
 <style>
 .in-query-manage .query-item {
     transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
 }
 .in-query-manage .query-item:hover {
-    border-color: rgba(244, 63, 94, 0.2) !important;
-    background-color: rgba(244, 63, 94, 0.05) !important;
+    border-color: rgba(244, 63, 94, 0.25) !important;
+    background-color: rgba(244, 63, 94, 0.06) !important;
 }
 .in-query-manage .query-item .btn-delete-single,
 .in-query-manage .query-item .view-cache-btn {
     display: none !important;
 }
 .query-item .select-check-icon { display: none; }
-.in-query-manage .query-item .select-check-icon { display: inline-flex; }
+.in-query-manage .query-item.selected {
+    border-color: rgba(244, 63, 94, 0.4) !important;
+    background-color: rgba(244, 63, 94, 0.08) !important;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.1), inset 0 1px 0 rgba(244, 63, 94, 0.05);
+}
+.in-query-manage .query-item.selected .select-check-icon { display: inline-flex; }
 </style>
 
 <div id="panel-queries" class="h-full flex flex-col hidden overflow-hidden relative">
@@ -111,6 +117,7 @@
             btn.classList.add('text-slate-400', 'hover:text-cyan-400');
             btn.classList.remove('text-rose-400', 'hover:text-rose-300');
             selectedQueries = [];
+            panel.querySelectorAll('.query-item.selected').forEach(el => el.classList.remove('selected'));
             updateQuerySelectionUI();
         }
     };
@@ -125,10 +132,10 @@
         const idx = selectedQueries.indexOf(key);
         if (idx > -1) {
             selectedQueries.splice(idx, 1);
-            item.classList.remove('border-rose-500/40', 'bg-rose-950/20', 'shadow-[0_0_10px_rgba(244,63,94,0.1)]');
+            item.classList.remove('selected');
         } else {
             selectedQueries.push(key);
-            item.classList.add('border-rose-500/40', 'bg-rose-950/20', 'shadow-[0_0_10px_rgba(244,63,94,0.1)]');
+            item.classList.add('selected');
         }
         updateQuerySelectionUI();
     });

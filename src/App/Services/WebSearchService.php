@@ -5,9 +5,6 @@ namespace App\Services;
 use App\Agents\SearchDecider;
 use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
-use App\Config;
-use App\Search;
-use App\Scraper;
 use App\Cache;
 
 class WebSearchService
@@ -93,32 +90,10 @@ class WebSearchService
             }
         }
 
-        $limit = (int) Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
-        $scrapedUrls = Search::query($searchQuery, $limit);
-
-        if (empty($scrapedUrls)) {
-            $emit('search_no_results', ['query' => $searchQuery]);
-            return '';
-        }
-
-        $scrapedPages = [];
-        foreach ($scrapedUrls as $url) {
-            $emit('scraping_start', ['url' => $url]);
-            $pageText = Scraper::fetchAndClean($url);
-            $emit('scraping_done', ['url' => $url]);
-            if (!empty(trim($pageText))) {
-                $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
-            }
-        }
-
-        if (!empty($scrapedPages)) {
-            $emit('condensing', []);
-            $condensedContext = $this->contextCondenser->condense($scrapedPages, $query);
-
-            $newCacheKey = 'ctx_' . md5($searchQuery . time());
-            Cache::set($newCacheKey, $condensedContext);
-            Cache::addToLedger($searchQuery, $newCacheKey);
-            return $condensedContext;
+        $result = \App\Services\Tools\SearchWebTool::liveSearch($searchQuery, [], $emit, $this->contextCondenser, 0);
+        if (!empty($result['evidence']) && !str_starts_with($result['evidence'], 'Web search for')) {
+            $scrapedUrls = []; // SearchPipeline handles fetching internally
+            return $result['evidence'];
         }
 
         $emit('search_no_results', ['query' => $searchQuery]);

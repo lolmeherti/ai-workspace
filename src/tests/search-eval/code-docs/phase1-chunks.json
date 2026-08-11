@@ -1,0 +1,103 @@
+[
+    {
+        "chunkId": "S1-C4",
+        "domain": "towardsdev.com",
+        "title": "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies | by Adolfo | Towards Dev",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies",
+            "Developing Middleware in Go"
+        ],
+        "textLen": 143
+    },
+    {
+        "chunkId": "S2-C9",
+        "domain": "www.alexedwards.net",
+        "title": "Making and Using HTTP Middleware in Go\u2013 Alex Edwards",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Using middleware on specific routes"
+        ],
+        "textLen": 2044
+    },
+    {
+        "chunkId": "S1-C10",
+        "domain": "towardsdev.com",
+        "title": "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies | by Adolfo | Towards Dev",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies",
+            "Conclusion"
+        ],
+        "textLen": 1114
+    },
+    {
+        "chunkId": "S1-C2",
+        "domain": "towardsdev.com",
+        "title": "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies | by Adolfo | Towards Dev",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies"
+        ],
+        "textLen": 2736
+    },
+    {
+        "chunkId": "S2-C5",
+        "domain": "www.alexedwards.net",
+        "title": "Making and Using HTTP Middleware in Go\u2013 Alex Edwards",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Using middleware on specific routes"
+        ],
+        "textLen": 2799
+    },
+    {
+        "chunkId": "S2-C6",
+        "domain": "www.alexedwards.net",
+        "title": "Making and Using HTTP Middleware in Go\u2013 Alex Edwards",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Using middleware on specific routes"
+        ],
+        "textLen": 1768
+    },
+    {
+        "chunkId": "S2-C3",
+        "domain": "www.alexedwards.net",
+        "title": "Making and Using HTTP Middleware in Go\u2013 Alex Edwards",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "The standard pattern"
+        ],
+        "textLen": 2503
+    },
+    {
+        "chunkId": "S3-C38",
+        "domain": "dev.to",
+        "title": "Building a net\/http Middleware Chain From Scratch in Go - DEV Community",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "[ ](#when-to-reach-for-a-framework) When to Reach for a Framework"
+        ],
+        "textLen": 610
+    },
+    {
+        "chunkId": "S1-C3",
+        "domain": "towardsdev.com",
+        "title": "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies | by Adolfo | Towards Dev",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Building HTTP Middleware in Go: A Practical Guide Without Third-Party Dependencies",
+            "What is Middleware?"
+        ],
+        "textLen": 1189
+    },
+    {
+        "chunkId": "S3-C1",
+        "domain": "dev.to",
+        "title": "Building a net\/http Middleware Chain From Scratch in Go - DEV Community",
+        "sectionType": "paragraph",
+        "headingPath": [],
+        "textLen": 525
+    }
+]

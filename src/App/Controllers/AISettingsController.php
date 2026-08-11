@@ -81,11 +81,10 @@ class AISettingsController extends BaseController
 
     private function switchModel(int $sessionId, Tab $activeTab): void
     {
-        // FIX: Trim any outer quotes submitted in form strings
-        $modelName = trim($_POST['model_name'] ?? '', '"\' ');
-        $ctxSize   = (int)($_POST['ctx_size'] ?? 0);
+        $modelId = trim($_POST['model_id'] ?? '', '\"\' ');
+        $ctxSize = (int)($_POST['ctx_size'] ?? 0);
 
-        if ($modelName === '') {
+        if ($modelId === '') {
             $this->redirect($this->buildUrl($sessionId, $activeTab));
             return;
         }
@@ -97,9 +96,9 @@ class AISettingsController extends BaseController
             $goApiUrl = 'http://host.docker.internal:9876/api/model-switch';
         }
 
-        $payload  = json_encode([
-            'model_name' => $modelName,
-            'ctx_size'   => max($ctxSize, 512),
+        $payload = json_encode([
+            'model_id' => $modelId,
+            'ctx_size' => max($ctxSize, 512),
         ]);
 
         $ch = curl_init($goApiUrl);
@@ -117,7 +116,10 @@ class AISettingsController extends BaseController
         if ($httpCode === 200 && !empty($response)) {
             $data = json_decode($response, true);
             if (isset($data['status']) && $data['status'] === 'ok') {
-                $envUpdates = ['LLM_MODEL_NAME' => $modelName];
+                $envUpdates = [
+                    'LLM_MODEL_ID'   => $modelId,
+                    'LLM_MODEL_NAME' => $data['name'] ?? $modelId,
+                ];
                 if ($ctxSize > 0) {
                     $envUpdates['LLM_CTX_SIZE'] = (string)$ctxSize;
                 }

@@ -1,0 +1,104 @@
+[
+    {
+        "chunkId": "S2-C6",
+        "domain": "www.gsmarena.com",
+        "title": "Apple iPhone 16 Pro - Full phone specifications",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Apple iPhone 16 Pro",
+            "[Apple iPhone 16 Pro - user opinions and reviews](apple_iphone_16_pro-reviews-13315.php)"
+        ],
+        "textLen": 2189
+    },
+    {
+        "chunkId": "S1-C10",
+        "domain": "support.apple.com",
+        "title": "iPhone 16 Pro - Tech Specs - Apple Support (BW)",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "iPhone 16 Pro - Tech Specs",
+            "Camera"
+        ],
+        "textLen": 1392
+    },
+    {
+        "chunkId": "S1-C23",
+        "domain": "support.apple.com",
+        "title": "iPhone 16 Pro - Tech Specs - Apple Support (BW)",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "iPhone 16 Pro - Tech Specs",
+            "External Buttons and Connectors"
+        ],
+        "textLen": 725
+    },
+    {
+        "chunkId": "S1-C40",
+        "domain": "support.apple.com",
+        "title": "iPhone 16 Pro - Tech Specs - Apple Support (BW)",
+        "sectionType": "list",
+        "headingPath": [
+            "iPhone 16 Pro - Tech Specs",
+            "In the Box"
+        ],
+        "textLen": 537
+    },
+    {
+        "chunkId": "S1-C31",
+        "domain": "support.apple.com",
+        "title": "iPhone 16 Pro - Tech Specs - Apple Support (BW)",
+        "sectionType": "list",
+        "headingPath": [
+            "iPhone 16 Pro - Tech Specs",
+            "SIM Card"
+        ],
+        "textLen": 349
+    },
+    {
+        "chunkId": "S2-C4",
+        "domain": "www.gsmarena.com",
+        "title": "Apple iPhone 16 Pro - Full phone specifications",
+        "sectionType": "list",
+        "headingPath": [
+            "Apple iPhone 16 Pro"
+        ],
+        "textLen": 1055
+    },
+    {
+        "chunkId": "S2-C2",
+        "domain": "www.gsmarena.com",
+        "title": "Apple iPhone 16 Pro - Full phone specifications",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Apple iPhone 16 Pro"
+        ],
+        "textLen": 2882
+    },
+    {
+        "chunkId": "S2-C5",
+        "domain": "www.gsmarena.com",
+        "title": "Apple iPhone 16 Pro - Full phone specifications",
+        "sectionType": "paragraph",
+        "headingPath": [
+            "Apple iPhone 16 Pro",
+            "Pricing These are the best offers from our affiliate partners. We may get a commission from qualifying sales."
+        ],
+        "textLen": 1266
+    },
+    {
+        "chunkId": "S3-C7",
+        "domain": "www.techradar.com",
+        "title": "iPhone 16 Pro cameras: every camera on the Pro and Pro Max | TechRadar",
+        "sectionType": "paragraph",
+        "headingPath": [],
+        "textLen": 3226
+    },
+    {
+        "chunkId": "S3-C10",
+        "domain": "www.techradar.com",
+        "title": "iPhone 16 Pro cameras: every camera on the Pro and Pro Max | TechRadar",
+        "sectionType": "paragraph",
+        "headingPath": [],
+        "textLen": 3260
+    }
+]
