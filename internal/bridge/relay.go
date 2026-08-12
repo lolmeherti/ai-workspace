@@ -36,7 +36,7 @@ type SearchCandidate struct {
 // SearchResult carries the search outcome.
 type SearchResult struct {
 	Status     string            `json:"status"`
-	Candidates []SearchCandidate `json:"candidates"`
+	Candidates []SearchCandidate `json:"results"`
 	Error      string            `json:"error,omitempty"`
 }
 

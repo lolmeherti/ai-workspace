@@ -62,7 +62,7 @@ class CacheController extends BaseController
 
         try {
             $value = Cache::get($key);
-            $decoded = json_decode($value, true);
+            $decoded = json_decode($value ?? '', true);
             $isJson = (json_last_error() === JSON_ERROR_NONE);
 
             $this->jsonResponse([

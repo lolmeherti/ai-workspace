@@ -64,15 +64,29 @@ final class SearchPipeline
         $this->emitProgress('search_querying', "Querying browser search for: {$query}", $emit);
 
         $candidates = $bridge->searchSERP($query);
+        \App\Logger::logEvent('bridge_serp', 'Bridge SERP result', [
+            'query' => $query,
+            'raw_count' => count($candidates),
+        ], 'info', 'SearchPipeline::runBridgeMode');
         if (empty($candidates)) {
-            $this->emitProgress('search_no_results', "No browser results for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceUrls' => []];
+            $this->emitProgress('search_no_results', 'No browser results, falling back to SearXNG snippets', $emit);
+            \App\Logger::logEvent('bridge_fallback', 'Bridge SERP returned no candidates - falling back to snippet mode', [
+                'query' => $query,
+            ], 'warn', 'SearchPipeline::runBridgeMode');
+            return $this->runSnippetMode($query, $emit);
         }
 
         $deduplicator = new CandidateDeduplicator();
         $candidates = $deduplicator->deduplicate($candidates);
 
         // ── Sequential fetch via bridge ──────────────────────────────
+        $limit = (int) \App\Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
+        if (count($candidates) > $limit) {
+            $candidates = array_slice($candidates, 0, $limit);
+        }
+
+        $minSources = (int) \App\Config::get('MIN_EVIDENCE_SOURCES', 2);
+
         $sourceId = 0;
         $allChunks = [];
         $fetchedUrls = [];
@@ -109,16 +123,66 @@ final class SearchPipeline
 
             $chunks = $this->chunksFromBridgeContent($result->content, $sid, $candidate->url);
             $allChunks = array_merge($allChunks, $chunks);
+
+            // ── Incremental stop decision (raw BM25, no diversity) ────
+            $ranked = $this->retriever->rankRaw($allChunks, $query, $query);
+            $topN = min(5, count($ranked));
+            $topRankedSourceIds = [];
+            $bestRanks = [];
+            for ($i = 0; $i < $topN; $i++) {
+                $rsid = $ranked[$i]->sourceId;
+                $topRankedSourceIds[$rsid] = true;
+                if (!isset($bestRanks[$rsid])) {
+                    $bestRanks[$rsid] = $i + 1;
+                }
+            }
+            $topSourceCount = count($topRankedSourceIds);
+            $isSimple = $this->queryIsSimple($query);
+
+            \App\Logger::logEvent('bridge_stop_check', 'Incremental stop evaluation', [
+                'url_index' => $sourceId,
+                'top_n' => $topN,
+                'top_ranked_source_ids' => array_keys($topRankedSourceIds),
+                'best_raw_ranks' => $bestRanks,
+                'top_source_count' => $topSourceCount,
+                'min_required' => $minSources,
+                'query_complexity' => $isSimple ? 'simple' : 'complex',
+                'fetched_so_far' => count($fetchedUrls),
+            ], 'info', 'SearchPipeline::runBridgeMode');
+
+            if ($topSourceCount >= $minSources && $isSimple) {
+                $this->emitProgress('search_coverage', 'Evidence sufficient — stopping early', $emit);
+                \App\Logger::logEvent('bridge_stop', 'Early stop — enough distinct sources in raw top-N', [
+                    'reason' => 'distinct_sources_in_top_ranks',
+                    'source_count' => $topSourceCount,
+                    'min_required' => $minSources,
+                    'best_ranks' => $bestRanks,
+                ], 'info', 'SearchPipeline::runBridgeMode');
+                break;
+            }
         }
 
         if (empty($allChunks)) {
-            $this->emitProgress('search_no_results', "No usable content for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceUrls' => []];
+            $this->emitProgress('search_no_results', 'No usable bridge content, falling back to SearXNG snippets', $emit);
+            \App\Logger::logEvent('bridge_fallback', 'All bridge fetches failed - falling back to snippet mode', [
+                'query' => $query,
+                'candidates_attempted' => count($candidates),
+            ], 'warn', 'SearchPipeline::runBridgeMode');
+            return $this->runSnippetMode($query, $emit);
         }
 
-        // ── BM25 retrieval ──────────────────────────────────────────
+        // ── Final BM25 retrieval across all fetched chunks ───────────
         $this->emitProgress('search_retrieving', 'Selecting relevant passages...', $emit);
         $selected = $this->retriever->rank($allChunks, $query, $query, $this->policy);
+
+        if (empty($selected)) {
+            $this->emitProgress('search_no_results', 'No usable bridge evidence, falling back to SearXNG snippets', $emit);
+            \App\Logger::logEvent('bridge_fallback', 'All bridge chunks scored zero or were filtered — falling back to snippet mode', [
+                'query' => $query,
+                'total_chunks_extracted' => count($allChunks),
+            ], 'warn', 'SearchPipeline::runBridgeMode');
+            return $this->runSnippetMode($query, $emit);
+        }
 
         // ── Three-level evidence fitting ────────────────────────────
         $this->emitProgress('search_condensing', 'Fitting evidence to budget...', $emit);
@@ -129,6 +193,14 @@ final class SearchPipeline
             $sourceIds[] = $chunk->sourceId;
         }
         $sourceIds = array_values(array_unique($sourceIds));
+
+        \App\Logger::logEvent('bridge_evidence', 'Bridge evidence fitting complete', [
+            'query' => $query,
+            'total_chunks' => count($allChunks),
+            'selected_chunks' => count($selected),
+            'evidence_len' => strlen($fit['evidence']),
+            'source_count' => count($sourceIds),
+        ], 'info', 'SearchPipeline::runBridgeMode');
 
         return [
             'evidence' => $fit['evidence'],
@@ -345,27 +417,29 @@ PROMPT;
     }
 
     /**
-     * Extract search terms for candidate ranking.
-     * @return array<string>
+     * Heuristic: does the query read as a simple factual lookup rather
+     * than a comparison, recommendation, or multi-aspect question?
+     *
+     * Returns false (NOT simple → fetch more sources) when comparison or
+     * recommendation markers are present. Returns true for everything else
+     * — the default is to trust the hard cap, not this heuristic.
      */
-    private function extractSearchTerms(string $query): array
+    private function queryIsSimple(string $query): bool
     {
-        $words = preg_split('/\s+/', strtolower($query));
-        $stopWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
-                       'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
-                       'can', 'could', 'should', 'may', 'might', 'to', 'of', 'in',
-                       'for', 'on', 'with', 'at', 'by', 'from', 'about', 'this',
-                       'that', 'it', 'its', 'and', 'or', 'not', 'but', 'if', 'so',
-                       'what', 'which', 'who', 'how', 'when', 'where', 'why'];
-        $stopSet = array_flip($stopWords);
-
-        $terms = [];
-        foreach ($words as $word) {
-            $word = trim($word, ".,;:!?\"'()");
-            if (strlen($word) > 1 && !isset($stopSet[$word])) {
-                $terms[] = $word;
+        $complexPatterns = [
+            '/\bvs\.?\b/i',               // "vs" / "vs."
+            '/\bversus\b/i',              // "versus"
+            '/\bcompare(d)?\b/i',         // "compare" / "compared"
+            '/\bdifference between\b/i',  // "difference between"
+            '/\bbetter\b/i',              // "better" — implies comparison
+            '/\bbest\b/i',                // "best" — requires breadth
+            '/\bpros?.?\s*(?:and|\&)\s*cons?\b/i', // "pros and cons"
+        ];
+        foreach ($complexPatterns as $pattern) {
+            if (preg_match($pattern, $query)) {
+                return false;
             }
         }
-        return array_unique($terms);
+        return true;
     }
 }

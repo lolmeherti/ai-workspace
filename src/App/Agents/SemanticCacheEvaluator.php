@@ -16,51 +16,59 @@ class SemanticCacheEvaluator
     }
 
     /**
-     * Shot 1 — title scan. Show the LLM cached query titles with ages
-     * and volatility info. It picks which entries are worth checking.
-     * Returns the ledger index of the best candidate, or null if none relevant.
+     * Single-shot semantic cache evaluation over a set of candidates
+     * with pre-resolved content. Candidates are keyed by cache_key so
+     * the caller never depends on positional indices.
      *
-     * @param string $newQuery The user's current search query
-     * @param array $ledger The full search ledger
-     * @return int|null Ledger index of selected candidate, or null
+     * @param string $newQuery   The user's current search query
+     * @param array  $candidates Map of cache_key => ['query', 'fetched_at', 'content']
+     * @return array ['decision' => 'USE'|'NONE', 'cache_key' => string|null]
      */
-    public function selectCandidate(string $newQuery, array $ledger): ?int
+    public function evaluateCandidates(string $newQuery, array $candidates): array
     {
-        if (empty($ledger)) {
-            return null;
+        if (empty($candidates)) {
+            return ['decision' => 'NONE', 'cache_key' => null];
         }
 
         $currentDate = date('l, F j, Y g:i A');
-        $sliced = array_slice($ledger, -5, null, true);
 
+        // Build numeric ID → cache_key mapping for the LLM prompt
+        $idMap = array_keys($candidates);
         $lines = [];
-        foreach ($sliced as $index => $item) {
-            $age = isset($item['fetched_at']) ? (time() - strtotime($item['fetched_at'])) : null;
+        foreach ($idMap as $i => $cacheKey) {
+            $c = $candidates[$cacheKey];
+            $age = isset($c['fetched_at']) ? (time() - strtotime($c['fetched_at'])) : null;
             $ageStr = $age !== null ? $this->formatAge($age) : 'unknown';
-            $volatility = \App\Search\CacheTTL::estimateVolatility($item['query'] ?? '');
-            $lines[] = "ID {$index}: \"{$item['query']}\" — {$ageStr} old, volatility: {$volatility}";
+            $volatility = \App\Search\CacheTTL::estimateVolatility($c['query'] ?? '');
+            $preview = $this->buildContentPreview($c['content'] ?? '');
+            $lines[] = "ID {$i}: \"{$c['query']}\" — {$ageStr} old, volatility: {$volatility}\n  Content: {$preview}";
         }
 
-        $list = implode("\n", $lines);
+        $list = implode("\n\n", $lines);
 
         $system = <<<TEXT
 Today is {$currentDate}.
 
-You are a cache relevance filter. Below is a list of past search queries with their ages and topic volatility. The user has a new query.
+You are evaluating whether any cached search result can answer a new user query.
 
-For each past query, consider:
+For each candidate, consider:
 - Is it about the same topic as the new query?
-- For high-volatility topics (sports, news, stocks, weather), cached data older than 15 minutes is likely stale.
-- For low-volatility topics (documentation, specs, definitions), cached data can remain valid for hours or days.
+- Does the content preview contain information that substantially answers the request?
+- For high-volatility topics (sports, news, stocks, weather), even relevant content may be stale.
+- For low-volatility topics (documentation, specs, definitions), older content may still be valid.
 
-Return a JSON object:
-{"decision": "CHECK", "id": <index>} — if one cached query is worth checking
-{"decision": "NONE"} — if no cached query is relevant
+Cached entries:
 
-Only pick ONE. Do not explain. Output only the JSON.
+{$list}
+
+Decide:
+- USE <id> — the cached entry can substantially answer the new query
+- NONE — no cached entry is relevant
+
+Return ONLY: {"decision": "USE", "id": <N>} or {"decision": "NONE"}
 TEXT;
 
-        $user = "New query: {$newQuery}\n\nPast searches:\n{$list}";
+        $user = "New query: {$newQuery}";
 
         $messages = [
             ['role' => 'system', 'content' => $system],
@@ -71,68 +79,67 @@ TEXT;
         $response = trim($this->agent->chat($messages, false, null, $temperature));
         $data = \App\JsonParser::extractAndDecode($response);
 
-        if (!is_array($data) || ($data['decision'] ?? '') !== 'CHECK') {
-            return null;
+        if (!is_array($data)) {
+            \App\Logger::logEvent('cache_eval', 'semantic_parse_failure', [
+                'response_preview' => mb_substr($response, 0, 300),
+                'candidate_count' => count($candidates),
+                'current_query' => $newQuery,
+            ], 'warn', 'SemanticCacheEvaluator::evaluateCandidates');
+            return ['decision' => 'NONE', 'cache_key' => null];
         }
 
-        $id = isset($data['id']) ? (int) $data['id'] : -1;
-        if (!isset($sliced[$id])) {
-            return null;
+        $decision = strtoupper($data['decision'] ?? 'NONE');
+
+        if ($decision === 'USE' && isset($data['id'])) {
+            $id = (int) $data['id'];
+            if (isset($idMap[$id])) {
+                return ['decision' => 'USE', 'cache_key' => $idMap[$id]];
+            }
+            \App\Logger::logEvent('cache_eval', 'semantic_use_invalid_id', [
+                'returned_id' => $id,
+                'max_candidates' => count($candidates),
+                'current_query' => $newQuery,
+            ], 'warn', 'SemanticCacheEvaluator::evaluateCandidates');
+            return ['decision' => 'NONE', 'cache_key' => null];
         }
 
-        return $id;
+        return ['decision' => 'NONE', 'cache_key' => null];
     }
 
     /**
-     * Shot 2 — content verification. The LLM sees the actual cached
-     * evidence and decides whether it contains the specific data the
-     * user is asking for.
-     *
-     * @return string 'AUTO_USE', 'ASK_USER', or 'NONE'
+     * Build a content preview for the LLM evaluator. Extracts text from
+     * <chunk> elements in XML evidence, showing the first ~200 chars of up
+     * to 4 chunks — preserving breadth across the evidence instead of
+     * head-truncating. Falls back to first ~800 chars of plain text.
      */
-    public function verifyContent(string $query, string $cachedContent, string $cachedQueryTitle, string $volatility): string
+    private function buildContentPreview(string $evidenceText): string
     {
-        $system = <<<TEXT
-You are a strict cache verifier. You are given:
-1. The user's new query
-2. A cached search result from a past query on a similar topic
-3. The original query that produced the cache
-4. The topic's volatility (how quickly this data changes)
-
-Check whether the cached content actually contains the specific facts, data, or
-details the user is asking for.
-
-Rules:
-- If the cached content has the exact data the user wants → "AUTO_USE"
-- If the cached content has the data but the topic is high-volatility and the
-  cache is hours old → "ASK_USER"
-- If the cached content does NOT contain the specific details (e.g. user wants
-  full standings but cache only has one team's position, or user wants numbers
-  but cache only has source names) → "NONE"
-- If the cached content is snippets/titles without actual data → "NONE"
-
-Return ONLY a JSON object: {"decision": "AUTO_USE"|"ASK_USER"|"NONE"}
-TEXT;
-
-        $user = "New query: {$query}\nOriginal cached query: {$cachedQueryTitle}\nVolatility: {$volatility}\n\nCached content:\n{$cachedContent}";
-
-        $messages = [
-            ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => $user],
-        ];
-
-        $temperature = (float) Config::get('AGENT_CACHE_EVAL_TEMP', 0.1);
-        $response = trim($this->agent->chat($messages, false, null, $temperature));
-        $data = \App\JsonParser::extractAndDecode($response);
-
-        if (is_array($data) && isset($data['decision'])) {
-            $decision = strtoupper($data['decision']);
-            if (in_array($decision, ['AUTO_USE', 'ASK_USER', 'NONE'], true)) {
-                return $decision;
+        if (preg_match('/<chunk/', $evidenceText)) {
+            preg_match_all('/<chunk[^>]*>(.*?)<\/chunk>/s', $evidenceText, $matches);
+            if (!empty($matches[1])) {
+                $previews = [];
+                $maxChunks = min(4, count($matches[1]));
+                for ($i = 0; $i < $maxChunks; $i++) {
+                    $text = strip_tags($matches[1][$i]);
+                    $text = trim(preg_replace('/\s+/', ' ', $text));
+                    if ($text === '') continue;
+                    if (mb_strlen($text) > 200) {
+                        $text = mb_substr($text, 0, 197) . '...';
+                    }
+                    $previews[] = "[Chunk " . ($i + 1) . "] {$text}";
+                }
+                if (!empty($previews)) {
+                    return implode("\n", $previews);
+                }
             }
         }
 
-        return 'NONE';
+        $text = strip_tags($evidenceText);
+        $text = trim(preg_replace('/\s+/', ' ', $text));
+        if (mb_strlen($text) > 800) {
+            $text = mb_substr($text, 0, 797) . '...';
+        }
+        return $text;
     }
 
     private function formatAge(int $seconds): string

@@ -17,6 +17,9 @@ use App\Search\SearchPipeline;
 
 class SearchWebTool
 {
+    /** When true, doLiveSearch returns a placeholder instead of hitting SearXNG. */
+    public static bool $testMode = false;
+
     private ContextCondenser $contextCondenser;
     private AgentManager $agent;
     private ?SemanticCacheEvaluator $cacheEvaluator;
@@ -47,94 +50,165 @@ class SearchWebTool
         if ($isSingleQuery) {
             $ledger = Cache::getSearchLedger();
             if (!empty($ledger)) {
-                // Gate 1: AskUserPolicy — age + volatility check (algorithmic, no LLM cost)
-                $policy = new AskUserPolicy();
-                $best = $ledger[0];
+                $canonicalNew = \App\Search\CacheKeyBuilder::canonicalQuery($searchQuery);
 
-                if (!empty($best['cache_key']) && !empty($best['fetched_at'])) {
-                    $entry = ['fetched_at' => $best['fetched_at']];
-                    $age = time() - strtotime($best['fetched_at']);
-                    $policyDecision = $policy->evaluate($entry, $best['query'] ?: $searchQuery);
-
-                    \App\Logger::logEvent('cache_eval', 'AskUserPolicy gate', [
-                        'decision' => $policyDecision,
-                        'age_seconds' => $age,
-                        'cached_query' => $best['query'] ?? '',
-                        'current_query' => $searchQuery,
-                    ], 'info', 'SearchWebTool::execute');
-
-                    $usedCache = false;
-
-                    if ($policyDecision !== 'NONE' && $this->cacheEvaluator !== null) {
-                        // Gates 2+3: LLM two-shot verification
-                        // Shot 1: title scan — is any cached entry topically relevant?
-                        $candidateIdx = $this->cacheEvaluator->selectCandidate($searchQuery, $ledger);
-
-                        if ($candidateIdx !== null) {
-                            $sliced = array_slice($ledger, -5, null, true);
-                            $candidate = $sliced[$candidateIdx] ?? null;
-
-                            if ($candidate !== null && !empty($candidate['cache_key'])) {
-                                $cachedContent = (new SearchCacheManager())->getEvidence($candidate['cache_key'])
-                                    ?? Cache::get($candidate['cache_key'])
-                                    ?? '';
-
-                                if (!empty($cachedContent)) {
-                                    // Shot 2: content verification — does it actually answer?
-                                    $volatility = \App\Search\CacheTTL::estimateVolatility($candidate['query'] ?? '');
-                                    $verifyDecision = $this->cacheEvaluator->verifyContent(
-                                        $searchQuery,
-                                        $cachedContent,
-                                        $candidate['query'] ?? '',
-                                        $volatility
-                                    );
-
-                                    \App\Logger::logEvent('cache_eval', 'SemanticCacheEvaluator two-shot', [
-                                        'policy' => $policyDecision,
-                                        'shot1_id' => $candidateIdx,
-                                        'verify' => $verifyDecision,
-                                        'cached_query' => $candidate['query'] ?? '',
-                                        'current_query' => $searchQuery,
-                                    ], 'info', 'SearchWebTool::execute');
-
-                                    if ($verifyDecision === 'AUTO_USE') {
-                                        \App\ProgressWriter::write($sessionId, 'cache_hit', 'Cached results match — serving from cache', 'amber');
-                                        $emit('cache_used', []);
-                                        return $cachedContent;
-                                    }
-                                    if ($verifyDecision === 'ASK_USER') {
-                                        $emit('ask_user', [
-                                            'cache_key' => $candidate['cache_key'],
-                                            'query_text' => $candidate['query'] ?? $searchQuery,
-                                            'session_id' => $sessionId
-                                        ]);
-                                        return '__ASK_USER__';
-                                    }
-                                    // verifyContent returned NONE — fall through to live search
-                                }
-                            }
+                // ── Step 1: Lexical lookup — exact canonical match ──
+                $lexicalCandidate = null;
+                foreach ($ledger as $entry) {
+                    if (!empty($entry['cache_key']) && !empty($entry['fetched_at'])) {
+                        if ($canonicalNew === \App\Search\CacheKeyBuilder::canonicalQuery($entry['query'] ?? '')) {
+                            $lexicalCandidate = $entry;
+                            break;
                         }
-                        // selectCandidate returned null — no relevant cache, fall through to live search
-                    } elseif ($policyDecision === 'AUTO_USE') {
-                        // No cacheEvaluator available — trust AskUserPolicy age check
-                        $cacheManager = new SearchCacheManager();
-                        $cachedContent = $cacheManager->getEvidence($best['cache_key'])
-                            ?? Cache::get($best['cache_key'])
-                            ?? '';
-                        if (!empty($cachedContent)) {
-                            \App\Logger::logEvent('cache_eval', 'AskUserPolicy AUTO_USE (no LLM verifier)', [
-                                'cached_query' => $best['query'] ?? '',
-                                'current_query' => $searchQuery,
-                            ], 'info', 'SearchWebTool::execute');
-                            \App\ProgressWriter::write($sessionId, 'cache_hit', 'Cached results still fresh — serving from cache', 'amber');
+                    }
+                }
+
+                if ($lexicalCandidate !== null) {
+                    $cachedContent = (new SearchCacheManager())->getEvidence($lexicalCandidate['cache_key'])
+                        ?? Cache::get($lexicalCandidate['cache_key'])
+                        ?? '';
+
+                    if (!empty($cachedContent)) {
+                        \App\Logger::logEvent('cache_eval', 'lexical_hit', [
+                            'cached_query' => $lexicalCandidate['query'] ?? '',
+                            'current_query' => $searchQuery,
+                            'canonical' => $canonicalNew,
+                        ], 'info', 'SearchWebTool::execute');
+
+                        $policy = new AskUserPolicy();
+                        $policyDecision = $policy->evaluate(
+                            ['fetched_at' => $lexicalCandidate['fetched_at']],
+                            $searchQuery
+                        );
+
+                        \App\Logger::logEvent('cache_eval', 'AskUserPolicy after lexical match', [
+                            'decision' => $policyDecision,
+                            'cached_query' => $lexicalCandidate['query'] ?? '',
+                            'current_query' => $searchQuery,
+                        ], 'info', 'SearchWebTool::execute');
+
+                        if ($policyDecision === 'AUTO_USE') {
+                            \App\ProgressWriter::write($sessionId, 'cache_hit', 'Cached results match — serving from cache', 'amber');
                             $emit('cache_used', []);
                             return $cachedContent;
                         }
+                        if ($policyDecision === 'ASK_USER') {
+                            \App\Logger::logEvent('cache_eval', 'ASK_USER — returning sentinel with metadata', [
+                                'cache_key' => $lexicalCandidate['cache_key'] ?? '(null)',
+                                'query_text' => $lexicalCandidate['query'] ?? $searchQuery,
+                            ], 'info', 'SearchWebTool::execute');
+                            return '__ASK_USER__:' . json_encode([
+                                'cache_key'  => $lexicalCandidate['cache_key'] ?? '',
+                                'query_text' => $lexicalCandidate['query'] ?? $searchQuery,
+                            ]);
+                        }
+
+                        \App\Logger::logEvent('cache_eval', 'policy_none', [
+                            'decision' => $policyDecision,
+                            'cached_query' => $lexicalCandidate['query'] ?? '',
+                            'current_query' => $searchQuery,
+                        ], 'info', 'SearchWebTool::execute');
+                    } else {
+                        \App\Logger::logEvent('cache_eval', 'lexical_hit_empty_cache', [
+                            'cache_key' => $lexicalCandidate['cache_key'] ?? '(null)',
+                            'cached_query' => $lexicalCandidate['query'] ?? '',
+                            'current_query' => $searchQuery,
+                        ], 'warn', 'SearchWebTool::execute');
                     }
-                    // policyDecision ASK_USER without cacheEvaluator → skip, go live
-                    // policyDecision NONE → skip, go live
-                    // verifyContent returned NONE → skip, go live
-                    // selectCandidate returned null → skip, go live
+                } else {
+                    \App\Logger::logEvent('cache_eval', 'lexical_miss', [
+                        'canonical' => $canonicalNew,
+                        'ledger_count' => count($ledger),
+                        'current_query' => $searchQuery,
+                    ], 'info', 'SearchWebTool::execute');
+
+                    // ── Step 2: Semantic candidate selection ──
+                    if ($this->cacheEvaluator !== null) {
+                        $sliced = array_slice($ledger, -5, null, true);
+                        $candidates = [];
+
+                        foreach ($sliced as $entry) {
+                            if (!empty($entry['cache_key']) && !empty($entry['fetched_at'])) {
+                                $content = (new SearchCacheManager())->getEvidence($entry['cache_key'])
+                                    ?? Cache::get($entry['cache_key'])
+                                    ?? '';
+                                if (!empty($content)) {
+                                    $candidates[$entry['cache_key']] = [
+                                        'query' => $entry['query'] ?? '',
+                                        'fetched_at' => $entry['fetched_at'],
+                                        'cache_key' => $entry['cache_key'],
+                                        'content' => $content,
+                                    ];
+                                }
+                            }
+                        }
+
+                        if (!empty($candidates)) {
+                            $evalResult = $this->cacheEvaluator->evaluateCandidates($searchQuery, $candidates);
+
+                            if (($evalResult['decision'] ?? '') === 'USE') {
+                                $selectedCacheKey = $evalResult['cache_key'] ?? '';
+                                $selected = $candidates[$selectedCacheKey] ?? null;
+
+                                if ($selected !== null) {
+                                    \App\Logger::logEvent('cache_eval', 'semantic_use', [
+                                        'cache_key' => $selectedCacheKey,
+                                        'cached_query' => $selected['query'] ?? '',
+                                        'current_query' => $searchQuery,
+                                        'candidate_count' => count($candidates),
+                                    ], 'info', 'SearchWebTool::execute');
+
+                                    $policy = new AskUserPolicy();
+                                    $policyDecision = $policy->evaluate(
+                                        ['fetched_at' => $selected['fetched_at']],
+                                        $searchQuery
+                                    );
+
+                                    \App\Logger::logEvent('cache_eval', 'AskUserPolicy after semantic match', [
+                                        'decision' => $policyDecision,
+                                        'cached_query' => $selected['query'] ?? '',
+                                        'current_query' => $searchQuery,
+                                    ], 'info', 'SearchWebTool::execute');
+
+                                    if ($policyDecision === 'AUTO_USE') {
+                                        $content = (new SearchCacheManager())->getEvidence($selected['cache_key'])
+                                            ?? Cache::get($selected['cache_key'])
+                                            ?? '';
+                                        \App\ProgressWriter::write($sessionId, 'cache_hit', 'Cached results match — serving from cache', 'amber');
+                                        $emit('cache_used', []);
+                                        return $content;
+                                    }
+                                    if ($policyDecision === 'ASK_USER') {
+                                        \App\Logger::logEvent('cache_eval', 'ASK_USER — returning sentinel with metadata', [
+                                            'cache_key' => $selected['cache_key'] ?? '(null)',
+                                            'query_text' => $selected['query'] ?? $searchQuery,
+                                        ], 'info', 'SearchWebTool::execute');
+                                        return '__ASK_USER__:' . json_encode([
+                                            'cache_key'  => $selected['cache_key'] ?? '',
+                                            'query_text' => $selected['query'] ?? $searchQuery,
+                                        ]);
+                                    }
+
+                                    \App\Logger::logEvent('cache_eval', 'policy_none', [
+                                        'decision' => $policyDecision,
+                                        'cached_query' => $selected['query'] ?? '',
+                                        'current_query' => $searchQuery,
+                                    ], 'info', 'SearchWebTool::execute');
+                                }
+                            } else {
+                                \App\Logger::logEvent('cache_eval', 'semantic_none', [
+                                    'current_query' => $searchQuery,
+                                    'candidate_count' => count($candidates),
+                                ], 'info', 'SearchWebTool::execute');
+                            }
+                        } else {
+                            \App\Logger::logEvent('cache_eval', 'no_viable_candidates', [
+                                'canonical' => $canonicalNew,
+                                'ledger_count' => count($ledger),
+                                'current_query' => $searchQuery,
+                            ], 'info', 'SearchWebTool::execute');
+                        }
+                    }
                 }
             }
         }
@@ -171,6 +245,9 @@ class SearchWebTool
 
     private function doLiveSearch(string $searchQuery, array $messages, callable $emit, int $sessionId): string
     {
+        if (self::$testMode) {
+            return '[TEST_MODE: live search disabled]';
+        }
         $result = self::liveSearch($searchQuery, $messages, $emit, $this->contextCondenser, $sessionId);
         return $result['evidence'] ?? '';
     }
@@ -185,6 +262,11 @@ class SearchWebTool
 
         try {
             $result = $pipeline->run($searchQuery, $messages, $emit);
+            \App\Logger::logEvent('search_pipeline_ok', 'SearchPipeline succeeded', [
+                'query' => $searchQuery,
+                'evidence_len' => strlen($result['evidence'] ?? ''),
+                'source_count' => count($result['sourceIds'] ?? []),
+            ], 'info', 'SearchWebTool::liveSearch');
         } catch (\Throwable $e) {
             \App\Logger::logEvent('search_pipeline_failed', 'SearchPipeline threw — falling back to legacy condenser', [
                 'error' => $e->getMessage(),
@@ -221,6 +303,12 @@ class SearchWebTool
         $limit = (int) Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
         $scrapedUrls = Search::query($searchQuery, $limit);
 
+        \App\Logger::logEvent('search_urls_found', 'SearXNG returned URLs', [
+            'query' => $searchQuery,
+            'url_count' => count($scrapedUrls),
+            'urls' => $scrapedUrls,
+        ], 'info', 'SearchWebTool::liveSearchLegacy');
+
         if (empty($scrapedUrls)) {
             \App\ProgressWriter::write($sessionId, 'search_no_results', "No results for: {$searchQuery}", 'rose');
             return ['evidence' => "Web search for '{$searchQuery}' returned no results.", 'sourceIds' => []];
@@ -246,6 +334,13 @@ class SearchWebTool
 
         \App\ProgressWriter::write($sessionId, 'condensing', 'Condensing search results...', 'slate');
         $condensedContext = $condenser->condense($scrapedPages, $searchQuery);
+
+        \App\Logger::logEvent('search_condensed', 'Context condenser produced output', [
+            'query' => $searchQuery,
+            'scraped_page_count' => count($scrapedPages),
+            'condensed_len' => strlen($condensedContext),
+            'condensed_preview' => mb_substr($condensedContext, 0, 200),
+        ], 'info', 'SearchWebTool::liveSearchLegacy');
 
         if (!empty($condensedContext)) {
             $cacheKey = 'ctx_' . md5($searchQuery . time());

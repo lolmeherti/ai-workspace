@@ -17,7 +17,8 @@ final class BridgeFetcher
 
     public function isConnected(): bool
     {
-        $ch = curl_init($this->baseUrl . '/bridge/status');
+        $url = $this->baseUrl . '/bridge/status';
+        $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 3,
@@ -25,14 +26,27 @@ final class BridgeFetcher
         ]);
         $body = curl_exec($ch);
         $err  = curl_error($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         if ($err !== '' || $body === false) {
+            \App\Logger::logEvent('bridge_check_failed', 'Bridge isConnected returned false', [
+                'url' => $url,
+                'curl_error' => $err,
+                'http_code' => $code,
+            ], 'warn', 'BridgeFetcher::isConnected');
             return false;
         }
 
         $data = json_decode($body, true);
-        return ($data['connected'] ?? false) === true;
+        $connected = ($data['connected'] ?? false) === true;
+        if (!$connected) {
+            \App\Logger::logEvent('bridge_check_failed', 'Bridge status endpoint returned connected=false', [
+                'url' => $url,
+                'response' => mb_substr($body, 0, 500),
+            ], 'warn', 'BridgeFetcher::isConnected');
+        }
+        return $connected;
     }
 
     /**
@@ -154,14 +168,26 @@ final class BridgeFetcher
 
         $data = json_decode($body, true);
         if (!is_array($data)) {
+            \App\Logger::logEvent('bridge_serp_fail', 'Bridge SERP returned invalid JSON', [
+                'query' => $query,
+                'raw_body' => mb_substr($body, 0, 500),
+            ], 'warn', 'BridgeFetcher::searchSERP');
             return [];
         }
-        if (($data['status'] ?? '') !== 'success') {
+        $status = $data['status'] ?? 'unknown';
+        if ($status !== 'success') {
+            $errorMsg = $data['error'] ?? '';
+            \App\Logger::logEvent('bridge_serp_fail', 'Bridge SERP returned non-success status: ' . $status, [
+                'query' => $query,
+                'status' => $status,
+                'error' => $errorMsg,
+                'candidate_count' => count($data['results'] ?? []),
+            ], 'warn', 'BridgeFetcher::searchSERP');
             return [];
         }
 
         $candidates = [];
-        foreach ($data['candidates'] ?? [] as $c) {
+        foreach ($data['results'] ?? [] as $c) {
             $candidates[] = new Candidate(
                 url:      $c['url'] ?? '',
                 title:    $c['title'] ?? '',

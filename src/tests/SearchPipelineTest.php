@@ -261,10 +261,39 @@ class SearchPipelineTest
             return;
         }
 
+        $testCacheKeys = [];
+        $testLedgerKeys = [];
+
+        try {
+
+        // Save real ledger, run tests against an isolated copy
+        $realLedger = Cache::getSearchLedger();
+        Cache::set('search_ledger', json_encode([]), 604800);
+
+        // Prevent live search from hitting SearXNG during tests
+        SearchWebTool::$testMode = true;
+
+        // Also clear any stale test cache keys from previous aborted runs
+        foreach ($realLedger as $entry) {
+            $ck = $entry['cache_key'] ?? '';
+            foreach (['ctx_hermes_', 'ctx_empty_', 'ctx_sem_', 'ctx_none_'] as $pfx) {
+                if (str_starts_with($ck, $pfx)) {
+                    Cache::delete($ck);
+                    break;
+                }
+            }
+        }
+
         $emitLog = [];
         $capture = function (string $event, array $data = []) use (&$emitLog): void {
             $emitLog[] = compact('event', 'data');
         };
+
+        // ── Unique suffixes to prevent ledger cross-contamination ──
+        $uid2 = 'hermes_lex_test_' . time();
+        $uid3 = 'hermes_empty_test_' . (time() + 1);
+        $uid4 = 'hermes_sem_test_' . (time() + 2);
+        $uid5 = 'hermes_none_test_' . (time() + 3);
 
         // 1. Empty query → guard returns error message
         $tool = $this->makeTool(null);
@@ -272,84 +301,66 @@ class SearchPipelineTest
         $result = $tool->execute(['query' => ''], 1, [], $capture, '');
         $this->testEq('empty query → error message', '[Web Search: No query provided.]', $result);
 
-        // 2. ASK_USER sentinel — needs non-empty ledger for evaluator to fire
-        Cache::addToLedger('dummy', 'ctx_dummy_hermes_test');
-        $mockEval = $this->makeMockEval([
-            'decision' => 'ASK_USER',
-            'cache_key' => 'ctx_abc',
-            'query' => 'test query',
-        ]);
-        $tool = $this->makeTool($mockEval);
-        $emitLog = [];
-        $result = $tool->execute(['query' => 'test'], 42, [], $capture, '');
-        $this->testEq('ASK_USER → __ASK_USER__ sentinel', '__ASK_USER__', $result);
-        $this->testTrue('ASK_USER: ask_user event emitted', $this->emitted($emitLog, 'ask_user'));
-        $askData = $this->emitData($emitLog, 'ask_user');
-        $this->testEq('ASK_USER: session_id passed', 42, $askData['session_id'] ?? null);
-
-        // 3. AUTO_USE with valid cache → returns cached content directly
-        $cacheKey = 'ctx_hermes_test_' . time();
+        // 2. Lexical hit with content → AskUserPolicy AUTO_USE (fresh = low volatility)
+        $cacheKey = 'ctx_hermes_' . $uid2;
+        $testCacheKeys[] = $cacheKey;
+        $testLedgerKeys[] = $cacheKey;
         Cache::set($cacheKey, 'CACHED CONTENT FOR TEST');
-        Cache::addToLedger('test query', $cacheKey);
+        Cache::addToLedger($uid2, $cacheKey);
+        $tool = $this->makeTool(null);
+        $emitLog = [];
+        $result = $tool->execute(['query' => $uid2], 1, [], $capture, '');
+        $this->testEq('lexical hit + AUTO_USE → cached content', 'CACHED CONTENT FOR TEST', $result);
+        $this->testTrue('lexical hit: cache_used emitted', $this->emitted($emitLog, 'cache_used'));
 
-        $mockEval = $this->makeMockEval([
-            'decision' => 'AUTO_USE',
-            'cache_key' => $cacheKey,
-            'query' => 'test query',
-        ]);
+        // 3. Lexical hit with empty content → falls through to live search (testMode: placeholder)
+        $emptyKey = 'ctx_empty_' . $uid3;
+        $testLedgerKeys[] = $emptyKey;
+        Cache::addToLedger($uid3, $emptyKey);
+        $emitLog = [];
+        $result = $tool->execute(['query' => $uid3], 1, [], $capture, '');
+        $this->testContains('lexical hit empty content → live search placeholder', '[TEST_MODE', $result);
+
+        // 4. Lexical miss → semantic evaluator USE → AskUserPolicy → cached content
+        $semKey = 'ctx_sem_' . $uid4;
+        $testCacheKeys[] = $semKey;
+        $testLedgerKeys[] = $semKey;
+        Cache::set($semKey, 'SEMANTIC CACHED CONTENT');
+        Cache::addToLedger('sem_candidate_' . $uid4, $semKey);
+        $mockEval = $this->makeMockEval(['decision' => 'USE']);
         $tool = $this->makeTool($mockEval);
         $emitLog = [];
-        $result = $tool->execute(['query' => 'test'], 1, [], $capture, '');
-        $this->testEq('AUTO_USE → returns cached content', 'CACHED CONTENT FOR TEST', $result);
-        $this->testTrue('AUTO_USE: cache_used event emitted', $this->emitted($emitLog, 'cache_used'));
+        $result = $tool->execute(['query' => $uid4], 1, [], $capture, '');
+        $this->testEq('semantic USE + AUTO_USE → cached content', 'SEMANTIC CACHED CONTENT', $result);
+        $this->testTrue('semantic USE: cache_used emitted', $this->emitted($emitLog, 'cache_used'));
 
-        // 4. AUTO_USE with empty cache → falls through (would hit Search, verifiable by non-match)
-        $mockEval = $this->makeMockEval([
-            'decision' => 'AUTO_USE',
-            'cache_key' => 'ctx_nonexistent_key',
-            'query' => 'nope',
-        ]);
-        $tool = $this->makeTool($mockEval);
-        $emitLog = [];
-        try {
-            $result = $tool->execute(['query' => 'test'], 1, [], $capture, '');
-            // If it didn't throw, it shouldn't return the cached sentinel
-            $this->testNotContains('AUTO_USE+empty cache: not cached value', 'CACHED CONTENT FOR TEST', $result);
-        } catch (\Throwable $e) {
-            // Falls through to liveSearch → Search::query (HTTP) → may fail in test env
-            $this->testTrue('AUTO_USE+empty cache: falls through (Search unavailable)', true);
-        }
-
-        // 5. NONE → evaluator returns null, proceeds to search (would hit HTTP)
+        // 5. Lexical miss → semantic evaluator NONE → falls through (testMode: placeholder)
+        $noneKey = 'ctx_none_' . $uid5;
+        $testCacheKeys[] = $noneKey;
+        $testLedgerKeys[] = $noneKey;
+        Cache::set($noneKey, 'NONE CACHED CONTENT');
+        Cache::addToLedger('sem_candidate_' . $uid5, $noneKey);
         $mockEval = $this->makeMockEval(null);
         $tool = $this->makeTool($mockEval);
         $emitLog = [];
-        try {
-            $result = $tool->execute(['query' => 'test'], 1, [], $capture, '');
-            $this->testTrue('NONE → proceeds past cache (no early return)', true);
-        } catch (\Throwable $e) {
-            $this->testTrue('NONE → proceeds past cache (Search unavailable)', true);
-        }
+        $result = $tool->execute(['query' => $uid5], 1, [], $capture, '');
+        $this->testContains('semantic NONE → live search placeholder', '[TEST_MODE', $result);
 
-        // 6. Non-single query (comma-separated) → skips cache eval entirely
-        $mockEval = $this->makeMockEval(['decision' => 'AUTO_USE', 'cache_key' => $cacheKey, 'query' => 'a']);
+        // 6. Multi-query (comma-separated) → skips cache eval entirely (testMode: placeholder)
+        $mockEval = $this->makeMockEval(['decision' => 'USE']);
         $tool = $this->makeTool($mockEval);
         $emitLog = [];
-        try {
-            $result = $tool->execute(['query' => 'a, b'], 1, [], $capture, '');
-            $this->testTrue('multi-query → cache eval skipped', true);
-        } catch (\Throwable $e) {
-            $this->testTrue('multi-query → cache eval skipped (Search unavailable)', true);
+        $result = $tool->execute(['query' => 'a, b'], 1, [], $capture, '');
+        $this->testContains('multi-query → live search placeholder', '[TEST_MODE', $result);
+
+        } finally {
+            // Restore real ledger + clean test cache keys
+            SearchWebTool::$testMode = false;
+            foreach ($testCacheKeys as $key) {
+                @Cache::delete($key);
+            }
+            Cache::set('search_ledger', json_encode($realLedger), 604800);
         }
-
-        // Cleanup test cache entry
-        Cache::delete($cacheKey);
-
-        // Remove test entries from ledger so they don't pollute the Web tab
-        $ledger = Cache::getSearchLedger();
-        $testKeys = ['ctx_dummy_hermes_test', $cacheKey];
-        $cleanLedger = array_filter($ledger, fn($item) => !in_array($item['cache_key'], $testKeys, true));
-        Cache::set('search_ledger', json_encode(array_values($cleanLedger)), 604800);
     }
 
     // ==================================================================
@@ -376,9 +387,18 @@ class SearchPipelineTest
                 parent::__construct($agent);
                 $this->value = $value;
             }
-            public function evaluate(string $query, array $ledger): ?array
+            public function evaluateCandidates(string $newQuery, array $candidates): array
             {
-                return $this->value;
+                if ($this->value === null) {
+                    return ['decision' => 'NONE', 'cache_key' => null];
+                }
+                $decision = $this->value['decision'] ?? 'NONE';
+                if ($decision === 'USE') {
+                    // Pick the first candidate's cache_key (only one entry in test ledger)
+                    $firstKey = array_key_first($candidates);
+                    return ['decision' => 'USE', 'cache_key' => $firstKey];
+                }
+                return ['decision' => 'NONE', 'cache_key' => null];
             }
         };
     }
