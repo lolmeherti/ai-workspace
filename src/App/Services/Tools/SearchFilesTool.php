@@ -17,7 +17,9 @@ class SearchFilesTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
-                $toolQuery = $toolData['query'] ?? '';
+                // Accept queries array (merge into one keyword set) or single query string
+                $queries = $toolData['queries'] ?? null;
+                $toolQuery = is_array($queries) ? implode(' ', $queries) : ($toolData['query'] ?? '');
                 \App\ProgressWriter::write($sessionId, 'search_querying', "Searching files for: {$toolQuery}", 'slate');
 
                 $cleanQuery = str_replace([',', ';', '/', '-', '_'], ' ', $toolQuery);

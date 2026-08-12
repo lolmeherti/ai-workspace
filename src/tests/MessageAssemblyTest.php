@@ -23,7 +23,6 @@ class MessageAssemblyTest
 
     public function run(): bool
     {
-        $this->runBuildStateGuard();
         $this->runPreprocessHistory();
         $this->runCleanMessagesArray();
 
@@ -73,95 +72,6 @@ class MessageAssemblyTest
         $ref = new \ReflectionMethod($obj, $method);
         $ref->setAccessible(true);
         return $ref->invoke($obj, ...$args);
-    }
-
-    // ===================================================================
-    // buildStateGuard — constructs the [State: ...] block appended to user messages
-    // ===================================================================
-    private function runBuildStateGuard(): void
-    {
-        echo "\n=== buildStateGuard ===\n";
-
-        // Empty tools
-        $empty = $this->invokePrivate($this->prompt, 'buildStateGuard', []);
-        $this->test('empty tools: contains "No tools active"',
-            str_contains($empty, 'No tools active'));
-        $this->test('empty tools: contains "say super_abilities"',
-            str_contains($empty, 'say super_abilities'));
-        $this->test('empty tools: does NOT contain "DO NOT say"',
-            !str_contains($empty, 'DO NOT say'));
-
-        // Single tool
-        $single = $this->invokePrivate($this->prompt, 'buildStateGuard', ['search_files']);
-        $this->test('single tool: contains tool name',
-            str_contains($single, 'search_files'));
-        $this->test('single tool: contains "DO NOT say super_abilities"',
-            str_contains($single, 'DO NOT say super_abilities'));
-        $this->test('single tool: contains QUERY: spec',
-            str_contains($single, 'QUERY:<SEARCH_TERMS>'));
-        $this->test('single tool: does NOT contain calendar',
-            !str_contains($single, 'calendar'));
-
-        // Calendar expansion — the critical fix from the architecture doc
-        $cal = $this->invokePrivate($this->prompt, 'buildStateGuard', ['calendar']);
-        $this->test('calendar: resolves to get_todoist_tasks',
-            str_contains($cal, 'get_todoist_tasks'));
-        $this->test('calendar: resolves to create_todoist_task',
-            str_contains($cal, 'create_todoist_task'));
-        $this->test('calendar: resolves to update_todoist_task',
-            str_contains($cal, 'update_todoist_task'));
-        $this->test('calendar: resolves to delete_todoist_task',
-            str_contains($cal, 'delete_todoist_task'));
-        $this->test('calendar: does NOT contain bare "calendar" in resolved list',
-            !str_contains($cal, 'Tools active — calendar'));
-        $this->test('calendar: contains "DO NOT say super_abilities"',
-            str_contains($cal, 'DO NOT say super_abilities'));
-
-        // Calendar + additional tool
-        $calPlus = $this->invokePrivate($this->prompt, 'buildStateGuard', ['calendar', 'search_web']);
-        $this->test('calendar+search_web: resolves calendar to 4 tools',
-            str_contains($calPlus, 'get_todoist_tasks') &&
-            str_contains($calPlus, 'create_todoist_task') &&
-            str_contains($calPlus, 'update_todoist_task') &&
-            str_contains($calPlus, 'delete_todoist_task'));
-        $this->test('calendar+search_web: includes search_web',
-            str_contains($calPlus, 'search_web'));
-        $this->test('calendar+search_web: does NOT contain bare calendar',
-            !str_contains($calPlus, 'Tools active — calendar'));
-
-        // Multiple tools
-        $multi = $this->invokePrivate($this->prompt, 'buildStateGuard', ['search_files', 'search_web']);
-        $this->test('multiple tools: both listed',
-            str_contains($multi, 'search_files') && str_contains($multi, 'search_web'));
-        $this->test('multiple tools: comma-separated',
-            str_contains($multi, 'search_files, search_web'));
-
-        // Unknown tool ignored
-        $unknown = $this->invokePrivate($this->prompt, 'buildStateGuard', ['nonexistent_tool']);
-        $this->test('unknown tool: guard still says "Tools active"',
-            str_contains($unknown, 'Tools active'));
-        $this->test('unknown tool: resolved list is empty string',
-            str_contains($unknown, 'Tools active — .'));
-
-        // All tools at once
-        $all = $this->invokePrivate($this->prompt, 'buildStateGuard', [
-            'search_files', 'search_web', 'search_memories', 'calendar',
-        ]);
-        $this->test('all tools: contains every resolved tool name',
-            str_contains($all, 'search_files') &&
-            str_contains($all, 'search_web') &&
-            str_contains($all, 'search_memories') &&
-            str_contains($all, 'get_todoist_tasks') &&
-            str_contains($all, 'create_todoist_task') &&
-            str_contains($all, 'update_todoist_task') &&
-            str_contains($all, 'delete_todoist_task'));
-
-        // Single todoist tool directly (not via calendar)
-        $task = $this->invokePrivate($this->prompt, 'buildStateGuard', ['create_todoist_task']);
-        $this->test('create_todoist_task: contains DUE_STRING spec',
-            str_contains($task, 'DUE_STRING'));
-        $this->test('create_todoist_task: does NOT expand to calendar tools',
-            !str_contains($task, 'get_todoist_tasks'));
     }
 
     // ===================================================================

@@ -130,4 +130,112 @@ class AgentManager
 
         return \App\ThoughtExtractor::strip($fullResponse);
     }
+
+    /**
+     * Non-streaming call with native function-calling support.
+     * Sends tool definitions as JSON schema; the API enforces format.
+     * Returns structured result so the caller can branch on finish_reason.
+     *
+     * @return array{finish_reason: string, content: ?string, tool_calls: ?array, usage: ?array}
+     */
+    public function chatWithTools(array $messages, array $tools, string $toolChoice = 'auto'): array
+    {
+        $endpoint = $this->apiUrl . '/chat/completions';
+        $finalTemperature = (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
+
+        $payload = [
+            'model' => $this->modelName,
+            'messages' => $messages,
+            'stream' => false,
+            'temperature' => $finalTemperature,
+            'max_tokens' => 4096,
+            'tools' => $tools,
+            'tool_choice' => $toolChoice,
+        ];
+
+        $msgCount = count($messages);
+        \App\Logger::logEvent('llm_tool_request_start', "LLM tool request: {$msgCount} messages, " . count($tools) . " tools", [
+            'message_count' => $msgCount,
+            'tool_count' => count($tools),
+            'tool_choice' => $toolChoice,
+        ], 'info', 'AgentManager::chatWithTools');
+
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+
+        $startTime = microtime(true);
+        $result = curl_exec($ch);
+        $elapsed = round((microtime(true) - $startTime) * 1000);
+
+        if ($result === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+
+            \App\Logger::logEvent('llm_connection_error', "LLM tool request failed after {$elapsed}ms: {$error}", [
+                'error' => $error,
+                'elapsed_ms' => $elapsed,
+                'endpoint' => $endpoint,
+            ], 'error', 'AgentManager::chatWithTools');
+
+            throw new \Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
+        }
+
+        curl_close($ch);
+
+        $response = json_decode($result, true);
+        if (!$response) {
+            \App\Logger::logEvent('llm_tool_parse_error', "Failed to parse LLM tool response", [
+                'raw_len' => strlen($result),
+                'raw_preview' => mb_substr($result, 0, 500),
+            ], 'error', 'AgentManager::chatWithTools');
+
+            return [
+                'finish_reason' => 'error',
+                'content' => null,
+                'tool_calls' => null,
+                'usage' => null,
+            ];
+        }
+
+        $choice = $response['choices'][0] ?? [];
+        $finishReason = $choice['finish_reason'] ?? 'stop';
+        $content = $choice['message']['content'] ?? null;
+        $toolCalls = $choice['message']['tool_calls'] ?? null;
+        $usage = $response['usage'] ?? null;
+
+        $this->lastUsage = $usage;
+
+        $toolCallDetails = [];
+        if ($toolCalls) {
+            foreach ($toolCalls as $tc) {
+                $fn = $tc['function'] ?? [];
+                $toolCallDetails[] = [
+                    'name' => $fn['name'] ?? '?',
+                    'arguments' => $fn['arguments'] ?? '{}',
+                ];
+            }
+        }
+
+        \App\Logger::logEvent('llm_tool_response_done', "LLM tool response: finish={$finishReason}, " . ($toolCalls ? count($toolCalls) . " tool calls" : 'no tool calls') . ", {$elapsed}ms", [
+            'finish_reason' => $finishReason,
+            'has_content' => $content !== null && $content !== '',
+            'tool_call_count' => $toolCalls ? count($toolCalls) : 0,
+            'tool_calls' => $toolCallDetails,
+            'elapsed_ms' => $elapsed,
+            'tokens_used' => $usage,
+        ], 'info', 'AgentManager::chatWithTools');
+
+        return [
+            'finish_reason' => $finishReason,
+            'content' => $content,
+            'tool_calls' => $toolCalls,
+            'usage' => $usage,
+        ];
+    }
 }

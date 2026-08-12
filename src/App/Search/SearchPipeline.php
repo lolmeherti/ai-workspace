@@ -99,7 +99,7 @@ final class SearchPipeline
                 ? substr($candidate->url, 0, 57) . '...'
                 : $candidate->url;
 
-            $this->emitProgress('scraping_start', "Scraping {$shortUrl}", $emit);
+            $this->emitProgress('scraping_start', "Scraping {$shortUrl}", $emit, $candidate->url);
 
             $result = $bridge->fetch($candidate->url);
 
@@ -114,11 +114,11 @@ final class SearchPipeline
             BridgeFetchLogger::record($candidate->url, $result->status, $totalBodyLen, $entityCount);
 
             if (!$result->isSuccess()) {
-                $this->emitProgress('scraping_done', "Scraped {$shortUrl} ({$result->status})", $emit);
+                $this->emitProgress('scraping_done', "Scraped {$shortUrl} ({$result->status})", $emit, $candidate->url);
                 continue;
             }
 
-            $this->emitProgress('scraping_done', "Scraped {$shortUrl}", $emit);
+            $this->emitProgress('scraping_done', "Scraped {$shortUrl}", $emit, $candidate->url);
             $fetchedUrls[] = $candidate->url;
 
             $chunks = $this->chunksFromBridgeContent($result->content, $sid, $candidate->url);
@@ -409,10 +409,10 @@ or conflicting, say so. Do not use knowledge outside the provided data.
 PROMPT;
     }
 
-    private function emitProgress(string $stage, string $text, callable $emit): void
+    private function emitProgress(string $stage, string $text, callable $emit, string $url = ''): void
     {
         if (class_exists('\\App\\ProgressWriter')) {
-            \App\ProgressWriter::write($this->sessionId, $stage, $text, 'slate');
+            \App\ProgressWriter::write($this->sessionId, $stage, $text, 'slate', $url);
         }
     }
 

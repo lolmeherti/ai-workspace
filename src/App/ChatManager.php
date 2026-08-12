@@ -41,7 +41,7 @@ class ChatManager
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
     }
 
-    private function cleanMessagesArray(array $messages): array
+    public function cleanMessagesArray(array $messages): array
     {
         foreach ($messages as $idx => $msg) {
             $role = $msg['role'] ?? '';
@@ -57,16 +57,6 @@ class ChatManager
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?callable $streamCallback = null): array
     {
-        \App\ProgressWriter::init('/tmp');
-
-        // Sentinel — confirms progress directory is writable
-        if (\App\ProgressWriter::isReady()) {
-            @unlink('/tmp/progress/' . $sessionId . '.jsonl');
-            \App\ProgressWriter::write($sessionId, 'ready', 'Progress pipeline active', 'emerald');
-        } else {
-            error_log('ProgressWriter: directory not writable — /tmp/progress');
-        }
-
         $emit = function(string $event, array $data = []) use ($streamCallback) {
             if ($streamCallback !== null) {
                 $streamCallback($event, $data);
@@ -85,55 +75,19 @@ class ChatManager
 
         $this->ensureSessionExists($sessionId);
 
-        // Parse active_tools from POST (set by frontend card)
-        $activeToolsRaw = $_POST['active_tools'] ?? '';
-        $activeTools = [];
-        if (!empty($activeToolsRaw)) {
-            $activeTools = array_filter(array_map('trim', explode(',', $activeToolsRaw)));
-        }
-        $isToolTurn = !empty($activeTools);
-        $pendingTools = $activeTools; // multi-tool: queue of tools left to execute
-
-        if ($isToolTurn) {
-            \App\Logger::logEvent('tool_turn_start', 'Tool turn initiated', [
-                'session_id' => $sessionId,
-                'active_tools' => $activeTools,
-                'query' => $query,
-            ], 'info', 'ChatManager::process');
-        }
-
-        \App\Logger::info("isToolTurn check", [
-            'raw' => $activeToolsRaw ?: 'EMPTY',
-            'parsed' => $activeTools,
-            'isToolTurn' => $isToolTurn,
-            'post_keys' => array_keys($_POST),
-        ]);
-
-        // Silent emit for tool turns — suppress trace noise, only pass core stream events
-        $silentEmit = function(string $event, array $data = []) use ($emit, $isToolTurn) {
-            if ($isToolTurn) {
-                if (!in_array($event, ['token', 'reasoning', 'thought_complete', 'generating', 'done', 'super_abilities_requested', 'file_choices', 'status'])) {
-                    return;
-                }
-            }
-            $emit($event, $data);
-        };
-        $emit = $silentEmit;
-
+        // Always insert user message — tools are always available, no per-turn activation
         $imagePath = null;
-        if (!$isToolTurn) {
-            if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
-                $emit('status', ['text' => 'Processing attachment...']);
-            }
-            $imagePath = $this->fileAttachmentService->handleUpload($sessionId, $imageFile);
-            $this->db->insert('chat_history', [
-                'session_id' => $sessionId,
-                'role' => 'user',
-                'message' => $query,
-                'image_path' => $imagePath,
-                'token_estimate' => (int)(mb_strlen($query) / 4)
-            ]);
+        if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
+            $emit('status', ['text' => 'Processing attachment...']);
         }
+        $imagePath = $this->fileAttachmentService->handleUpload($sessionId, $imageFile);
+        $this->db->insert('chat_history', [
+            'session_id' => $sessionId,
+            'role' => 'user',
+            'message' => $query,
+            'image_path' => $imagePath,
+            'token_estimate' => (int)(mb_strlen($query) / 4)
+        ]);
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
@@ -142,12 +96,10 @@ class ChatManager
         }
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
-        $firstTool = $isToolTurn ? $activeTools : [];
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $firstTool, '', false, $query);
-
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], '', false, $query);
         $currentMessages = $this->cleanMessagesArray($currentMessages);
 
-        $contextMessageCount = count($currentMessages) - 1; 
+        $contextMessageCount = count($currentMessages) - 1;
 
         $emit('context_assembled', [
             'message_count' => $contextMessageCount,
@@ -156,212 +108,57 @@ class ChatManager
 
         $validSourceIds = [];
 
+        // Tool call pass — native function calling via llama.cpp API.
+        // Model receives JSON-schema tool definitions; API enforces format.
+        $tools = $this->buildToolSchemas();
+        $emit('status', ['text' => 'Analyzing request...']);
+
+        $toolResult = $this->agent->chatWithTools($currentMessages, $tools, 'auto');
+
+        if ($toolResult['finish_reason'] === 'tool_calls' && !empty($toolResult['tool_calls'])) {
+            \App\ProgressWriter::init('/tmp');
+            $emit('status', ['text' => 'Executing tools...']);
+
+            foreach ($toolResult['tool_calls'] as $toolCall) {
+                $fn = $toolCall['function'] ?? [];
+                $toolName = $fn['name'] ?? '';
+                $argsJson = $fn['arguments'] ?? '{}';
+                $args = json_decode($argsJson, true) ?: [];
+                $queries = $args['queries'] ?? [];
+
+                if (empty($toolName) || empty($queries)) continue;
+
+                $queryList = implode(', ', $queries);
+                $emit('tool_start', ['tool' => $toolName, 'label' => "{$toolName}: {$queryList}"]);
+
+                $result = $this->toolExecutionService->executeToolByName(
+                    $toolName, $queries, $sessionId, $emit
+                );
+
+                $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
+
+                $this->db->insert('chat_history', [
+                    'session_id' => $sessionId,
+                    'role' => 'system',
+                    'message' => $result,
+                    'message_type' => 'data_fetching',
+                    'token_estimate' => (int)(mb_strlen($result) / 4),
+                ]);
+            }
+
+            \App\ProgressWriter::done($sessionId);
+
+            $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+            $currentMessages = $this->promptAssemblyService->buildMessagesArray(
+                $systemPrompt, $history, [], '', false, $query
+            );
+            $currentMessages = $this->cleanMessagesArray($currentMessages);
+        }
+
         $emit('generating', []);
 
-        $executionCount = 0;
-        $maxExecutions = 5;
-        $finalResponse = '';
-
-        while ($executionCount < $maxExecutions) {
-            if ($isToolTurn && !empty($pendingTools)) {
-                $emit('status', ['text' => 'Analyzing request...']);
-
-                $aiRawResponse = $this->agent->chat($currentMessages, false);
-
-                $responseLen = strlen($aiRawResponse);
-                \App\Logger::logEvent('tool_turn_first_pass', "Tool turn first pass complete: {$responseLen} chars", [
-                    'session_id' => $sessionId,
-                    'response_length' => $responseLen,
-                    'response_preview' => mb_substr($aiRawResponse, 0, 300),
-                ], 'info', 'ChatManager::process');
-
-                \App\Logger::info('tool-turn first pass response', [
-                    'len' => strlen($aiRawResponse),
-                    'preview' => substr($aiRawResponse, 0, 300),
-                ]);
-            } else {
-                $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
-            }
-
-            if ($executionCount === 0 && empty($activeTools)) {
-                // Normal turn: check if the model requested super_abilities.
-                // Only check the response portion — NOT the CoT/thinking. The model
-                // often mentions "super_abilities" in its internal reasoning (both
-                // positively and negatively), but the card should only appear when
-                // the model explicitly outputs it in the visible response.
-                $extracted = \App\ThoughtExtractor::extract($aiRawResponse);
-                $userVisible = $extracted['content'];
-                if (stripos($userVisible, 'super_abilities') !== false) {
-                    $finalResponse = $aiRawResponse;
-                    // Save the assistant response
-                    $this->db->insert('chat_history', [
-                        'session_id' => $sessionId,
-                        'role' => 'assistant',
-                        'message' => $aiRawResponse,
-                        'message_type' => 'super_abilities',
-                        'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4),
-                        'search_query' => null,
-                    ]);
-                    $emit('super_abilities_requested', [
-                        'session_id' => $sessionId,
-                        'query' => $query
-                    ]);
-                    $emit('done', [
-                        'message' => $aiRawResponse,
-                        'title' => $updatedTitle,
-                        'session_id' => $sessionId
-                    ]);
-                    return [
-                        'status' => 'success',
-                        'message' => $aiRawResponse,
-                        'title' => $updatedTitle,
-                        'meta' => ['super_abilities_requested' => true]
-                    ];
-                }
-            }
-
-            // Parse tool calls from response. On a tool turn, only the first
-            // (non-streaming) response contains tool calls. Subsequent streaming
-            // responses are the model's natural-language answer — don't re-scan.
-            $shouldParse = $isToolTurn && !empty($pendingTools);
-            $toolResults = $shouldParse
-                ? $this->toolExecutionService->parseAndExecuteToolLines($aiRawResponse, $sessionId, $currentMessages, $emit)
-                : [];
-
-            // Guarantee: every user-selected tool MUST execute. If the model
-            // skipped any, force-execute them with the full user query.
-            // Only on the tool-parsing pass (shouldParse), not the streaming pass.
-            if ($shouldParse && !empty($activeTools)) {
-                $matchedNames = array_column($toolResults, 'tool');
-                $calendarTools = ['get_todoist_tasks', 'create_todoist_task', 'update_todoist_task', 'delete_todoist_task'];
-                $calendarMatched = !empty(array_intersect($matchedNames, $calendarTools));
-
-                foreach ($activeTools as $tool) {
-                    if ($tool === 'calendar') {
-                        if (!$calendarMatched) {
-                            $emit('status', ['text' => 'Fetching calendar...']);
-                            \App\ProgressWriter::write($sessionId, 'tool_start', 'Executing get_todoist_tasks (forced)', 'amber');
-                            $forced = $this->toolExecutionService->executeGuaranteed('get_todoist_tasks', $query, $sessionId, $currentMessages, $emit);
-                            if (!empty($forced)) {
-                                $toolResults[] = ['tool' => 'get_todoist_tasks', 'result' => $forced];
-                            }
-                            \App\ProgressWriter::write($sessionId, 'tool_done', 'get_todoist_tasks completed (forced).', 'amber');
-                            $emit('trace', ['label' => 'get_todoist_tasks (forced) completed.', 'color' => 'emerald']);
-                        }
-                    } elseif (!in_array($tool, $matchedNames)) {
-                        $emit('status', ['text' => "Executing {$tool}..."]);
-                        \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$tool} (forced)", 'amber');
-                        $forced = $this->toolExecutionService->executeGuaranteed($tool, $query, $sessionId, $currentMessages, $emit);
-                        if (!empty($forced)) {
-                            $toolResults[] = ['tool' => $tool, 'result' => $forced];
-                        }
-                        \App\ProgressWriter::write($sessionId, 'tool_done', "{$tool} completed (forced).", 'amber');
-                        $emit('trace', ['label' => "{$tool} (forced) completed.", 'color' => 'emerald']);
-                    }
-                }
-            }
-
-            if ($isToolTurn && $executionCount === 0 && empty($toolResults)) {
-                \App\Logger::logEvent('tool_name_missed', 'Tool turn: model response contained no parseable tool names', [
-                    'session_id' => $sessionId,
-                    'response_length' => strlen($aiRawResponse),
-                    'response_preview' => mb_substr($aiRawResponse, 0, 500),
-                    'response_first_50_chars' => mb_substr($aiRawResponse, 0, 50),
-                ], 'warn', 'ChatManager::process');
-            }
-
-            \App\Logger::info('tool-turn parse result', [
-                'shouldParse' => $shouldParse,
-                'toolCount' => count($toolResults),
-                'tools' => array_column($toolResults, 'tool'),
-                'responseLen' => strlen($aiRawResponse),
-                'responsePreview' => substr($aiRawResponse, 0, 200),
-            ]);
-
-            if (!empty($toolResults)) {
-                // Save the tool-call response
-                $this->db->insert('chat_history', [
-                    'session_id' => $sessionId,
-                    'role' => 'assistant',
-                    'message' => $aiRawResponse,
-                    'message_type' => 'tool_call',
-                    'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
-                ]);
-
-                // tool_done + save each tool result
-                foreach ($toolResults as $item) {
-                    $tn = $item['tool'];
-
-                    \App\ProgressWriter::write($sessionId, 'tool_done', "{$tn} completed.", 'emerald');
-
-                    $this->db->insert('chat_history', [
-                        'session_id' => $sessionId,
-                        'role' => 'system',
-                        'message' => $item['result'],
-                        'message_type' => 'data_fetching',
-                        'tool_name' => $tn,
-                        'token_estimate' => (int)(mb_strlen($item['result']) / 4)
-                    ]);
-                }
-
-                // All tools executed — rebuild for natural streaming response
-                $pendingTools = [];
-                $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-
-                // Extract source IDs from data_fetching messages so CitationValidator can fire
-                if (empty($validSourceIds)) {
-                    foreach ($updatedHistory as $row) {
-                        if (($row['message_type'] ?? '') === 'data_fetching') {
-                            $msg = $row['message'] ?? '';
-                            if (preg_match_all('/<source\s+id="([^"]+)"/', $msg, $m)) {
-                                $validSourceIds = array_values(array_unique($m[1]));
-                            }
-                        }
-                    }
-                }
-
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, [], '', false, $query);
-                $currentMessages = $this->cleanMessagesArray($currentMessages);
-
-                $executionCount++;
-            } elseif ($isToolTurn && !empty($pendingTools)) {
-                // Tool call not matched. Clear queue, go to streaming.
-                $pendingTools = [];
-
-                \App\Logger::logEvent('tool_turn_no_match', 'Tool turn produced no parseable tool call', [
-                    'session_id' => $sessionId,
-                    'response_preview' => mb_substr($aiRawResponse, 0, 500),
-                    'response_length' => strlen($aiRawResponse),
-                    'pending_tools' => $pendingTools,
-                ], 'warn', 'ChatManager::process');
-
-                $this->db->insert('chat_history', [
-                    'session_id' => $sessionId,
-                    'role' => 'assistant',
-                    'message' => $aiRawResponse,
-                    'message_type' => 'tool_call',
-                    'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4)
-                ]);
-
-                $updatedHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-                $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $updatedHistory, [], '', false, $query);
-                $currentMessages = $this->cleanMessagesArray($currentMessages);
-
-                $executionCount++;
-            } else {
-                // No tool calls — this is the final response
-                $finalResponse = $aiRawResponse;
-                break;
-            }
-        }
-
-        if ($executionCount >= $maxExecutions) {
-            \App\Logger::logEvent('tool_loop_exhausted', "Tool execution loop hit max iterations ({$maxExecutions})", [
-                'session_id' => $sessionId,
-                'max_executions' => $maxExecutions,
-                'final_response_len' => strlen($finalResponse),
-            ], 'warn', 'ChatManager::process');
-        }
+        $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+        $finalResponse = $aiRawResponse;
 
         $cleanResponse = $finalResponse;
 
@@ -416,8 +213,6 @@ class ChatManager
             'session_id' => $sessionId
         ]);
 
-        \App\ProgressWriter::done($sessionId);
-
         return [
             'status' => 'success',
             'message' => $finalResponse,
@@ -440,7 +235,7 @@ class ChatManager
 
         $filteredHistory = array_filter($history, function($row) {
             $type = $row['message_type'] ?? '';
-            return $type !== 'tool_call' && $type !== 'super_abilities';
+            return $type !== 'tool_call';
         });
 
         if (count($filteredHistory) > ($keepLimit * 2)) {
@@ -481,6 +276,66 @@ class ChatManager
         }
     }
 
+    private function buildToolSchemas(): array
+    {
+        return [
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_local',
+                    'description' => 'Search the user\'s local files and long-term memories for information. Use for anything in the user\'s personal data.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'queries' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string'],
+                                'description' => 'Search queries. Include synonyms and alternate phrasings.',
+                            ],
+                        ],
+                        'required' => ['queries'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_web',
+                    'description' => 'Search the web for current information, facts, news, or anything beyond the user\'s personal data. Be focused — use only the most relevant query terms.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'queries' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string'],
+                                'description' => 'Focused web search queries. Keep it tight.',
+                            ],
+                        ],
+                        'required' => ['queries'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_calendar',
+                    'description' => 'Search the user\'s calendar for tasks, events, and todo items.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'queries' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string'],
+                                'description' => 'Calendar search queries.',
+                            ],
+                        ],
+                        'required' => ['queries'],
+                    ],
+                ],
+            ],
+        ];
+    }
+
     private function autoGenerateTitle(int $sessionId, string $query, array $history, callable $emit): ?string
     {
         if (count($history) !== 1) return null;
@@ -494,7 +349,7 @@ class ChatManager
         return $title;
     }
 
-    private function streamAgentResponse(array $messages, callable $emit): string
+    public function streamAgentResponse(array $messages, callable $emit): string
     {
         $aiResponse = '';
         $utf8_buffer = '';

@@ -131,9 +131,9 @@ class SearchWebTool
         $scrapedPages = [];
         foreach ($scrapedUrls as $url) {
             $shortUrl = strlen($url) > 60 ? substr($url, 0, 57) . '...' : $url;
-            \App\ProgressWriter::write($sessionId, 'scraping_start', "Scraping {$shortUrl}", 'slate');
+            \App\ProgressWriter::write($sessionId, 'scraping_start', "Scraping {$shortUrl}", 'slate', $url);
             $pageText = Scraper::fetchAndClean($url, $perUrlTokens);
-            \App\ProgressWriter::write($sessionId, 'scraping_done', "Scraped {$shortUrl}", 'emerald');
+            \App\ProgressWriter::write($sessionId, 'scraping_done', "Scraped {$shortUrl}", 'emerald', $url);
             if (!empty(trim($pageText))) {
                 $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
             }

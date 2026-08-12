@@ -27,18 +27,19 @@ class MemorySelector
         }
 
         $searchString = implode(' ', $words);
+        $boolQuery = '+' . implode(' +', $words);
         $memories = [];
 
         $sqlFulltext = <<<TEXT
 SELECT id, memory_text 
 FROM memories 
-WHERE MATCH(memory_text) AGAINST(:prompt IN NATURAL LANGUAGE MODE) 
-LIMIT 20
+WHERE MATCH(memory_text) AGAINST(:prompt IN BOOLEAN MODE) 
+LIMIT 50
 TEXT;
 
         try {
             $memories = $this->db->query($sqlFulltext, [
-                ':prompt' => $searchString
+                ':prompt' => $boolQuery
             ]);
         } catch (\Throwable $e) {
             $memories = [];

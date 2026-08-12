@@ -288,15 +288,3 @@ select.input-futuristic option {
     font-size: 0.75rem;
     color: #e2e8f0;
 }
-
-/* Super Abilities Card — border-activation tool selection */
-.sa-ability-item {
-    position: relative;
-}
-.sa-ability-item[data-selected="true"] {
-    box-shadow: var(--sa-glow);
-}
-.sa-ability-item[data-accent="cyan"][data-selected="true"]    { --sa-glow: 0 0 14px rgba(6, 182, 212, 0.35); }
-.sa-ability-item[data-accent="blue"][data-selected="true"]    { --sa-glow: 0 0 14px rgba(59, 130, 246, 0.35); }
-.sa-ability-item[data-accent="purple"][data-selected="true"]  { --sa-glow: 0 0 14px rgba(168, 85, 247, 0.35); }
-.sa-ability-item[data-accent="amber"][data-selected="true"]   { --sa-glow: 0 0 14px rgba(245, 158, 11, 0.35); }
