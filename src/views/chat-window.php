@@ -75,11 +75,7 @@
                                 <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
                                     <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
                                     <?php if ($msg['role'] !== 'user'): ?>
-                                        <?php if (!empty($msg['cache_used'])): ?>
-                                            <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
-                                                <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cached
-                                            </span>
-                                        <?php elseif (!empty($msg['search_query'])): ?>
+                                        <?php if (!empty($msg['search_query'])): ?>
                                             <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
                                                 <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search
                                             </span>
@@ -110,41 +106,6 @@
                                 <?php endif; ?>
                                 
                                 <?php if ($msg['role'] === 'assistant'): ?>
-                                    <?php if (!empty($msg['scraped_urls']) || !empty($msg['search_query']) || !empty($msg['cache_used'])): ?>
-                                        <details class="w-full bg-slate-900/40 border border-slate-800/80 rounded-lg mb-4 overflow-hidden group">
-                                            <summary class="flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800/30 cursor-pointer select-none">
-                                                <span class="flex items-center gap-2">
-                                                    <uk-icon icon="settings" class="w-3.5 h-3.5 group-open:rotate-90 transition-transform duration-200"></uk-icon>
-                                                    Agent Execution Trace
-                                                </span>
-                                                <span class="text-[0.65rem] text-slate-500 font-normal">Click to expand</span>
-                                            </summary>
-                                            <div class="px-4 pb-4 pt-2 border-t border-slate-800/50 space-y-2">
-                                                <?php if (!empty($msg['cache_used'])): ?>
-                                                    <div class="text-xs text-amber-400 flex items-center gap-1.5 font-medium">
-                                                        <uk-icon icon="zap" class="w-3.5 h-3.5"></uk-icon> Memory Cache matched successfully
-                                                    </div>
-                                                <?php elseif (!empty($msg['search_query'])): ?>
-                                                    <div class="text-xs text-blue-400 flex items-center gap-1.5 font-medium">
-                                                        <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search Triggered: "<?php echo htmlspecialchars($msg['search_query']); ?>"
-                                                    </div>
-                                                <?php endif; ?>
-                                                <?php if (!empty($msg['scraped_urls'])): ?>
-                                                    <?php $urls = json_decode($msg['scraped_urls'], true); ?>
-                                                    <?php if (is_array($urls) && !empty($urls)): ?>
-                                                        <div class="flex flex-col gap-1.5">
-                                                            <?php foreach ($urls as $url): ?>
-                                                                <a href="<?php echo htmlspecialchars($url); ?>" target="_blank" class="flex items-center gap-2 text-xs text-emerald-400 bg-slate-950/40 p-2 rounded border border-slate-850 hover:bg-slate-800/30 transition-colors w-full font-medium">
-                                                                    <uk-icon icon="check-circle" class="w-3.5 h-3.5"></uk-icon>
-                                                                    <span class="truncate max-w-full"><?php echo htmlspecialchars($url); ?></span>
-                                                                </a>
-                                                             <?php endforeach; ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                <?php endif; ?>
-                                            </div>
-                                        </details>
-                                    <?php endif; ?>
                                     <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
                                 <?php else: ?>
                                     <?php echo nl2br(htmlspecialchars($msg['message'])); ?>

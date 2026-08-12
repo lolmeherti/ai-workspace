@@ -276,7 +276,7 @@ class ToolExecutionService
         $cleanJson = json_encode($toolData);
 
         try {
-            return match ($resolvedTool) {
+            $result = match ($resolvedTool) {
                 Tool::SEARCH_FILES => $this->searchFilesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_WEB => $this->searchWebTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::CREATE_TODOIST_TASK => $this->createTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
@@ -286,6 +286,15 @@ class ToolExecutionService
                 Tool::GET_EMAIL_BRIEFING => $this->getEmailBriefingTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
             };
+
+            \App\Logger::logEvent('tool_executed', "Tool {$toolName} executed successfully", [
+                'tool_name' => $toolName,
+                'result_len' => strlen($result),
+                'result_preview' => mb_substr($result, 0, 200),
+                'result_last200' => mb_substr($result, -200),
+            ], 'info', 'ToolExecutionService::executeTool');
+
+            return $result;
         } catch (\Throwable $e) {
             \App\Logger::logEvent('tool_execution_failed', "Tool {$toolName} failed: " . $e->getMessage(), [
                 'tool_name' => $toolName,

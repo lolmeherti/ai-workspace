@@ -460,7 +460,7 @@ final class SearchCacheManager
             'created_at'         => date('c'),
         ]);
 
-        $ttl = CacheTTL::TTL_SERP_MAX;
+        $ttl = 604800; // 7 days — freshness is handled by the cache evaluator
         $this->redis->setex($evidenceKey, $ttl, $serialized);
     }
 

@@ -28,14 +28,16 @@ class Bm25Retriever
     private const B = 0.75;
 
     /**
+     * BM25 score, sort, and return the full ranked list WITHOUT diversity
+     * selection. Excludes chunks with score <= 0 (no query term matched).
+     *
      * @param WebChunk[] $chunks
-     * @return WebChunk[] ranked and diversity-filtered
+     * @return WebChunk[] ranked by BM25 score descending
      */
-    public function rank(array $chunks, string $userQuestion, string $searchQuery, ?RetrievalPolicy $policy = null): array
+    public function rankRaw(array $chunks, string $userQuestion, string $searchQuery): array
     {
         if (empty($chunks)) return [];
 
-        $policy = $policy ?? RetrievalPolicy::default();
         $queryVector = $this->buildQueryTokenVector($userQuestion, $searchQuery);
         $totalChunks = count($chunks);
 
@@ -70,12 +72,22 @@ class Bm25Retriever
                 1.0 * $this->bm25Field($queryVector, $bodyTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->text)) +
                 1.5 * $this->entityMatch($queryVector, $chunk);
 
+            if ($score <= 0.0) continue;
             $scored[] = ['chunk' => $chunk, 'score' => $score];
         }
 
         usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
-        $ranked = array_map(fn($s) => $s['chunk'], $scored);
+        return array_map(fn($s) => $s['chunk'], $scored);
+    }
 
+    /**
+     * @param WebChunk[] $chunks
+     * @return WebChunk[] ranked and diversity-filtered
+     */
+    public function rank(array $chunks, string $userQuestion, string $searchQuery, ?RetrievalPolicy $policy = null): array
+    {
+        $policy = $policy ?? RetrievalPolicy::default();
+        $ranked = $this->rankRaw($chunks, $userQuestion, $searchQuery);
         return $this->selectDiverseChunks($ranked, $policy);
     }
 
