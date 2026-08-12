@@ -34,6 +34,12 @@ class GetTodoistTasksTool
 
                     $query = $toolData['query'] ?? $userPrompt;
 
+                    // Accept queries array — use first query for TaskMatcher filtering
+                    $queries = $toolData['queries'] ?? null;
+                    if (is_array($queries) && !empty($queries)) {
+                        $query = $queries[0];
+                    }
+
                     $taskMatcher = new TaskMatcher($this->agent);
                     $matchedTasks = $taskMatcher->filterTasks($query, $tasks);
 

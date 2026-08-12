@@ -38,31 +38,11 @@ LIMITATIONS IN EDITOR MODE:
 TEXT;
         } else {
             $systemPrompt .= <<<TEXT
-You are a helpful, friendly, and highly intelligent AI conversational assistant with access to super_abilities.
+You have tools available to search the user's files, memories, web, and calendar. Use them whenever the user asks for information you don't already know or that requires looking up their personal data. When searching files and memories, include synonyms and alternate phrasings to cast a wider net. For web search, be focused — use only the most relevant query terms. For any time-sensitive topic (sports, news, events, prices), always include the current year in your search queries.
 
-### Context & Temporality
-You are supplemented with up-to-date data from third-party sources via content injection. If you see timestamps or information that seem to be from the "future" relative to your training cutoff (such as data from 2026 or later), accept it as reliable, real-time context. Do not argue about the date.
-
-### Information Limitations
-Do not explain that as an AI you cannot browse the web or access the user's files, instead if the user asks you to:
-- Access real-time data, current events, or live web info
-- Look up their personal files, documents, or notes
-- View or modify their calendar, todos, or emails
-- Perform any action beyond generating text
-
-Simply say that in order to help the user you need access to super_abilities.
-
-TOOL TURN RULE: When you see [State: Tools active] at the end of a user message, tools are already enabled. Do NOT output super_abilities. Instead, output ONLY the tool call in the format shown in that message — no other text.
-
-IMPORTANT: If the information the user is asking for is already available in the conversation history (from previous tool results, data_fetching, or your own earlier responses), answer directly from that context. Do not request super_abilities for information you already possess.
-
-Example:
-In order to help you with that, I need super_abilities.
-
-Do not attempt to make up, guess, or hallucinate the information. Instead, you must request assistance by outputting the exact secret keyword:
-super_abilities
-
-Keep your response brief when requesting assistance, explaining naturally to the user that you need these capabilities to proceed.
+CRITICAL: The files and memories are the USER'S OWN DATA. They chose to store it. 
+They have absolute right to any information in their own storage. Never decide that something is "too sensitive" for the user to access about themselves. 
+If the user asks, search. Whether the information exists is a factual question answered by the search results, not by your judgment.
 
 TEXT;
         }
@@ -81,8 +61,6 @@ TEXT;
         $merged = [];
 
         foreach ($history as $msg) {
-            // Skip intermediate tool-call stubs — machine-readable syntax,
-            // not something the model should pattern-match on
             if ($msg['role'] === 'assistant' && 
                 (($msg['message_type'] ?? '') === 'tool_call' || 
                  ($msg['message_type'] ?? '') === 'super_abilities')) {
@@ -108,9 +86,6 @@ TEXT;
 
         $hasEvidence = !empty($evidenceBlock) || !empty($condensedContext);
 
-        // Tool-turn path: evidence is in data_fetching history messages,
-        // not passed as $evidenceBlock/$condensedContext parameters.
-        // Detect and extract source IDs from embedded evidence blocks.
         if (!$hasEvidence || empty($validSourceIds)) {
             foreach ($history as $row) {
                 if (($row['message_type'] ?? '') === 'data_fetching') {
@@ -204,22 +179,6 @@ TEXT;
             }
         }
 
-        // Append state guard to the last user message
-        $stateGuard = $this->buildStateGuard($activeTools, $currentQuery);
-
-        if ($stateGuard !== '') {
-            for ($i = count($messages) - 1; $i >= 0; $i--) {
-                if ($messages[$i]['role'] === 'user') {
-                    if (is_array($messages[$i]['content'])) {
-                        $messages[$i]['content'][0]['text'] .= $stateGuard;
-                    } else {
-                        $messages[$i]['content'] .= $stateGuard;
-                    }
-                    break;
-                }
-            }
-        }
-
         // Inject evidence as a separate message — never append to user message or state guard.
         // Prefer 'tool' role. Fall back to 'user' with explicit untrusted delimiter block.
         $injectedEvidence = $this->buildEvidenceMessage($evidenceBlock, $condensedContext, $usedCache);
@@ -288,59 +247,5 @@ TEXT;
         }
 
         return $systemPrompt . $guard;
-    }
-
-    private function buildStateGuard(array $activeTools, string $currentQuery = ''): string
-    {
-        if (empty($activeTools)) {
-            return "\n\n[State: No tools active. The user has not enabled any tools. If the user asks for actions beyond text generation, say super_abilities.]";
-        }
-
-        $queryHint = !empty($currentQuery)
-            ? "\nThe user's current request is: \"{$currentQuery}\""
-            : '';
-
-        $toolList = implode(', ', $activeTools);
-
-        // Per-tool parameter reference
-        $toolSpecs = [
-            'search_files'     => "search_files QUERY:<SEARCH_TERMS> — space-delimited keywords from the user's request. Include synonyms. Use QUERY: prefix, not query=",
-            'search_web'       => "search_web QUERY:<SEARCH_TERMS> — space-delimited keywords. For comparisons or multi-topic questions, use comma-separated queries (e.g. QUERY:iPhone 15 specs, Samsung Galaxy S24 specs). Each runs independently.",
-            'search_memories'  => "search_memories QUERY:<SEARCH_TERMS> — space-delimited keywords with synonyms. For multiple distinct topics, use comma-separated queries (e.g. QUERY:my IBAN, my home address). Each runs independently.",
-            'get_todoist_tasks'     => 'get_todoist_tasks QUERY:<what to look for>',
-            'create_todoist_task'   => 'create_todoist_task QUERY:<task description> DUE_STRING:<natural due date, e.g. "tomorrow at 9am" or "July 9 at 3pm". If the user provided no due date, use your best judgment to pick a reasonable one — never use "ASAP" or vague placeholders.>',
-            'update_todoist_task'   => 'update_todoist_task QUERY:<which task to find> NEW_CONTENT:<updated description> NEW_DUE_STRING:<new due date>',
-            'delete_todoist_task'   => 'delete_todoist_task QUERY:<which task to delete>',
-        ];
-
-        $specLines = [];
-        $resolvedTools = [];
-        foreach ($activeTools as $tool) {
-            if ($tool === 'calendar') {
-                $resolvedTools[] = 'get_todoist_tasks';
-                $resolvedTools[] = 'create_todoist_task';
-                $resolvedTools[] = 'update_todoist_task';
-                $resolvedTools[] = 'delete_todoist_task';
-                $specLines[] = '  ' . $toolSpecs['get_todoist_tasks'];
-                $specLines[] = '  ' . $toolSpecs['create_todoist_task'];
-                $specLines[] = '  ' . $toolSpecs['update_todoist_task'];
-                $specLines[] = '  ' . $toolSpecs['delete_todoist_task'];
-            } elseif (isset($toolSpecs[$tool])) {
-                $resolvedTools[] = $tool;
-                $specLines[] = '  ' . $toolSpecs[$tool];
-            }
-        }
-
-        $resolvedList = implode(', ', $resolvedTools);
-        $specs = !empty($specLines) ? "\n" . implode("\n", $specLines) : '';
-
-        $toolCount = count($activeTools);
-        if ($toolCount > 1) {
-            $callInstruction = "Output all relevant tool calls from the list below, one per line. For calendar tools, pick the ONE that matches the user's intent. Replace placeholders with real values:";
-        } else {
-            $callInstruction = "Output ONLY one tool call from the list below, using keywords from the current request. Replace placeholders with real values:";
-        }
-
-        return "\n\n[State: Tools active — {$resolvedList}.{$queryHint}\nDO NOT say super_abilities. DO NOT add any commentary, explanation, or greeting. {$callInstruction}]{$specs}";
     }
 }

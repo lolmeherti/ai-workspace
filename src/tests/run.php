@@ -8,7 +8,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once __DIR__ . '/ParserTest.php';
 require_once __DIR__ . '/MessageAssemblyTest.php';
 require_once __DIR__ . '/ThoughtExtractionTest.php';
 require_once __DIR__ . '/MultiQueryTest.php';
@@ -17,8 +16,6 @@ require_once __DIR__ . '/SearchPipelineTest.php';
 use App\Config;
 use App\Database;
 use App\AgentManager;
-use App\Services\ToolExecutionService;
-use App\Tests\ParserTest;
 use App\Tests\MessageAssemblyTest;
 use App\Tests\ThoughtExtractionTest;
 use App\Tests\MultiQueryTest;
@@ -36,23 +33,19 @@ try {
 }
 
 $agent = new AgentManager();
-$service = new ToolExecutionService($db, $agent, __DIR__ . '/../uploads/');
 
 $allOk = true;
 
-echo "=== Phase 1: Parser Tests ===\n";
-$allOk = (new ParserTest($service))->run() && $allOk;
-
-echo "\n=== Phase 2: Message Assembly Tests ===\n";
+echo "=== Phase 1: Message Assembly Tests ===\n";
 $allOk = (new MessageAssemblyTest($db, $agent, __DIR__ . '/../uploads/'))->run() && $allOk;
 
-echo "\n=== Phase 3: Thought Extraction Tests ===\n";
+echo "\n=== Phase 2: Thought Extraction Tests ===\n";
 $allOk = (new ThoughtExtractionTest())->run() && $allOk;
 
-echo "\n=== Phase 4: Multi-Query Tests ===\n";
+echo "\n=== Phase 3: Multi-Query Tests ===\n";
 $allOk = (new MultiQueryTest())->run() && $allOk;
 
-echo "\n=== Phase 5: Search Pipeline Tests ===\n";
+echo "\n=== Phase 4: Search Pipeline Tests ===\n";
 $allOk = (new SearchPipelineTest($db, $agent, __DIR__ . '/../uploads/'))->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";

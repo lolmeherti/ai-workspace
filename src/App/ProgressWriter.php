@@ -25,11 +25,15 @@ class ProgressWriter
         return self::$dir !== '';
     }
 
-    public static function write(int $sessionId, string $event, string $label, string $color = 'slate'): void
+    public static function write(int $sessionId, string $event, string $label, string $color = 'slate', string $url = ''): void
     {
         if (empty(self::$dir)) return;
 
-        $line = json_encode(compact('event', 'label', 'color'));
+        $payload = compact('event', 'label', 'color');
+        if ($url !== '') {
+            $payload['url'] = $url;
+        }
+        $line = json_encode($payload);
         if ($line === false) {
             Logger::logEvent('progress_json_failed', "json_encode failed for event={$event}", [], 'error', 'ProgressWriter');
             return;

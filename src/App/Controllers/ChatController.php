@@ -125,6 +125,11 @@ class ChatController extends BaseController
             return;
         }
 
+        if ($action === Action::TOOL_APPROVE) {
+            (new ToolApprovalAction($this->db, $this->agentManager, $this->memoryExtractor))->execute();
+            return;
+        }
+
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
         $imageFile = $_FILES['file'] ?? $_FILES['image'] ?? null;

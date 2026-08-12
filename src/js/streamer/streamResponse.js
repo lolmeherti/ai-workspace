@@ -8,7 +8,6 @@ import { showCondensationModal, updateTokenCounter } from '../ui.js';
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
-import { renderSuperAbilitiesCard } from '../chat/superAbilitiesCard.js';
 
 class TypewriterEffect {
     constructor(targetEl, peekEl) {
@@ -386,9 +385,22 @@ export async function streamResponse(formData, originalMessage) {
                             const toolLabel = data.label || data.tool;
                             setActiveTask(`Executing \u2014 ${toolLabel}`, 'slate');
 
+                            const icons = {
+                                search_web:      '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+                                search_local:    '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+                                search_calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+                            };
+                            const spec = {
+                                search_web:      { bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/40', accent: 'bg-sky-400' },
+                                search_local:    { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/40', accent: 'bg-cyan-400' },
+                                search_calendar: { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/40', accent: 'bg-amber-400' },
+                            };
+                            const s = spec[data.tool] || { bg: 'bg-slate-500/10', text: 'text-slate-300', border: 'border-slate-500/30', accent: 'bg-slate-400' };
+                            const icon = icons[data.tool] || '<circle cx="12" cy="12" r="10"/>';
+
                             const badge = document.createElement('span');
-                            badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
-                            badge.innerHTML = `<uk-icon icon="code" class="w-3 h-3"></uk-icon> ${data.tool}`;
+                            badge.className = `text-[0.7rem] px-2.5 py-0.5 rounded-md ${s.bg} ${s.text} border ${s.border} flex items-center gap-1.5 font-medium tracking-tight`;
+                            badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${s.accent} shadow-[0_0_6px_currentColor]"></span><svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>${data.tool}`;
                             aiLabelContainer.appendChild(badge);
                         }
 
@@ -461,19 +473,6 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'status') {
                             loadingText.textContent = data.text;
-                        }
-
-                        if (event === 'super_abilities_requested') {
-                            state.isGenerating = false;
-                            if (loadingIndicator && loadingIndicator.parentNode) {
-                                loadingIndicator.remove();
-                            }
-                            aiBubble.classList.add('parsed');
-                            traceAccordion.open = false;
-                            if (tracePulseDot) tracePulseDot.classList.add('hidden');
-                            renderSuperAbilitiesCard(data.session_id, data.query, aiBubble);
-                            scrollIfStuck(chatWindow);
-                            return;
                         }
 
                         if (event === 'file_choices') {
@@ -621,7 +620,7 @@ export async function streamResponse(formData, originalMessage) {
                                     htmlContent = window.parseInlineFiles(htmlContent);
                                 }
 
-                                const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">▍</span>';
+                                const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u258d</span>';
                                 
                                 textContainer.innerHTML = htmlContent + cursorHtml;
                                 textContainer.querySelectorAll('pre code').forEach((block) => {
@@ -643,6 +642,39 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.animate-pulse');
                             if (cursor) cursor.remove();
+
+                            // Tool-call detection: scan full text for tool syntax (including multi-line)
+                            // Strip code fences first, then scan remaining text
+                            const noFences = markdownBuffer.replace(/```[\s\S]*?```/g, '');
+                            const toolPattern = /search_(local|web|calendar)\s*\(\s*queries[:=]\s*(.+?)\)/gs;
+                            const detectedActions = [];
+                            let match;
+                            while ((match = toolPattern.exec(noFences)) !== null) {
+                                detectedActions.push({
+                                    tool: `search_${match[1]}`,
+                                    queries: match[2].split(',').map(s => s.trim()).filter(s => s.length > 0)
+                                });
+                            }
+
+                            if (detectedActions.length > 0) {
+                                state.isGenerating = false;
+                                if (loadingIndicator && loadingIndicator.parentNode) {
+                                    loadingIndicator.remove();
+                                }
+                                aiBubble.classList.add('parsed');
+                                traceAccordion.open = false;
+                                if (tracePulseDot) tracePulseDot.classList.add('hidden');
+
+                                const lockOverlay = document.getElementById('editor-lock-overlay');
+                                if (lockOverlay) {
+                                    lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
+                                    lockOverlay.classList.add('opacity-0', 'pointer-events-none');
+                                }
+
+                                renderToolApprovalCard(data.session_id, detectedActions, aiBubble, markdownBuffer, textContainer);
+                                scrollIfStuck(chatWindow);
+                                return;
+                            }
 
                             if (window.activeEditFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {
                                 const re = /<update id="([^"]+)">([\s\S]*?)<\/update>/g;
@@ -749,294 +781,4 @@ function renderThinkingContent(container, text) {
     const html = marked.parse(text);
     container.innerHTML = html;
     container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-}
-
-export async function streamIntoBubble(aiBubble, formData, cardElement) {
-    const textContainer = aiBubble.querySelector('.streaming-text-container');
-    if (!textContainer) return;
-
-    const sessionId = formData.get('session_id');
-
-    state.isGenerating = true;
-    let markdownBuffer = textContainer.getAttribute('data-prior-text') || '';
-
-    if (cardElement) {
-        cardElement.remove();
-    }
-
-    // --- Trace accordion ---
-    let traceAccordion = aiBubble.querySelector('.trace-accordion');
-    if (!traceAccordion) {
-        const traceHtml = `
-            <style>
-                @keyframes trace-scan { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-                @keyframes trace-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-                @keyframes trace-fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-                .trace-active-task { animation: trace-fadein 0.2s ease-out; }
-                .trace-active-task .trace-scan-overlay { background: linear-gradient(90deg, transparent 0%, rgba(16,185,129,0.08) 45%, rgba(16,185,129,0.15) 50%, rgba(16,185,129,0.08) 55%, transparent 100%); background-size: 200% 100%; animation: trace-scan 2s linear infinite; }
-                .trace-cursor { animation: trace-blink 1s step-end infinite; }
-            </style>
-            <details class="trace-accordion group mb-3 w-full rounded-xl border border-emerald-500/15 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_20px_rgba(16,185,129,0.04),inset_0_1px_0_rgba(16,185,129,0.03)] transition-all duration-300" open>
-                <summary class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none bg-gradient-to-r from-emerald-500/5 via-emerald-500/3 to-transparent hover:from-emerald-500/10 hover:via-emerald-500/5 transition-all duration-200 rounded-t-xl">
-                    <span class="flex items-center gap-2 text-[0.7rem] text-emerald-400/80 font-semibold tracking-wider uppercase">
-                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        <span class="trace-label">Execution Trace</span>
-                        <span class="flex h-1.5 w-1.5 relative trace-pulse-dot">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.8)]"></span>
-                        </span>
-                        <span class="trace-step-counter text-emerald-500/60"></span>
-                    </span>
-                    <svg class="w-3.5 h-3.5 text-emerald-500/50 transition-transform duration-300 group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-                </summary>
-                <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
-                    <div class="trace-active-task hidden mb-2 px-2 py-1.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 font-mono text-[0.7rem] relative overflow-hidden flex items-center">
-                        <div class="trace-scan-overlay absolute inset-0 pointer-events-none"></div>
-                        <span class="uk-spinner uk-spinner-sm animate-spin text-emerald-400 shrink-0 mr-1.5 trace-spinner" uk-spinner="ratio:0.6"></span>
-                        <span class="trace-active-check mr-1.5 text-emerald-400 hidden">\u2713</span>
-                        <span class="trace-active-label text-emerald-300/90"></span>
-                        <span class="trace-cursor text-emerald-400 ml-0.5">\u2588</span>
-                    </div>
-                    <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono"></div>
-                </div>
-            </details>`;
-        textContainer.insertAdjacentHTML('beforebegin', traceHtml);
-        traceAccordion = aiBubble.querySelector('.trace-accordion');
-    } else {
-        traceAccordion.open = true;
-    }
-
-    const traceContent = traceAccordion.querySelector('.trace-content');
-    const traceActiveTask = traceAccordion.querySelector('.trace-active-task');
-    const traceActiveLabel = traceAccordion.querySelector('.trace-active-label');
-    const traceSpinner = traceAccordion.querySelector('.trace-spinner');
-    const traceActiveCheck = traceAccordion.querySelector('.trace-active-check');
-    const traceCursor = traceAccordion.querySelector('.trace-cursor');
-    const traceScanOverlay = traceAccordion.querySelector('.trace-scan-overlay');
-    let traceStepCount = 0;
-    const traceStepCounter = traceAccordion.querySelector('.trace-step-counter');
-    const tracePulseDot = traceAccordion.querySelector('.trace-pulse-dot');
-    let activeTaskKey = null;
-
-    const TRACE_COLORS = {
-        cyan:    { text: 'text-cyan-400',    accent: 'bg-cyan-500/50',   icon: 'text-cyan-400' },
-        blue:    { text: 'text-blue-400',    accent: 'bg-blue-500/50',   icon: 'text-blue-400' },
-        amber:   { text: 'text-amber-400',   accent: 'bg-amber-500/50',  icon: 'text-amber-400' },
-        emerald: { text: 'text-emerald-400', accent: 'bg-emerald-500/50',icon: 'text-emerald-400' },
-        indigo:  { text: 'text-indigo-400',  accent: 'bg-indigo-500/50', icon: 'text-indigo-400' },
-        rose:    { text: 'text-rose-400',    accent: 'bg-rose-500/50',   icon: 'text-rose-400' },
-        slate:   { text: 'text-slate-300',   accent: 'bg-slate-500/40',  icon: 'text-slate-400' },
-    };
-
-    function setActiveTask(label, color = 'slate') {
-        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
-        traceActiveTask.classList.remove('hidden');
-        traceActiveTask.className = traceActiveTask.className.replace(/bg-\w+-\d+\/\d+/g, `bg-${color === 'slate' ? 'slate' : color}-500/5`);
-        traceActiveTask.className = traceActiveTask.className.replace(/border-\w+-\d+\/\d+/g, `border-${color === 'slate' ? 'slate' : color}-500/20`);
-        traceActiveLabel.className = `trace-active-label ${c.text}`;
-        traceActiveLabel.textContent = label;
-        // pending state: spinner on, checkmark hidden, cursor + scan visible
-        if (traceSpinner) { traceSpinner.classList.remove('hidden'); traceSpinner.classList.add('animate-spin'); }
-        if (traceActiveCheck) traceActiveCheck.classList.add('hidden');
-        if (traceCursor) traceCursor.classList.remove('hidden');
-        if (traceScanOverlay) traceScanOverlay.style.display = '';
-        // restart fade-in animation
-        traceActiveTask.style.animation = 'none';
-        traceActiveTask.offsetHeight;
-        traceActiveTask.style.animation = '';
-        activeTaskKey = label;
-    }
-
-    function completeActiveTask() {
-        if (traceActiveTask.classList.contains('hidden')) return;
-        // spinner → checkmark, hide cursor + scan
-        if (traceSpinner) traceSpinner.classList.add('hidden');
-        if (traceActiveCheck) traceActiveCheck.classList.remove('hidden');
-        if (traceCursor) traceCursor.classList.add('hidden');
-        if (traceScanOverlay) traceScanOverlay.style.display = 'none';
-        traceActiveLabel.className = 'trace-active-label text-emerald-300/90';
-    }
-
-    function addTraceEntry(label, color = 'slate') {
-        const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
-        const row = document.createElement('div');
-        row.className = 'flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150';
-        row.innerHTML = `<span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span><span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u2713 ${label}</span>`;
-        traceContent.appendChild(row);
-        traceStepCount++;
-        if (traceStepCounter) traceStepCounter.textContent = `${traceStepCount} step${traceStepCount !== 1 ? 's' : ''}`;
-    }
-
-    // --- Progress endpoint ---
-    let progressSource = null;
-    let progressEventCount = 0;
-    if (sessionId && sessionId !== '0') {
-        addTraceEntry(`Progress session: ${sessionId}`, 'slate');
-        progressSource = new EventSource('/progress.php?session=' + sessionId);
-        progressSource.addEventListener('message', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                progressEventCount++;
-                console.log('[progress]', data.event, data.label, `(#${progressEventCount})`);
-                if (data.event === 'done') {
-                    console.log('[progress] done — closing');
-                    completeActiveTask();
-                    progressSource.close();
-                    if (tracePulseDot) tracePulseDot.classList.add('hidden');
-                    return;
-                }
-                if (data.event === 'ready') return;
-
-                // In-progress: set as active task with animation
-                if (data.event === 'tool_start' || data.event === 'search_querying' || data.event === 'scraping_start' || data.event === 'condensing') {
-                    console.log('[progress] setActiveTask →', data.label);
-                    setActiveTask(data.label, data.color || 'slate');
-                    return;
-                }
-
-                // Completion: freeze active bar with checkmark, then log
-                if (data.event === 'tool_done' || data.event === 'search_done' || data.event === 'scraping_done') {
-                    console.log('[progress] completeActiveTask ←', data.label);
-                    completeActiveTask();
-                    addTraceEntry(data.label, data.color || 'emerald');
-                    return;
-                }
-
-                // Other events (no_results, cache_hit, etc.) — just trace
-                addTraceEntry(data.label, data.color || 'slate');
-            } catch (_) {}
-        });
-        progressSource.onerror = () => {
-            console.log('[progress] onerror — completing task');
-            completeActiveTask();
-            progressSource.close();
-        };
-    } else {
-        addTraceEntry("No session ID — progress unavailable", 'rose');
-    }
-
-    try {
-        const response = await fetch('index.php', {
-            method: 'POST',
-            headers: { 'Accept': 'text/event-stream' },
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            let lines = buffer.split("\n\n");
-            buffer = lines.pop();
-
-            for (let line of lines) {
-                if (line.startsWith('data: ')) {
-                    const payloadStr = line.substring(6);
-                    try {
-                        const payload = JSON.parse(payloadStr);
-                        const event = payload.event;
-                        const data = payload.data;
-
-                        if (event === 'token') {
-                            markdownBuffer += data.chunk;
-
-                            let htmlContent = marked.parse(markdownBuffer);
-                            htmlContent = cleanAssistantStreamText(htmlContent);
-
-                            if (window.parseInlineFiles) {
-                                htmlContent = window.parseInlineFiles(htmlContent);
-                            }
-
-                            const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u25cd</span>';
-                            textContainer.innerHTML = htmlContent + cursorHtml;
-                            textContainer.querySelectorAll('pre code').forEach((block) => {
-                                hljs.highlightElement(block);
-                            });
-
-                            const chatWindow = document.getElementById('chatWindow');
-                            scrollIfStuck(chatWindow);
-                        }
-
-                        if (event === 'file_choices') {
-                            let fcContainer = aiBubble.querySelector('.file-choices-placeholder-container');
-                            if (!fcContainer) {
-                                fcContainer = document.createElement('div');
-                                fcContainer.className = 'file-choices-placeholder-container w-full';
-                                const textContainer = aiBubble.querySelector('.streaming-text-container');
-                                if (textContainer) {
-                                    textContainer.parentNode.insertBefore(fcContainer, textContainer);
-                                } else {
-                                    aiBubble.appendChild(fcContainer);
-                                }
-                            }
-                            const chatWindow = document.getElementById('chatWindow');
-                            renderFileChoices(data, fcContainer, chatWindow);
-                        }
-
-                        if (event === 'context_assembled') {
-                            let ctxParts = [];
-                            if (data.has_search_context) {
-                                ctxParts.push('web results');
-                            }
-                            const memoryNote = data.message_count > 0
-                                ? `${data.message_count} prior messages`
-                                : 'new conversation';
-                            ctxParts.push(memoryNote);
-                            addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
-                        }
-
-                        if (event === 'done') {
-                            const cursor = textContainer.querySelector('.animate-pulse');
-                            if (cursor) cursor.remove();
-
-                            if (!markdownBuffer && data.message) {
-                                let htmlContent = marked.parse(data.message);
-                                htmlContent = cleanAssistantStreamText(htmlContent);
-                                if (window.parseInlineFiles) {
-                                    htmlContent = window.parseInlineFiles(htmlContent);
-                                }
-                                textContainer.innerHTML = htmlContent;
-                                textContainer.querySelectorAll('pre code').forEach((block) => {
-                                    hljs.highlightElement(block);
-                                });
-                            }
-
-                            if (data.session_id) {
-                                const sessionIdInputs = document.querySelectorAll('input[name=session_id]');
-                                sessionIdInputs.forEach(input => {
-                                    input.value = data.session_id;
-                                });
-                            }
-
-                            traceAccordion.open = false;
-                            if (tracePulseDot) tracePulseDot.classList.add('hidden');
-                            const chatWindow = document.getElementById('chatWindow');
-                            scrollIfStuck(chatWindow);
-                        }
-
-                    } catch (e) {}
-                }
-            }
-        }
-
-    } catch (error) {
-        console.error("Stream Error:", error);
-    } finally {
-        state.isGenerating = false;
-        if (progressSource) progressSource.close();
-        const lockOverlay = document.getElementById('editor-lock-overlay');
-        if (lockOverlay) {
-            lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
-            lockOverlay.classList.add('opacity-0', 'pointer-events-none');
-        }
-    }
 }
