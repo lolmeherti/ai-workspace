@@ -408,53 +408,6 @@ export async function streamResponse(formData, originalMessage) {
                             addTraceEntry(`No usable web results for: \u201c${truncated}\u201d`, 'rose');
                         }
 
-                        if (event === 'cache_used') {
-                            const badge = document.createElement('span');
-                            badge.className = "text-[0.65rem] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm";
-                            badge.innerHTML = '<uk-icon icon="zap" class="w-3 h-3"></uk-icon> Memory Cached';
-                            aiLabelContainer.appendChild(badge);
-
-                            addTraceEntry('Memory cache matched \u2014 serving cached results', 'amber');
-                        }
-
-                        if (event === 'ask_user') {
-                            state.isGenerating = false;
-                            aiWrapper.remove();
-
-                            const tplAsk = document.getElementById('tpl-ask-user');
-                            const askNode = tplAsk.content.cloneNode(true);
-                            const askWrapper = askNode.querySelector('.cache-prompt-bubble');
-
-                            askNode.querySelector('.ask-topic').textContent = `"${data.query_text}"`;
-
-                            const btnUse = askNode.querySelector('.btn-use-cache');
-                            const btnForce = askNode.querySelector('.btn-force-live');
- 
-                            btnUse.onclick = function() {
-                                askWrapper.remove();
-                                const newForm = new FormData();
-                                newForm.append('session_id', data.session_id);
-                                newForm.append('q', originalMessage);
-                                newForm.append('cache_action', 'use_cache');
-                                newForm.append('cache_key', data.cache_key);
-                                streamResponse(newForm, originalMessage);
-                            };
-
-                            btnForce.onclick = function() {
-                                askWrapper.remove();
-                                const newForm = new FormData();
-                                newForm.append('session_id', data.session_id);
-                                newForm.append('q', originalMessage);
-                                newForm.append('cache_action', 'force_live');
-                                newForm.append('cache_key', data.cache_key);
-                                streamResponse(newForm, originalMessage);
-                            };
-
-                            chatWindow.appendChild(askNode);
-                            scrollIfStuck(chatWindow);
-                            return;
-                        }
-
                         if (event === 'scraping_start') {
                             loadingText.textContent = "Extracting knowledge...";
                             scrapingContainer.classList.remove('hidden');
@@ -496,7 +449,7 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'context_assembled') {
                             let ctxParts = [];
                             if (data.has_search_context) {
-                                ctxParts.push(data.used_cache ? 'cached web results' : 'fresh web results');
+                                ctxParts.push('web results');
                             }
                             const memoryNote = data.message_count > 0
                                 ? `${data.message_count} prior messages`
@@ -1032,7 +985,7 @@ export async function streamIntoBubble(aiBubble, formData, cardElement) {
                         if (event === 'context_assembled') {
                             let ctxParts = [];
                             if (data.has_search_context) {
-                                ctxParts.push(data.used_cache ? 'cached web results' : 'fresh web results');
+                                ctxParts.push('web results');
                             }
                             const memoryNote = data.message_count > 0
                                 ? `${data.message_count} prior messages`

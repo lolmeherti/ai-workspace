@@ -255,33 +255,6 @@
             </div>
         </div>
     </template>
-
-    <template id="tpl-ask-user">
-        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-start mb-4 cache-prompt-bubble">
-            <div class="flex items-center gap-2 ml-1">
-                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
-                    System Cache Routing
-                    <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
-                        <uk-icon icon="help-circle" class="w-3 h-3"></uk-icon> Action Required
-                    </span>
-                </span>
-            </div>
-            <div class="chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.15)] relative overflow-hidden flex flex-col items-stretch">
-                <div class="absolute inset-0 bg-indigo-900/10 z-0"></div>
-                <div class="relative z-10 flex flex-col items-stretch">
-                    <p class="mb-4 text-slate-200">I have compiled notes on a highly relevant topic recently: <br><em class="text-white font-medium ask-topic"></em></p>
-                    <div class="flex flex-wrap gap-3 mt-4">
-                        <button type="button" class="btn-use-cache bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-md text-sm transition-colors border border-indigo-400/50 flex items-center gap-2 font-medium">
-                            <uk-icon icon="zap" class="w-4 h-4"></uk-icon> Fetch from Memory (Instant)
-                        </button>
-                        <button type="button" class="btn-force-live bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-lg shadow text-sm transition-colors border border-slate-600 flex items-center gap-2">
-                            <uk-icon icon="globe" class="w-4 h-4"></uk-icon> Force Live Search (Slower)
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </template>
 </section>
 
 <script type="module" src="js/chat/chatWindowBootstrap.js"></script>

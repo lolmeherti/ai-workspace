@@ -36,11 +36,11 @@ Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB
 - **Core**: `AgentManager.php` — wraps llama.cpp API calls (OpenAI-compatible chat endpoint at `http://host.docker.internal:1234/v1`). Supports streaming + non-streaming responses.
 - **Agents** (`src/App/Agents/`): specialized reasoning modules:
   - `MemoryExtractor.php`, `MemorySelector.php` — persistent memory management
-  - `SearchDecider.php`, `SemanticCacheEvaluator.php`, `TaskMatcher.php` — routing/intent logic
+  - `SearchDecider.php`, `TaskMatcher.php` — routing/intent logic
   - `SchedulingAgent.php`, `ContextCondenser.php`
 - **Controllers** (`src/App/Controllers/`): Chat, Email, File, Cache, AI Settings
 - **Actions** (`src/App/Actions/`): HTTP action handlers (chat stream, email list/send/reply, file search/upload/edit, todoist integration)
-- **Services**: `ToolExecutionService`, `PromptAssemblyService`, `WebSearchService`, `EmailService`
+- **Services**: `ToolExecutionService`, `PromptAssemblyService`, `EmailService`
 - **Tools**: Todoist create/delete/update tasks, search files, get email briefings
 - **Database**: MySQL 8.0 via PDO; schema in `src/App/Database/Schema.php`; repositories for chat sessions and memory
 
@@ -116,10 +116,7 @@ The Go launcher starts llama.cpp server on port 1234. PHP's `AgentManager.php` c
 
 ## Memory system architecture
 
-Three mechanisms handle different aspects of persistent knowledge, plus one for search caching:
-
-### SemanticCacheEvaluator (`src/App/Agents/SemanticCacheEvaluator.php`)
-Called on every request before web search. Analyzes current query against last 5 cached search results and makes a nuanced decision: AUTO_USE (cached content fully answers + time is still valid), ASK_USER (content matches but may be stale), or NONE (insufficient/stale). This requires actual LLM reasoning — simple vector similarity or BM25 cannot capture the temporal awareness (comparing current time vs cache age) and sufficiency checking (distinguishing "cached result partially answers query" from "fully answers it") that this call does.
+Three mechanisms handle different aspects of persistent knowledge:
 
 ### MemorySelector (`src/App/Agents/MemorySelector.php`)
 Called on every request via PromptAssemblyService.buildSystemPrompt(). Uses MySQL FULLTEXT search against cleaned user prompt + fallback to most recent memories, then sends all candidates (up to 500) through an LLM filter that returns relevant memory IDs. Note: this call happens per-request and may be redundant within a single conversation — consider caching results by recent-messages-hash when optimizing.

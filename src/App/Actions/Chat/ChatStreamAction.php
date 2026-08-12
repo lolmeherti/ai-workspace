@@ -37,7 +37,7 @@ class ChatStreamAction extends BaseAction
             $this->memoryExtractor
         );
 
-        $chatManager->process($sessionId, $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile, function ($event, $data) {
+        $chatManager->process($sessionId, $query, $imageFile, $activeEditFile, function ($event, $data) {
             $payload = json_encode(['event' => $event, 'data' => $data]);
             echo "data: {$payload}\n\n";
             @ob_flush();
