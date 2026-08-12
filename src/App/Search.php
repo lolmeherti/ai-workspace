@@ -91,7 +91,7 @@ class Search
 
     /**
      * Legacy method — query SearXNG and return plain URL strings.
-     * Kept for backward compat with existing SearchWebTool / WebSearchService.
+     * Kept for backward compat with existing SearchWebTool.
      *
      * @param string $query
      * @param int $limit

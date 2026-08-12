@@ -87,8 +87,6 @@ class ContextCondenser
                 'image_path' => null,
                 'token_estimate' => (int)(mb_strlen($formattedSummary) / 4),
                 'search_query' => null,
-                'cache_used' => 0,
-                'scraped_urls' => null
             ], ['id' => $oldestId]);
 
             $deleteIds = array_filter($archiveIds, fn($id) => $id !== $oldestId);

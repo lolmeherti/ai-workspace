@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Tests;
 
 use App\AgentManager;
-use App\Cache;
 use App\Database;
-use App\Agents\SemanticCacheEvaluator;
 use App\Scraper;
 use App\Services\Tools\SearchWebTool;
-use App\Services\Tools\TodoistApiClient;
 
 class SearchPipelineTest
 {
@@ -30,7 +27,6 @@ class SearchPipelineTest
     {
         $this->runCalculateScrapeBudget();
         $this->runScraperClean();
-        $this->runCacheRouting();
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);
@@ -250,180 +246,6 @@ class SearchPipelineTest
     }
 
     // ==================================================================
-    // Phase C: Cache evaluator routing (AUTO_USE / ASK_USER / guard)
-    // ==================================================================
-    private function runCacheRouting(): void
-    {
-        echo "\n=== Cache evaluator routing ===\n";
-
-        if ($this->db === null || $this->agent === null) {
-            echo "  SKIP: Database/AgentManager not injected (run via run.php for Phase C)\n";
-            return;
-        }
-
-        $testCacheKeys = [];
-        $testLedgerKeys = [];
-
-        try {
-
-        // Save real ledger, run tests against an isolated copy
-        $realLedger = Cache::getSearchLedger();
-        Cache::set('search_ledger', json_encode([]), 604800);
-
-        // Prevent live search from hitting SearXNG during tests
-        SearchWebTool::$testMode = true;
-
-        // Also clear any stale test cache keys from previous aborted runs
-        foreach ($realLedger as $entry) {
-            $ck = $entry['cache_key'] ?? '';
-            foreach (['ctx_hermes_', 'ctx_empty_', 'ctx_sem_', 'ctx_none_'] as $pfx) {
-                if (str_starts_with($ck, $pfx)) {
-                    Cache::delete($ck);
-                    break;
-                }
-            }
-        }
-
-        $emitLog = [];
-        $capture = function (string $event, array $data = []) use (&$emitLog): void {
-            $emitLog[] = compact('event', 'data');
-        };
-
-        // ── Unique suffixes to prevent ledger cross-contamination ──
-        $uid2 = 'hermes_lex_test_' . time();
-        $uid3 = 'hermes_empty_test_' . (time() + 1);
-        $uid4 = 'hermes_sem_test_' . (time() + 2);
-        $uid5 = 'hermes_none_test_' . (time() + 3);
-
-        // 1. Empty query → guard returns error message
-        $tool = $this->makeTool(null);
-        $emitLog = [];
-        $result = $tool->execute(['query' => ''], 1, [], $capture, '');
-        $this->testEq('empty query → error message', '[Web Search: No query provided.]', $result);
-
-        // 2. Lexical hit with content → AskUserPolicy AUTO_USE (fresh = low volatility)
-        $cacheKey = 'ctx_hermes_' . $uid2;
-        $testCacheKeys[] = $cacheKey;
-        $testLedgerKeys[] = $cacheKey;
-        Cache::set($cacheKey, 'CACHED CONTENT FOR TEST');
-        Cache::addToLedger($uid2, $cacheKey);
-        $tool = $this->makeTool(null);
-        $emitLog = [];
-        $result = $tool->execute(['query' => $uid2], 1, [], $capture, '');
-        $this->testEq('lexical hit + AUTO_USE → cached content', 'CACHED CONTENT FOR TEST', $result);
-        $this->testTrue('lexical hit: cache_used emitted', $this->emitted($emitLog, 'cache_used'));
-
-        // 3. Lexical hit with empty content → falls through to live search (testMode: placeholder)
-        $emptyKey = 'ctx_empty_' . $uid3;
-        $testLedgerKeys[] = $emptyKey;
-        Cache::addToLedger($uid3, $emptyKey);
-        $emitLog = [];
-        $result = $tool->execute(['query' => $uid3], 1, [], $capture, '');
-        $this->testContains('lexical hit empty content → live search placeholder', '[TEST_MODE', $result);
-
-        // 4. Lexical miss → semantic evaluator USE → AskUserPolicy → cached content
-        $semKey = 'ctx_sem_' . $uid4;
-        $testCacheKeys[] = $semKey;
-        $testLedgerKeys[] = $semKey;
-        Cache::set($semKey, 'SEMANTIC CACHED CONTENT');
-        Cache::addToLedger('sem_candidate_' . $uid4, $semKey);
-        $mockEval = $this->makeMockEval(['decision' => 'USE']);
-        $tool = $this->makeTool($mockEval);
-        $emitLog = [];
-        $result = $tool->execute(['query' => $uid4], 1, [], $capture, '');
-        $this->testEq('semantic USE + AUTO_USE → cached content', 'SEMANTIC CACHED CONTENT', $result);
-        $this->testTrue('semantic USE: cache_used emitted', $this->emitted($emitLog, 'cache_used'));
-
-        // 5. Lexical miss → semantic evaluator NONE → falls through (testMode: placeholder)
-        $noneKey = 'ctx_none_' . $uid5;
-        $testCacheKeys[] = $noneKey;
-        $testLedgerKeys[] = $noneKey;
-        Cache::set($noneKey, 'NONE CACHED CONTENT');
-        Cache::addToLedger('sem_candidate_' . $uid5, $noneKey);
-        $mockEval = $this->makeMockEval(null);
-        $tool = $this->makeTool($mockEval);
-        $emitLog = [];
-        $result = $tool->execute(['query' => $uid5], 1, [], $capture, '');
-        $this->testContains('semantic NONE → live search placeholder', '[TEST_MODE', $result);
-
-        // 6. Multi-query (comma-separated) → skips cache eval entirely (testMode: placeholder)
-        $mockEval = $this->makeMockEval(['decision' => 'USE']);
-        $tool = $this->makeTool($mockEval);
-        $emitLog = [];
-        $result = $tool->execute(['query' => 'a, b'], 1, [], $capture, '');
-        $this->testContains('multi-query → live search placeholder', '[TEST_MODE', $result);
-
-        } finally {
-            // Restore real ledger + clean test cache keys
-            SearchWebTool::$testMode = false;
-            foreach ($testCacheKeys as $key) {
-                @Cache::delete($key);
-            }
-            Cache::set('search_ledger', json_encode($realLedger), 604800);
-        }
-    }
-
-    // ==================================================================
-    // Phase C helpers
-    // ==================================================================
-
-    private function makeTool(?SemanticCacheEvaluator $evaluator): SearchWebTool
-    {
-        return new SearchWebTool(
-            $this->db,
-            $this->agent,
-            $this->uploadDir,
-            new TodoistApiClient(),
-            $evaluator
-        );
-    }
-
-    private function makeMockEval(?array $returnValue): SemanticCacheEvaluator
-    {
-        return new class($this->agent, $returnValue) extends SemanticCacheEvaluator {
-            private ?array $value;
-            public function __construct(AgentManager $agent, ?array $value)
-            {
-                parent::__construct($agent);
-                $this->value = $value;
-            }
-            public function evaluateCandidates(string $newQuery, array $candidates): array
-            {
-                if ($this->value === null) {
-                    return ['decision' => 'NONE', 'cache_key' => null];
-                }
-                $decision = $this->value['decision'] ?? 'NONE';
-                if ($decision === 'USE') {
-                    // Pick the first candidate's cache_key (only one entry in test ledger)
-                    $firstKey = array_key_first($candidates);
-                    return ['decision' => 'USE', 'cache_key' => $firstKey];
-                }
-                return ['decision' => 'NONE', 'cache_key' => null];
-            }
-        };
-    }
-
-    private function emitted(array $log, string $event): bool
-    {
-        foreach ($log as $entry) {
-            if ($entry['event'] === $event) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function emitData(array $log, string $event): array
-    {
-        foreach ($log as $entry) {
-            if ($entry['event'] === $event) {
-                return $entry['data'];
-            }
-        }
-        return [];
-    }
-
-    // ==================================================================
     // Shared helpers
     // ==================================================================
 
@@ -498,7 +320,7 @@ class SearchPipelineTest
             $this->failures[] = ['label' => $label, 'needle' => $needle, 'haystack_snippet' => mb_substr($haystack, 0, 80)];
             echo "  FAIL: {$label}\n";
             echo "    expected to contain: " . json_encode($needle) . "\n";
-            echo "    haystack start:      " . json_encode(mb_substr($haystack, 0, 80)) . "\n";
+            echo "    haystack snippet: " . json_encode(mb_substr($haystack, 0, 80)) . "\n";
         }
     }
 
@@ -509,9 +331,10 @@ class SearchPipelineTest
             echo "  PASS: {$label}\n";
         } else {
             $this->failed++;
-            $this->failures[] = ['label' => $label, 'unexpected_needle' => $needle];
+            $this->failures[] = ['label' => $label, 'needle' => $needle, 'haystack_snippet' => mb_substr($haystack, 0, 80)];
             echo "  FAIL: {$label}\n";
             echo "    should NOT contain: " . json_encode($needle) . "\n";
+            echo "    haystack snippet: " . json_encode(mb_substr($haystack, 0, 80)) . "\n";
         }
     }
 
@@ -524,6 +347,8 @@ class SearchPipelineTest
             $this->failed++;
             $this->failures[] = ['label' => $label, 'condition' => 'false'];
             echo "  FAIL: {$label}\n";
+            echo "    expected: true\n";
+            echo "    actual:   false\n";
         }
     }
 }

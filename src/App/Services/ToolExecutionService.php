@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Database;
 use App\AgentManager;
-use App\Agents\SemanticCacheEvaluator;
 use App\Enums\Tool;
 use App\Services\Tools\TodoistApiClient;
 use App\Services\Tools\SearchFilesTool;
@@ -49,7 +48,7 @@ class ToolExecutionService
         $this->todoist = new TodoistApiClient();
 
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
-        $this->searchWebTool = new SearchWebTool($db, $agent, $uploadDir, $this->todoist, new SemanticCacheEvaluator($agent));
+        $this->searchWebTool = new SearchWebTool($db, $agent, $uploadDir, $this->todoist);
         $this->createTodoistTaskTool = new CreateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);

@@ -4,7 +4,6 @@
  */
 
 import './tabsMemoryEdit.js';
-import './tabsQueryCache.js';
 import './tabsChatFilter.js';
 import { toggleStarSession } from './tabsChatStar.js';
 import { setChatFilter } from './tabsChatFilter.js';

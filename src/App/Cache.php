@@ -29,46 +29,9 @@ class Cache
     {
         self::getClient()->setex($key, $ttl, $value);
     }
-    
+
     public static function delete(string $key): void
     {
         self::getClient()->del($key);
-    }
-
-    public static function getSearchLedger(): array
-    {
-        $data = self::get('search_ledger');
-        if (!$data) {
-            return [];
-        }
-
-        $ledger = json_decode($data, true) ?: [];
-        $validLedger = [];
-        $sevenDaysAgo = time() - (7 * 86400);
-
-        foreach ($ledger as $item) {
-            if (isset($item['timestamp']) && $item['timestamp'] > $sevenDaysAgo) {
-                $validLedger[] = $item;
-            }
-        }
-
-        return $validLedger;
-    }
-
-    public static function addToLedger(string $query, string $cacheKey): void
-    {
-        $ledger = self::getSearchLedger();
-        
-        array_unshift($ledger, [
-            'query' => $query,
-            'cache_key' => $cacheKey,
-            'timestamp' => time(),
-            'human_time' => date('l, F j, Y g:i A'),
-            'fetched_at' => date('c'),
-        ]);
-
-        $ledger = array_slice($ledger, 0, 50);
-        
-        self::set('search_ledger', json_encode($ledger), 604800);
     }
 }

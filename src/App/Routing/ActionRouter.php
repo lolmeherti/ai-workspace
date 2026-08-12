@@ -8,7 +8,6 @@ use App\Controllers\ChatController;
 use App\Controllers\MemoryController;
 use App\Controllers\AISettingsController;
 use App\Controllers\FileController;
-use App\Controllers\CacheController;
 use App\Controllers\EmailController;
 use App\Enums\Action;
 use App\Enums\ApiAction;
@@ -78,11 +77,6 @@ class ActionRouter
                         $controller = new AISettingsController($this->db, $this->chatSessionRepository, $this->envEditor);
                         break;
 
-                    case Action::DELETE_QUERY:
-                    case Action::DELETE_MULTIPLE_QUERIES:
-                        $controller = new CacheController($this->status);
-                        break;
-
                     case Action::DELETE_FILES:
                         $controller = new FileController();
                         $controller->setDatabase($this->db);
@@ -102,9 +96,7 @@ class ActionRouter
                 $controller = new ChatController($this->db, $this->chatSessionRepository, $this->agentManager, $this->memoryExtractor, $this->status);
             }
         } else {
-            if ($apiAction === ApiAction::GET_CACHE) {
-                $controller = new CacheController($this->status);
-            } elseif ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
+            if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
                 $controller = new AISettingsController($this->db, $this->chatSessionRepository, $this->envEditor);
             } elseif ($apiAction === ApiAction::GET_EMAILS || $apiAction === ApiAction::GET_EMAIL_BODY) {
                 $controller = new EmailController($this->db);

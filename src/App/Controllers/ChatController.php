@@ -128,11 +128,9 @@ class ChatController extends BaseController
         $sessionId = (int)($_POST['session_id'] ?? 0);
         $query = $_POST['q'] ?? '';
         $imageFile = $_FILES['file'] ?? $_FILES['image'] ?? null;
-        $cacheAction = $_POST['cache_action'] ?? null;
-        $cacheKey = $_POST['cache_key'] ?? null;
         $activeEditFile = $_POST['active_edit_file'] ?? null;
 
-        if (empty($query) && empty($imageFile) && empty($cacheAction)) {
+        if (empty($query) && empty($imageFile)) {
             $this->jsonResponse(['status' => 'error', 'message' => 'Empty prompt.'], 400);
             return;
         }
@@ -146,6 +144,6 @@ class ChatController extends BaseController
         }
 
         (new ChatStreamAction($this->db, $this->agentManager, $this->memoryExtractor))
-            ->execute($sessionId, $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile);
+            ->execute($sessionId, $query, $imageFile, null, null, $activeEditFile);
     }
 }

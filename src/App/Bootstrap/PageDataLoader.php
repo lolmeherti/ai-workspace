@@ -4,7 +4,6 @@ namespace App\Bootstrap;
 
 use App\Repositories\MemoryRepository;
 use App\Repositories\ChatSessionRepository;
-use App\Cache;
 
 class PageDataLoader
 {
@@ -21,7 +20,6 @@ class PageDataLoader
         $totalSessionTokens = 0;
         $memories = [];
         $memoryCount = 0;
-        $queries = [];
 
         if ($db) {
             $sessions = $chatSessionRepository->getAllDesc();
@@ -44,13 +42,6 @@ class PageDataLoader
             }
         }
 
-        if ($status->redis) {
-            try {
-                $queries = Cache::getSearchLedger();
-            } catch (\Exception $e) {
-            }
-        }
-
         return compact(
             'sessions',
             'activeSessionTitle',
@@ -58,7 +49,6 @@ class PageDataLoader
             'totalSessionTokens',
             'memories',
             'memoryCount',
-            'queries'
         );
     }
 }

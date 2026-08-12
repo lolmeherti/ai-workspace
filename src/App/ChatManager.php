@@ -5,9 +5,7 @@ namespace App;
 use App\Database;
 use App\AgentManager;
 use App\Agents\MemoryExtractor;
-use App\Agents\SemanticCacheEvaluator;
 use App\Agents\ContextCondenser;
-use App\Cache;
 use App\Config;
 use App\Scraper;
 use App\Search;
@@ -15,7 +13,6 @@ use App\Search\CitationValidator;
 use App\Services\FileAttachmentService;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
-use App\Services\Tools\SearchWebTool;
 
 class ChatManager
 {
@@ -26,20 +23,17 @@ class ChatManager
     private ToolExecutionService $toolExecutionService;
     private string $uploadDir;
 
-    private ?SemanticCacheEvaluator $cacheEvaluator;
     private ?ContextCondenser $contextCondenserService;
 
     public function __construct(
         Database $db, 
         AgentManager $agent, 
         ?MemoryExtractor $memoryExtractor = null,
-        ?SemanticCacheEvaluator $cacheEvaluator = null,
         ?ContextCondenser $contextCondenser = null
     ) {
         $this->db = $db;
         $this->agent = $agent;
         $this->uploadDir = __DIR__ . '/../uploads/';
-        $this->cacheEvaluator = $cacheEvaluator;
         $this->contextCondenserService = $contextCondenser;
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
@@ -61,7 +55,7 @@ class ChatManager
         return $messages;
     }
 
-    public function process(int $sessionId, string $query, ?array $imageFile, ?string $cacheAction = null, ?string $cacheKeyToUse = null, ?string $activeEditFile = null, ?callable $streamCallback = null): array
+    public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?callable $streamCallback = null): array
     {
         \App\ProgressWriter::init('/tmp');
 
@@ -82,13 +76,11 @@ class ChatManager
         $emit('status', ['text' => 'Initializing...']);
 
         $bypassWarning = (int)($_POST['bypass_warning'] ?? 0);
-        if (empty($cacheAction)) {
-            if (!$this->checkTokenThreshold($sessionId, (bool)$bypassWarning, $emit)) {
-                return [
-                    'status' => 'warning',
-                    'message' => 'Token limit warning triggered'
-                ];
-            }
+        if (!$this->checkTokenThreshold($sessionId, (bool)$bypassWarning, $emit)) {
+            return [
+                'status' => 'warning',
+                'message' => 'Token limit warning triggered'
+            ];
         }
 
         $this->ensureSessionExists($sessionId);
@@ -120,7 +112,7 @@ class ChatManager
         // Silent emit for tool turns — suppress trace noise, only pass core stream events
         $silentEmit = function(string $event, array $data = []) use ($emit, $isToolTurn) {
             if ($isToolTurn) {
-                if (!in_array($event, ['token', 'reasoning', 'thought_complete', 'generating', 'done', 'super_abilities_requested', 'file_choices', 'status', 'ask_user'])) {
+                if (!in_array($event, ['token', 'reasoning', 'thought_complete', 'generating', 'done', 'super_abilities_requested', 'file_choices', 'status'])) {
                     return;
                 }
             }
@@ -129,7 +121,7 @@ class ChatManager
         $emit = $silentEmit;
 
         $imagePath = null;
-        if (!$isToolTurn && empty($cacheAction)) {
+        if (!$isToolTurn) {
             if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
                 $emit('status', ['text' => 'Processing attachment...']);
             }
@@ -145,11 +137,9 @@ class ChatManager
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
-        if (empty($cacheAction) && count($history) === 1) {
+        if (count($history) === 1) {
             $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
         }
-
-        $usedCache = false;
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
         $firstTool = $isToolTurn ? $activeTools : [];
@@ -162,37 +152,9 @@ class ChatManager
         $emit('context_assembled', [
             'message_count' => $contextMessageCount,
             'has_search_context' => false,
-            'used_cache' => false
         ]);
 
-        // Handle cache_action resubmits from ask_user card
-        // Evidence injected as separate untrusted-data message — never system role.
-        $validSourceIds = []; // populated by structured evidence pipeline in later phase
-        $evidenceBlock = '';
-        if ($cacheAction === 'use_cache' && !empty($cacheKeyToUse)) {
-            $cachedContent = Cache::get($cacheKeyToUse) ?? '';
-            if (!empty($cachedContent)) {
-                $evidenceBlock = $cachedContent;
-                $usedCache = true;
-            }
-        } elseif ($cacheAction === 'force_live') {
-            if ($this->contextCondenserService !== null) {
-                $result = SearchWebTool::liveSearch($query, $currentMessages, $emit, $this->contextCondenserService, $sessionId);
-                if (!empty($result['evidence']) && !str_starts_with($result['evidence'], 'Web search for')) {
-                    $evidenceBlock = $result['evidence'];
-                    $validSourceIds = $result['sourceIds'] ?? [];
-                }
-            }
-        }
-
-        if (!empty($evidenceBlock)) {
-            // Rebuild messages with evidence injected as proper untrusted block
-            $currentMessages = $this->promptAssemblyService->buildMessagesArray(
-                $systemPrompt, $history, $firstTool, '', $usedCache, $query,
-                $evidenceBlock, $validSourceIds
-            );
-            $currentMessages = $this->cleanMessagesArray($currentMessages);
-        }
+        $validSourceIds = [];
 
         $emit('generating', []);
 
@@ -239,8 +201,6 @@ class ChatManager
                         'message_type' => 'super_abilities',
                         'token_estimate' => (int)(mb_strlen($aiRawResponse) / 4),
                         'search_query' => null,
-                        'cache_used' => 0,
-                        'scraped_urls' => null
                     ]);
                     $emit('super_abilities_requested', [
                         'session_id' => $sessionId,
@@ -317,29 +277,6 @@ class ChatManager
                 'responseLen' => strlen($aiRawResponse),
                 'responsePreview' => substr($aiRawResponse, 0, 200),
             ]);
-
-            // Check for ASK_USER sentinel from cache evaluator
-            $askUser = false;
-            foreach ($toolResults as $item) {
-                if (str_starts_with($item['result'], '__ASK_USER__')) {
-                    $askUser = true;
-                    break;
-                }
-            }
-            if ($askUser) {
-                // Frontend card is already shown via ask_user SSE event.
-                // Don't save tool results — let the user decide cache vs live.
-                $emit('done', [
-                    'message' => '',
-                    'title' => $updatedTitle,
-                    'session_id' => $sessionId
-                ]);
-                return [
-                    'status' => 'success',
-                    'message' => '',
-                    'meta' => ['ask_user' => true]
-                ];
-            }
 
             if (!empty($toolResults)) {
                 // Save the tool-call response
@@ -460,8 +397,6 @@ class ChatManager
             'image_path' => null,
             'token_estimate' => $assistantTokens,
             'search_query' => null,
-            'cache_used' => $usedCache ? 1 : 0,
-            'scraped_urls' => !empty($scrapedUrls) ? json_encode($scrapedUrls) : null
         ]);
 
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
@@ -490,7 +425,6 @@ class ChatManager
             'meta' => [
                 'search_triggered' => false,
                 'search_query' => null,
-                'cache_used' => $usedCache
             ]
         ];
     }
