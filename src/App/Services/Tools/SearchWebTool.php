@@ -15,6 +15,8 @@ class SearchWebTool
     /** When true, doLiveSearch returns a placeholder instead of hitting SearXNG. */
     public static bool $testMode = false;
 
+    private array $lastSourceMap = [];
+
     private ContextCondenser $contextCondenser;
     private AgentManager $agent;
 
@@ -30,6 +32,8 @@ class SearchWebTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
+        $this->lastSourceMap = [];
+
         $rawQuery = $toolData['query'] ?? '';
         if (empty($rawQuery)) {
             return '[Web Search: No query provided.]';
@@ -72,7 +76,18 @@ class SearchWebTool
             return '[TEST_MODE: live search disabled]';
         }
         $result = self::liveSearch($searchQuery, $messages, $emit, $this->contextCondenser, $sessionId);
+        $this->lastSourceMap = array_merge($this->lastSourceMap, $result['sourceMap'] ?? []);
         return $result['evidence'] ?? '';
+    }
+
+    public function getLastSourceMap(): array
+    {
+        return $this->lastSourceMap;
+    }
+
+    public function resetSourceMap(): void
+    {
+        $this->lastSourceMap = [];
     }
 
     public static function liveSearch(string $searchQuery, array $messages, callable $emit, ContextCondenser $condenser, int $sessionId = 0): array
@@ -106,7 +121,7 @@ class SearchWebTool
 
     /**
      * Legacy condenser path — kept as fallback if SearchPipeline throws.
-     * @return array{evidence: string, sourceIds: string[]}
+     * @return array{evidence: string, sourceIds: string[], sourceMap: array<string, array{url:string,title:string,domain:string}>}
      */
     private static function liveSearchLegacy(string $searchQuery, array $messages, callable $emit, ContextCondenser $condenser, int $sessionId): array
     {
@@ -129,13 +144,22 @@ class SearchWebTool
         $perUrlTokens = self::calculateScrapeBudgetStatic($messages, count($scrapedUrls));
 
         $scrapedPages = [];
+        $sourceMap = [];
+        $sid = 0;
         foreach ($scrapedUrls as $url) {
             $shortUrl = strlen($url) > 60 ? substr($url, 0, 57) . '...' : $url;
             \App\ProgressWriter::write($sessionId, 'scraping_start', "Scraping {$shortUrl}", 'slate', $url);
             $pageText = Scraper::fetchAndClean($url, $perUrlTokens);
             \App\ProgressWriter::write($sessionId, 'scraping_done', "Scraped {$shortUrl}", 'emerald', $url);
             if (!empty(trim($pageText))) {
-                $scrapedPages[] = "[Source: {$url}]\n\n" . $pageText;
+                $sid++;
+                $domain = parse_url($url, PHP_URL_HOST) ?: $url;
+                $scrapedPages[] = "[Source: {$domain}]\n\n" . $pageText;
+                $sourceMap["S{$sid}"] = [
+                    'url'    => $url,
+                    'title'  => $domain,
+                    'domain' => $domain,
+                ];
             }
         }
 
@@ -157,7 +181,7 @@ class SearchWebTool
         \App\ProgressWriter::write($sessionId, 'search_done', 'Search complete', 'emerald');
 
         $evidence = $condensedContext ?: "Web search for '{$searchQuery}' completed but produced no useful summary.";
-        return ['evidence' => $evidence, 'sourceIds' => []];
+        return ['evidence' => $evidence, 'sourceIds' => array_keys($sourceMap), 'sourceMap' => $sourceMap];
     }
 
     private function calculateScrapeBudget(array $messages, int $urlCount): int

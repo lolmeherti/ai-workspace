@@ -6,27 +6,29 @@ final class CitationValidator
 {
     /**
      * Ensures answer only cites valid retrieved source IDs.
-     * Strips hallucinated IDs ([S4] when only S1, S2 exist).
-     *
-     * Does NOT detect missing citations, valid-but-incorrect citations,
-     * unsupported claims, or [S1] attached to an S2 fact — those remain
-     * prompt-enforced at the model level.
+     * Strips exact-known citations only — [S1], [S1-C4], [S1-C1, S3-C2], [S1, S2].
+     * Built from the actual valid IDs, so nothing else can be mis-stripped and no
+     * hallucinated ID survives.
      *
      * @param string $answer The model's final answer text
      * @param array<string> $validSourceIds e.g. ['S1', 'S2']
      */
     public function sanitizeCitations(string $answer, array $validSourceIds): string
     {
-        if (empty($validSourceIds)) {
-            return $answer;
+        if (!empty($validSourceIds)) {
+            $sorted = $validSourceIds;
+            usort($sorted, static fn($a, $b) => strlen($b) <=> strlen($a));
+            $ids = implode('|', array_map(static fn($id) => preg_quote($id, '/'), $sorted));
+
+            // Deterministic: strip exactly the retrieved IDs — [S1], [S1-C4], [S1-C1, S3-C2].
+            $pattern = '/\[(?:' . $ids . ')(?:-C\d+)?(?:\s*,\s*(?:' . $ids . ')(?:-C\d+)?)*\]/';
+            $answer = preg_replace($pattern, '', $answer);
         }
 
-        $validSet = array_flip($validSourceIds);
+        // Fallback: strip any residual citation-shaped token (hallucinated or stale IDs).
+        $answer = preg_replace('/\[S\d+(?:-C\d+)?(?:\s*,\s*S\d+(?:-C\d+)?)*\]/', '', $answer);
 
-        return preg_replace_callback('/\[(S\d+)\]/', function ($matches) use ($validSet) {
-            $sourceId = $matches[1];
-            return isset($validSet[$sourceId]) ? "[{$sourceId}]" : '';
-        }, $answer);
+        return $answer;
     }
 
     /**

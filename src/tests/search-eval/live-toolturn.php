@@ -35,7 +35,7 @@ $result = SearchWebTool::liveSearch($query, $messages, $emit, $condenser, 0);
 
 echo "evidence length: " . strlen($result['evidence'] ?? '') . "\n";
 echo "sourceIds:       " . implode(', ', $result['sourceIds'] ?? ['NONE']) . "\n";
-echo "sourceUrls:      " . count($result['sourceUrls'] ?? []) . " URLs\n";
+echo "sourceMap:       " . count($result['sourceMap'] ?? []) . " sources\n";
 $path1ok = !empty($result['sourceIds']);
 echo "Status: " . ($path1ok ? "OK — sourceIds present" : "BROKEN — no sourceIds") . "\n\n";
 

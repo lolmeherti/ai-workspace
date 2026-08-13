@@ -243,7 +243,9 @@ TEXT;
                       "- NEVER output any source ID that is not listed above.\n" .
                       "- Do not cite a source that does not support the claim.\n" .
                       "- When sources disagree, state the disagreement.\n" .
-                      "- If evidence is incomplete, say what is missing rather than guessing.\n";
+                      "- If evidence is incomplete, say what is missing rather than guessing.\n" .
+                      "- Output ONLY the [S#] markers inline after claims. Do NOT output a source\n" .
+                      "  list, references section, or any URLs — the system renders sources automatically.\n";
         }
 
         return $systemPrompt . $guard;

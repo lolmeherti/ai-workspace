@@ -61,7 +61,7 @@ try {
     $result = $pipeline->run($query, [], $emit);
     echo "Evidence: " . strlen($result['evidence'] ?? '') . " chars\n";
     echo "SourceIds: " . implode(', ', $result['sourceIds'] ?? ['NONE']) . "\n";
-    echo "SourceUrls: " . count($result['sourceUrls'] ?? []) . "\n";
+    echo "SourceMap: " . count($result['sourceMap'] ?? []) . "\n";
 } catch (\Throwable $e) {
     echo "THREW: " . get_class($e) . ": " . $e->getMessage() . "\n";
     echo "File: " . $e->getFile() . ":" . $e->getLine() . "\n";

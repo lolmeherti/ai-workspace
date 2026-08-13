@@ -44,7 +44,7 @@ final class SearchPipeline
      * Bridge connected → browser-based SERP + full page extraction.
      * Bridge disconnected → SearXNG snippets only (honest fallback).
      *
-     * @return array{evidence: string, sourceIds: string[], sourceUrls: string[]}
+     * @return array{evidence: string, sourceIds: string[], sourceMap: array<string, array{url:string,title:string,domain:string}>}
      */
     public function run(string $query, array $messages, callable $emit): array
     {
@@ -78,6 +78,7 @@ final class SearchPipeline
 
         $deduplicator = new CandidateDeduplicator();
         $candidates = $deduplicator->deduplicate($candidates);
+        $candidates = CandidateRanker::deprioritize($candidates);
 
         // ── Sequential fetch via bridge ──────────────────────────────
         $limit = (int) \App\Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
@@ -194,6 +195,16 @@ final class SearchPipeline
         }
         $sourceIds = array_values(array_unique($sourceIds));
 
+        $sourceMap = [];
+        foreach ($fit['chunks'] as $chunk) {
+            if (isset($sourceMap[$chunk->sourceId])) continue;
+            $sourceMap[$chunk->sourceId] = [
+                'url'    => $chunk->finalUrl ?: $chunk->url,
+                'title'  => $chunk->title,
+                'domain' => $chunk->domain,
+            ];
+        }
+
         \App\Logger::logEvent('bridge_evidence', 'Bridge evidence fitting complete', [
             'query' => $query,
             'total_chunks' => count($allChunks),
@@ -203,9 +214,9 @@ final class SearchPipeline
         ], 'info', 'SearchPipeline::runBridgeMode');
 
         return [
-            'evidence' => $fit['evidence'],
+            'evidence'  => $fit['evidence'],
             'sourceIds' => $sourceIds,
-            'sourceUrls' => $fetchedUrls,
+            'sourceMap' => $sourceMap,
         ];
     }
 
@@ -279,23 +290,35 @@ final class SearchPipeline
         $candidates = Search::queryCandidates($query, 12);
         if (empty($candidates)) {
             $this->emitProgress('search_no_results', "No results for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceUrls' => []];
+            return ['evidence' => '', 'sourceIds' => [], 'sourceMap' => []];
         }
 
         $deduplicator = new CandidateDeduplicator();
         $candidates = $deduplicator->deduplicate($candidates);
+        $candidates = CandidateRanker::deprioritize($candidates);
 
         $evidence = EvidenceBuilder::fromSnippets($candidates);
 
         if (empty($evidence)) {
             $this->emitProgress('search_no_results', "No usable content for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceUrls' => []];
+            return ['evidence' => '', 'sourceIds' => [], 'sourceMap' => []];
+        }
+
+        $sourceMap = [];
+        $i = 0;
+        foreach ($candidates as $c) {
+            $i++;
+            $sourceMap["S{$i}"] = [
+                'url'    => $c->url,
+                'title'  => $c->title ?: 'Untitled',
+                'domain' => $c->domain,
+            ];
         }
 
         return [
-            'evidence'   => $evidence,
-            'sourceIds'  => [],
-            'sourceUrls' => array_map(fn(Candidate $c) => $c->url, $candidates),
+            'evidence'  => $evidence,
+            'sourceIds' => array_keys($sourceMap),
+            'sourceMap' => $sourceMap,
         ];
     }
 

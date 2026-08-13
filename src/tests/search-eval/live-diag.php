@@ -33,7 +33,7 @@ try {
     $result1 = $pipeline->run($query, $messages, $emit);
     echo "Evidence length: " . strlen($result1['evidence'] ?? '') . "\n";
     echo "Source IDs:      " . implode(', ', $result1['sourceIds'] ?? ['NONE']) . "\n";
-    echo "sourceUrls:      " . count($result1['sourceUrls'] ?? []) . "\n";
+    echo "sourceMap:       " . count($result1['sourceMap'] ?? []) . "\n";
     echo "Pipeline:   OK\n\n";
 } catch (\Throwable $e) {
     echo "Pipeline THREW: " . get_class($e) . ": " . $e->getMessage() . "\n\n";
@@ -47,7 +47,7 @@ try {
     $result2 = SearchWebTool::liveSearch($query, $messages, $emit, $condenser2, 0);
     echo "Evidence length: " . strlen($result2['evidence'] ?? '') . "\n";
     echo "Source IDs:      " . implode(', ', $result2['sourceIds'] ?? ['NONE']) . "\n";
-    echo "sourceUrls:      " . count($result2['sourceUrls'] ?? []) . "\n";
+    echo "sourceMap:       " . count($result2['sourceMap'] ?? []) . "\n";
     echo "liveSearch: OK\n\n";
 } catch (\Throwable $e) {
     echo "liveSearch THREW: " . get_class($e) . ": " . $e->getMessage() . "\n\n";
