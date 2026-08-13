@@ -12,6 +12,7 @@ require_once __DIR__ . '/MessageAssemblyTest.php';
 require_once __DIR__ . '/ThoughtExtractionTest.php';
 require_once __DIR__ . '/MultiQueryTest.php';
 require_once __DIR__ . '/SearchPipelineTest.php';
+require_once __DIR__ . '/MemorySelectorTest.php';
 
 use App\Config;
 use App\Database;
@@ -20,6 +21,7 @@ use App\Tests\MessageAssemblyTest;
 use App\Tests\ThoughtExtractionTest;
 use App\Tests\MultiQueryTest;
 use App\Tests\SearchPipelineTest;
+use App\Tests\MemorySelectorTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -47,6 +49,9 @@ $allOk = (new MultiQueryTest())->run() && $allOk;
 
 echo "\n=== Phase 4: Search Pipeline Tests ===\n";
 $allOk = (new SearchPipelineTest($db, $agent, __DIR__ . '/../uploads/'))->run() && $allOk;
+
+echo "\n=== Phase 5: Memory Selector Tests ===\n";
+$allOk = (new MemorySelectorTest($db))->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

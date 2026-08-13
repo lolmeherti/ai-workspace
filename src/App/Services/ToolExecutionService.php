@@ -63,6 +63,16 @@ class ToolExecutionService
         return $result;
     }
 
+    public function getLastSourceMap(): array
+    {
+        return $this->searchWebTool->getLastSourceMap();
+    }
+
+    public function resetSourceMap(): void
+    {
+        $this->searchWebTool->resetSourceMap();
+    }
+
     private function executeTool(string $toolName, array $toolData, int $sessionId, array $messages, callable $emit): string
     {
         $resolvedTool = Tool::tryFrom($toolName);

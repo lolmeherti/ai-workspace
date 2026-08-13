@@ -106,7 +106,8 @@ class ChatManager
             'has_search_context' => false,
         ]);
 
-        $validSourceIds = [];
+        $sourceMap = [];
+        $this->toolExecutionService->resetSourceMap();
 
         // Tool call pass — native function calling via llama.cpp API.
         // Model receives JSON-schema tool definitions; API enforces format.
@@ -135,6 +136,8 @@ class ChatManager
                     $toolName, $queries, $sessionId, $emit
                 );
 
+                $sourceMap = array_merge($sourceMap, $this->toolExecutionService->getLastSourceMap());
+
                 $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
 
                 $this->db->insert('chat_history', [
@@ -155,18 +158,17 @@ class ChatManager
             $currentMessages = $this->cleanMessagesArray($currentMessages);
         }
 
+        if (!empty($sourceMap)) {
+            $emit('sources', ['sources' => $sourceMap]);
+        }
+
         $emit('generating', []);
 
         $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
         $finalResponse = $aiRawResponse;
 
-        $cleanResponse = $finalResponse;
-
-        // Strip hallucinated source IDs from final answer
-        if (!empty($validSourceIds)) {
-            $citationValidator = new CitationValidator();
-            $cleanResponse = $citationValidator->sanitizeCitations($cleanResponse, $validSourceIds);
-        }
+        $cleanResponse = (new CitationValidator())
+            ->sanitizeCitations($finalResponse, array_keys($sourceMap));
 
         $usage = $this->agent->lastUsage;
         $assistantTokens = (int)(mb_strlen($cleanResponse) / 4);
@@ -194,6 +196,7 @@ class ChatManager
             'image_path' => null,
             'token_estimate' => $assistantTokens,
             'search_query' => null,
+            'source_map' => empty($sourceMap) ? null : json_encode($sourceMap),
         ]);
 
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
@@ -210,7 +213,8 @@ class ChatManager
             'message' => $cleanResponse,
             'title' => $updatedTitle,
             'total_session_tokens' => $totalSessionTokens,
-            'session_id' => $sessionId
+            'session_id' => $sessionId,
+            'sources' => $sourceMap,
         ]);
 
         return [

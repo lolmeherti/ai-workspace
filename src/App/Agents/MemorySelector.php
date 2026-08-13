@@ -26,8 +26,7 @@ class MemorySelector
             return null;
         }
 
-        $searchString = implode(' ', $words);
-        $boolQuery = '+' . implode(' +', $words);
+        $boolQuery = $this->buildBoolQuery($words);
         $memories = [];
 
         $sqlFulltext = <<<TEXT
@@ -73,5 +72,10 @@ TEXT;
         }
 
         return implode("\n", $selectedMemories);
+    }
+
+    private function buildBoolQuery(array $words): string
+    {
+        return implode(' ', $words);
     }
 }
