@@ -13,6 +13,18 @@ require_once __DIR__ . '/ThoughtExtractionTest.php';
 require_once __DIR__ . '/MultiQueryTest.php';
 require_once __DIR__ . '/SearchPipelineTest.php';
 require_once __DIR__ . '/MemorySelectorTest.php';
+require_once __DIR__ . '/JobStateMachineTest.php';
+require_once __DIR__ . '/JobMatcherTest.php';
+require_once __DIR__ . '/JobRepositoryTest.php';
+require_once __DIR__ . '/JobParserTest.php';
+require_once __DIR__ . '/JobEvaluatorTest.php';
+require_once __DIR__ . '/TemplateExpanderTest.php';
+require_once __DIR__ . '/JobAdapterTest.php';
+require_once __DIR__ . '/FileIngestorTest.php';
+require_once __DIR__ . '/FileRetrieverTest.php';
+require_once __DIR__ . '/FileSyncReindexTest.php';
+require_once __DIR__ . '/ModelLockTest.php';
+require_once __DIR__ . '/FileRetrievalEvalTest.php';
 
 use App\Config;
 use App\Database;
@@ -22,6 +34,18 @@ use App\Tests\ThoughtExtractionTest;
 use App\Tests\MultiQueryTest;
 use App\Tests\SearchPipelineTest;
 use App\Tests\MemorySelectorTest;
+use App\Tests\JobStateMachineTest;
+use App\Tests\JobMatcherTest;
+use App\Tests\JobRepositoryTest;
+use App\Tests\JobParserTest;
+use App\Tests\JobEvaluatorTest;
+use App\Tests\TemplateExpanderTest;
+use App\Tests\JobAdapterTest;
+use App\Tests\FileIngestorTest;
+use App\Tests\FileRetrieverTest;
+use App\Tests\FileSyncReindexTest;
+use App\Tests\ModelLockTest;
+use App\Tests\FileRetrievalEvalTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -52,6 +76,42 @@ $allOk = (new SearchPipelineTest($db, $agent, __DIR__ . '/../uploads/'))->run() 
 
 echo "\n=== Phase 5: Memory Selector Tests ===\n";
 $allOk = (new MemorySelectorTest($db))->run() && $allOk;
+
+echo "\n=== Phase 6: Job State Machine Tests ===\n";
+$allOk = (new JobStateMachineTest())->run() && $allOk;
+
+echo "\n=== Phase 7: Job Matcher Tests ===\n";
+$allOk = (new JobMatcherTest())->run() && $allOk;
+
+echo "\n=== Phase 8: Job Repository Tests ===\n";
+$allOk = (new JobRepositoryTest($db))->run() && $allOk;
+
+echo "\n=== Phase 9: Job Parser Tests ===\n";
+$allOk = (new JobParserTest())->run() && $allOk;
+
+echo "\n=== Phase 10: Job Evaluator Tests ===\n";
+$allOk = (new JobEvaluatorTest())->run() && $allOk;
+
+echo "\n=== Phase 11: Template Expander Tests ===\n";
+$allOk = (new TemplateExpanderTest())->run() && $allOk;
+
+echo "\n=== Phase 12: Job Adapter Tests ===\n";
+$allOk = (new JobAdapterTest())->run() && $allOk;
+
+echo "\n=== Phase 13: File Ingestor Tests ===\n";
+$allOk = (new FileIngestorTest())->run() && $allOk;
+
+echo "\n=== Phase 14: File Retriever Tests ===\n";
+$allOk = (new FileRetrieverTest())->run() && $allOk;
+
+echo "\n=== Phase 15: Model Lock Tests ===\n";
+$allOk = (new ModelLockTest())->run() && $allOk;
+
+echo "\n=== Phase 16: File Sync Re-index Tests ===\n";
+$allOk = (new FileSyncReindexTest())->run() && $allOk;
+
+echo "\n=== Phase 17: File Retrieval Evaluation ===\n";
+$allOk = (new FileRetrievalEvalTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

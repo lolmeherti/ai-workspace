@@ -163,6 +163,10 @@ Viewer at `/logs` (not linked from UI): event type counts, expandable samples, r
 - No framework conventions to follow — bare procedural style in controllers/actions
 - Chat actions stream responses via SSE (Server-Sent Events)
 - The PHP app has no ORM — raw PDO queries throughout
+- Reuse centralized paths and scan for existing usage before writing — DB access
+  only via `App\Database` + repositories, LLM only via `AgentManager`, fetching/
+  parsing via `Scraper`/`BridgeFetcher`/`JsonParser`. Do not reimplement or open a
+  parallel path; this is the primary guard against accidental rewrites/duplication.
 
 ## Important constraints
 - **Never read `.env`** — it may contain credentials; use `.env.example` if needed

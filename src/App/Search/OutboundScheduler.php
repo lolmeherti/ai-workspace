@@ -98,7 +98,7 @@ final class OutboundScheduler
     public function acquireGlobalLock(int $timeoutMs = 30000): ?string
     {
         $token = bin2hex(random_bytes(16));
-        $acquired = $this->redis->set('outbound:global:lock', $token, ['NX', 'PX' => $timeoutMs]);
+        $acquired = $this->redis->set('outbound:global:lock', $token, 'PX', $timeoutMs, 'NX');
         return $acquired ? $token : null;
     }
 

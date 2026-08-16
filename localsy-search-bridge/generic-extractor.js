@@ -54,6 +54,8 @@
       url: location.href,
       title: document.title,
       fetched_at: new Date().toISOString(),
+      date_posted: extractJsonLdDatePosted(),
+      links: extraction.links,
       entities: [{
         entity_type: "article",
         entity_id: hashURL(location.href),
@@ -69,10 +71,20 @@
   // Challenge detection
   // ═══════════════════════════════════════════════════
   function detectChallenge() {
-    if (/prove your humanity/i.test(document.title)) return "challenge_required";
-    if (document.querySelector("iframe[src*='recaptcha']")) return "challenge_required";
+    const title = document.title || "";
+    if (/prove your humanity|just a moment|checking your browser|unusual (traffic|activity)|attention required|verify you are human|enable javascript/i.test(title)) {
+      return "challenge_required";
+    }
+    if (document.querySelector("iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[src*='captcha']")) {
+      return "challenge_required";
+    }
     if (location.hostname === "consent.google.com") return "consent_required";
     if (location.pathname.startsWith("/sorry/")) return "challenge_required";
+
+    const bodyText = (document.body && document.body.innerText || "").slice(0, 2000);
+    if (/unusual (traffic|activity)|checking your browser before accessing/i.test(bodyText)) {
+      return "challenge_required";
+    }
     return null;
   }
 
@@ -145,7 +157,23 @@
       fullBody = cleanText(document.body.innerText);
     }
 
-    return { body: fullBody.slice(0, 120000), sections };
+    // Collect visible anchor links (absolute URLs, deduped, bounded).
+    const links = [];
+    const seenLinks = new Set();
+    for (const a of document.querySelectorAll('a[href]')) {
+      const href = a.href || '';
+      if (!href || href.startsWith('javascript:') || href.startsWith('mailto:')
+          || href.startsWith('tel:') || href.startsWith('#')) continue;
+      const text = cleanText(a.textContent);
+      if (!text) continue;
+      const key = href.split('#')[0];
+      if (seenLinks.has(key)) continue;
+      seenLinks.add(key);
+      links.push({ url: href, text });
+      if (links.length >= 500) break;
+    }
+
+    return { body: fullBody.slice(0, 120000), sections, links };
 
     function flushSection() {
       const b = buffer.trim();
@@ -173,6 +201,45 @@
     }
     return "gen_" + Math.abs(hash).toString(36);
   }
+
+  // Generic schema.org JSON-LD scrape: return the first datePosted string found
+  // (JobPosting is the common case), regardless of host. No site-specific logic.
+  function extractJsonLdDatePosted() {
+    try {
+      for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
+        let data;
+        try {
+          data = JSON.parse(node.textContent || '');
+        } catch (e) {
+          continue;
+        }
+        const found = findDatePosted(data);
+        if (found) return found;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function findDatePosted(node) {
+    if (node == null) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = findDatePosted(item);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (typeof node === 'object') {
+      if (typeof node.datePosted === 'string' && node.datePosted.trim() !== '') {
+        return node.datePosted.trim();
+      }
+      for (const key of Object.keys(node)) {
+        const found = findDatePosted(node[key]);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
 })();
 
 // CAPTCHA poll listener
@@ -188,10 +255,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 function detectChallenge() {
-  if (/prove your humanity/i.test(document.title)) return "challenge_required";
-  if (document.querySelector("iframe[src*='recaptcha']")) return "challenge_required";
+  const title = document.title || "";
+  if (/prove your humanity|just a moment|checking your browser|unusual (traffic|activity)|attention required|verify you are human|enable javascript/i.test(title)) {
+    return "challenge_required";
+  }
+  if (document.querySelector("iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[src*='captcha']")) {
+    return "challenge_required";
+  }
   if (location.hostname === "consent.google.com") return "consent_required";
   if (location.pathname.startsWith("/sorry/")) return "challenge_required";
+
+  const bodyText = (document.body && document.body.innerText || "").slice(0, 2000);
+  if (/unusual (traffic|activity)|checking your browser before accessing/i.test(bodyText)) {
+    return "challenge_required";
+  }
   return null;
 }
 

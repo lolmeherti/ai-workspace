@@ -26,19 +26,23 @@ class PageDataLoader
             foreach ($sessions as $s) {
                 if ((int)$s['id'] === $sessionId) {
                     $activeSessionTitle = $s['title'];
+                    $totalSessionTokens = (int)($s['context_tokens'] ?? 0);
                     break;
                 }
             }
 
             $history = $chatSessionRepository->getHistory($sessionId);
-            foreach ($history as $msg) {
-                $totalSessionTokens += (int)($msg['token_estimate'] ?? 0);
-            }
 
             try {
                 $memories = $memoryRepository->getAllLimit500();
                 $memoryCount = count($memories);
             } catch (\Exception $e) {
+            }
+
+            try {
+                (new \App\Jobs\JobRepository($db))->deleteStaleUnread();
+                (new \App\Jobs\JobRunRepository($db))->cancelOrphanedRuns();
+            } catch (\Throwable $e) {
             }
         }
 

@@ -21,9 +21,9 @@
         "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-QAT-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 60000,  "requirements": { "vram_min": 24 } },
-        "t3": { "ctx_size": 4096,   "requirements": { "vram_min": 16 } }
+        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 60000,  "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 4096,   "requirements": { "vram_min": 14 } }
       }
     },
 
@@ -39,10 +39,10 @@
         "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 60000,  "requirements": { "vram_min": 24 } },
-        "t3": { "ctx_size": 8192,   "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 4096,   "requirements": { "vram_min": 12 } }
+        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 60000,  "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 8192,   "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 4096,   "requirements": { "vram_min": 10 } }
       }
     },
 
@@ -58,8 +58,8 @@
         "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 45000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 16384, "requirements": { "vram_min": 24 } }
+        "t1": { "ctx_size": 45000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 16384, "requirements": { "vram_min": 22 } }
       }
     },
 
@@ -75,11 +75,11 @@
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 100000, "requirements": { "vram_min": 24 } },
-        "t3": { "ctx_size": 65000,  "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 40960,  "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 8192,   "requirements": { "vram_min": 8 } }
+        "t1": { "ctx_size": 131072, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 100000, "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 65000,  "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 40960,  "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 8192,   "requirements": { "vram_min": 6 } }
       }
     },
 
@@ -95,11 +95,11 @@
         "url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/mmproj-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 100000, "requirements": { "vram_min": 24 } },
-        "t3": { "ctx_size": 65000,  "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 50000,  "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 16384,  "requirements": { "vram_min": 8 } }
+        "t1": { "ctx_size": 131072, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 100000, "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 65000,  "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 50000,  "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 16384,  "requirements": { "vram_min": 6 } }
       }
     },
 
@@ -115,11 +115,11 @@
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf"
       },
       "profiles": {
-        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 32 } },
-        "t2": { "ctx_size": 80000,  "requirements": { "vram_min": 24 } },
-        "t3": { "ctx_size": 50000,  "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 50000,  "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 12288,  "requirements": { "vram_min": 8 } }
+        "t1": { "ctx_size": 131072, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 80000,  "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 50000,  "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 50000,  "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 12288,  "requirements": { "vram_min": 6 } }
       }
     },
 
@@ -135,9 +135,9 @@
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-BF16.gguf"
       },
       "profiles": {
-        "t3": { "ctx_size": 65000, "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 45000, "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 45000, "requirements": { "vram_min": 8 } }
+        "t3": { "ctx_size": 65000, "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 45000, "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 45000, "requirements": { "vram_min": 6 } }
       }
     },
 
@@ -153,9 +153,9 @@
         "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf"
       },
       "profiles": {
-        "t3": { "ctx_size": 65000, "requirements": { "vram_min": 16 } },
-        "t4": { "ctx_size": 45000, "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 45000, "requirements": { "vram_min": 8 } }
+        "t3": { "ctx_size": 65000, "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 45000, "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 45000, "requirements": { "vram_min": 6 } }
       }
     },
 
@@ -171,8 +171,8 @@
         "url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/mmproj-Qwen3.5-4B-BF16.gguf"
       },
       "profiles": {
-        "t4": { "ctx_size": 40000, "requirements": { "vram_min": 12 } },
-        "t5": { "ctx_size": 40000, "requirements": { "vram_min": 8 } }
+        "t4": { "ctx_size": 40000, "requirements": { "vram_min": 10 } },
+        "t5": { "ctx_size": 40000, "requirements": { "vram_min": 6 } }
       }
     }
   }

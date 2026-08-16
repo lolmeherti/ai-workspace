@@ -4,13 +4,13 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\ChatManager;
+use App\Services\ModelBusyException;
 
 class ChatStreamAction extends BaseAction
 {
     public function __construct(
         private $db,
-        private $agentManager,
-        private $memoryExtractor
+        private $agentManager
     ) {
     }
 
@@ -33,15 +33,21 @@ class ChatStreamAction extends BaseAction
 
         $chatManager = new ChatManager(
             $this->db,
-            $this->agentManager,
-            $this->memoryExtractor
+            $this->agentManager
         );
 
-        $chatManager->process($sessionId, $query, $imageFile, $activeEditFile, function ($event, $data) {
-            $payload = json_encode(['event' => $event, 'data' => $data]);
+        try {
+            $chatManager->process($sessionId, $query, $imageFile, $activeEditFile, function ($event, $data) {
+                $payload = json_encode(['event' => $event, 'data' => $data]);
+                echo "data: {$payload}\n\n";
+                @ob_flush();
+                @flush();
+            });
+        } catch (ModelBusyException $e) {
+            $payload = json_encode(['event' => 'error', 'data' => ['message' => $e->getMessage()]]);
             echo "data: {$payload}\n\n";
             @ob_flush();
             @flush();
-        });
+        }
     }
 }

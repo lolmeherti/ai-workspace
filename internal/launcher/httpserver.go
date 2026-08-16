@@ -99,6 +99,9 @@ func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) 
 			}
 		}
 		for pid, p := range def.Profiles {
+			if p.Requirements.VRAMMin > h.hw.VRAMGB {
+				continue
+			}
 			entries = append(entries, profileEntry{
 				ModelID:    id,
 				Name:       def.Name,
@@ -118,15 +121,15 @@ func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) 
 
 func vramGroupLabel(vramMin float64) string {
 	switch {
-	case vramMin >= 32:
+	case vramMin >= 30:
 		return "32GB+"
-	case vramMin >= 24:
+	case vramMin >= 22:
 		return "24GB+"
-	case vramMin >= 16:
+	case vramMin >= 14:
 		return "16GB+"
-	case vramMin >= 12:
+	case vramMin >= 10:
 		return "12GB+"
-	case vramMin >= 8:
+	case vramMin >= 6:
 		return "8GB+"
 	default:
 		return "Any"

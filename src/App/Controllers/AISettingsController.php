@@ -203,7 +203,7 @@ class AISettingsController extends BaseController
             return;
         }
 
-        $newEnv = ['MEMORY_EXTRACTION_THRESHOLD_TOKENS' => (int)$detectedLimit];
+        $newEnv = ['LLM_CTX_SIZE' => (int)$detectedLimit];
         $writeSuccess = $this->envEditor->write($newEnv);
 
         if (!$writeSuccess) {

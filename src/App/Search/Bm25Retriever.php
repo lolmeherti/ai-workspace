@@ -36,14 +36,94 @@ class Bm25Retriever
      */
     public function rankRaw(array $chunks, string $userQuestion, string $searchQuery): array
     {
+        return array_map(fn($s) => $s['chunk'], $this->scoreAll($chunks, $userQuestion, $searchQuery));
+    }
+
+    /**
+     * @param WebChunk[] $chunks
+     * @return array<int, array{chunk: WebChunk, score: float}> ranked desc
+     */
+    public function rankRawWithScores(array $chunks, string $userQuestion, string $searchQuery): array
+    {
+        return $this->scoreAll($chunks, $userQuestion, $searchQuery);
+    }
+
+    private function scoreAll(array $chunks, string $userQuestion, string $searchQuery): array
+    {
         if (empty($chunks)) return [];
 
         $queryVector = $this->buildQueryTokenVector($userQuestion, $searchQuery);
+        $entityTerms = $this->entityTerms($queryVector, $userQuestion, $searchQuery);
+        $totalChunks = count($chunks);
+        [$docFreqs, $avgLen] = $this->computeCorpusStats($chunks);
+
+        $scored = [];
+        foreach ($chunks as $chunk) {
+            $titleTerms = $this->tokenizeForScoring($chunk->title);
+            $headingText = implode(' > ', $chunk->headingPath);
+            $headingTerms = $this->tokenizeForScoring($headingText);
+            $bodyTerms = $this->tokenizeForScoring($chunk->text);
+
+            $score =
+                3.0 * $this->bm25Field($queryVector, $titleTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->title)) +
+                2.0 * $this->bm25Field($queryVector, $headingTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($headingText)) +
+                1.0 * $this->bm25Field($queryVector, $bodyTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->text)) +
+                1.5 * $this->entityMatch($entityTerms, $chunk);
+
+            if ($score <= 0.0) continue;
+            $scored[] = ['chunk' => $chunk, 'score' => $score];
+        }
+
+        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+        return $scored;
+    }
+
+    /**
+     * @param WebChunk[] $chunks
+     * @return WebChunk[] ranked and diversity-filtered
+     */
+    public function rank(array $chunks, string $userQuestion, string $searchQuery, ?RetrievalPolicy $policy = null): array
+    {
+        $policy = $policy ?? RetrievalPolicy::default();
+        $ranked = $this->rankRaw($chunks, $userQuestion, $searchQuery);
+        return $this->selectDiverseChunks($ranked, $policy);
+    }
+
+    public function scoreFileChunks(array $chunks, string $query): array
+    {
+        if (empty($chunks)) return [];
+
+        $queryVector = $this->buildQueryTokenVector($query, '');
+        $entityTerms = $this->entityTerms($queryVector, $query);
+        [$docFreqs, $avgLen] = $this->computeCorpusStats($chunks);
         $totalChunks = count($chunks);
 
+        $scored = [];
+        foreach ($chunks as $chunk) {
+            $titleTerms = $this->tokenizeForScoring($chunk->title);
+            $headingText = implode(' ', $chunk->entities);
+            $headingTerms = $this->tokenizeForScoring($headingText);
+            $bodyTerms = $this->tokenizeForScoring($chunk->text);
+
+            $score =
+                3.0 * $this->bm25Field($queryVector, $titleTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->title)) +
+                2.0 * $this->bm25Field($queryVector, $headingTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($headingText)) +
+                1.0 * $this->bm25Field($queryVector, $bodyTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->text)) +
+                1.5 * $this->entityMatchInEntities($entityTerms, $chunk->entities);
+
+            if ($score <= 0.0) continue;
+            $scored[] = ['chunk' => $chunk, 'score' => $score];
+        }
+
+        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+        return $scored;
+    }
+
+    private function computeCorpusStats(array $chunks): array
+    {
         $docFreqs = [];
         foreach ($chunks as $chunk) {
-            $terms = $this->tokenizeForScoring($chunk->text);
+            $terms = $this->tokenizeForScoring($this->chunkCorpusText($chunk));
             $seen = [];
             foreach ($terms as $t) {
                 if (!isset($seen[$t])) {
@@ -57,38 +137,17 @@ class Bm25Retriever
         foreach ($chunks as $chunk) {
             $avgLen += mb_strlen($chunk->text);
         }
-        $avgLen = $avgLen / max(1, $totalChunks);
+        $avgLen = $avgLen / max(1, count($chunks));
 
-        $scored = [];
-        foreach ($chunks as $chunk) {
-            $titleTerms = $this->tokenizeForScoring($chunk->title);
-            $headingText = implode(' > ', $chunk->headingPath);
-            $headingTerms = $this->tokenizeForScoring($headingText);
-            $bodyTerms = $this->tokenizeForScoring($chunk->text);
-
-            $score =
-                3.0 * $this->bm25Field($queryVector, $titleTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->title)) +
-                2.0 * $this->bm25Field($queryVector, $headingTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($headingText)) +
-                1.0 * $this->bm25Field($queryVector, $bodyTerms, $docFreqs, $totalChunks, $avgLen, mb_strlen($chunk->text)) +
-                1.5 * $this->entityMatch($queryVector, $chunk);
-
-            if ($score <= 0.0) continue;
-            $scored[] = ['chunk' => $chunk, 'score' => $score];
-        }
-
-        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
-        return array_map(fn($s) => $s['chunk'], $scored);
+        return [$docFreqs, $avgLen];
     }
 
-    /**
-     * @param WebChunk[] $chunks
-     * @return WebChunk[] ranked and diversity-filtered
-     */
-    public function rank(array $chunks, string $userQuestion, string $searchQuery, ?RetrievalPolicy $policy = null): array
+    private function chunkCorpusText(object $chunk): string
     {
-        $policy = $policy ?? RetrievalPolicy::default();
-        $ranked = $this->rankRaw($chunks, $userQuestion, $searchQuery);
-        return $this->selectDiverseChunks($ranked, $policy);
+        $heading = property_exists($chunk, 'entities')
+            ? implode(' ', $chunk->entities)
+            : implode(' > ', $chunk->headingPath);
+        return $chunk->title . ' ' . $heading . ' ' . $chunk->text;
     }
 
     private function buildQueryTokenVector(string $userQuestion, string $searchQuery): array
@@ -198,22 +257,43 @@ class Bm25Retriever
         return $score;
     }
 
-    private function entityMatch(array $queryVector, WebChunk $chunk): float
+    private function entityTerms(array $queryVector, string ...$rawTexts): array
     {
         $entities = [];
         foreach ($queryVector as $term => $weight) {
-            if (preg_match('/^[A-Z]/', $term) && strlen($term) >= 4) {
-                $entities[] = $term;
-            }
             if (preg_match('/\d/', $term)) {
                 $entities[] = $term;
             }
         }
+        foreach ($rawTexts as $text) {
+            if (preg_match_all('/\b\p{Lu}[\p{L}\d._-]{3,}\b/u', $text, $matches)) {
+                foreach ($matches[0] as $word) {
+                    $entities[] = mb_strtolower($word);
+                }
+            }
+        }
+        return array_values(array_unique($entities));
+    }
 
+    private function entityMatch(array $entityTerms, WebChunk $chunk): float
+    {
         $score = 0.0;
         $lowerText = mb_strtolower($chunk->text);
-        foreach ($entities as $entity) {
+        foreach ($entityTerms as $entity) {
             if (str_contains($lowerText, $entity)) {
+                $score += 1.0;
+            }
+        }
+
+        return $score;
+    }
+
+    private function entityMatchInEntities(array $entityTerms, array $entities): float
+    {
+        $lowerEntities = array_map('mb_strtolower', $entities);
+        $score = 0.0;
+        foreach ($entityTerms as $entity) {
+            if (in_array($entity, $lowerEntities, true)) {
                 $score += 1.0;
             }
         }

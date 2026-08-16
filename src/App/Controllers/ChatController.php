@@ -148,7 +148,7 @@ class ChatController extends BaseController
             return;
         }
 
-        (new ChatStreamAction($this->db, $this->agentManager, $this->memoryExtractor))
+        (new ChatStreamAction($this->db, $this->agentManager))
             ->execute($sessionId, $query, $imageFile, null, null, $activeEditFile);
     }
 }

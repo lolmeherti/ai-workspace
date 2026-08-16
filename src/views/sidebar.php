@@ -20,6 +20,9 @@
             <button onclick="switchSidebarTab('emails')" id="tab-btn-emails" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
                 <uk-icon icon="mail" class="w-3.5 h-3.5"></uk-icon> Mails
             </button>
+            <button onclick="switchSidebarTab('jobs')" id="tab-btn-jobs" class="flex-1 py-2 rounded-md transition-all text-center flex items-center justify-center gap-1 cursor-pointer">
+                <uk-icon icon="briefcase" class="w-3.5 h-3.5"></uk-icon> Jobs
+            </button>
         </div>
     </div>
 
@@ -28,6 +31,7 @@
         <?php include __DIR__ . '/tab-uploads.php'; ?>
         <?php include __DIR__ . '/tab-memories.php'; ?>
         <?php include __DIR__ . '/tab-emails.php'; ?>
+        <?php include __DIR__ . '/tab-jobs.php'; ?>
     </div>
     
     <div class="border-t border-slate-800/80 bg-[#090d18] mt-auto select-none shrink-0">

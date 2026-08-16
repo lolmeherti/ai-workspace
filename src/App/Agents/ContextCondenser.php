@@ -115,6 +115,7 @@ class ContextCondenser
             }
 
             $db->query("COMMIT");
+            $db->update('chat_sessions', ['context_tokens' => 0], ['id' => $sessionId]);
         } catch (Exception $e) {
             $db->query("ROLLBACK");
             throw $e;

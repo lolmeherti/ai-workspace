@@ -19,11 +19,117 @@ class StructuralChunker
             return [];
         }
 
-        $units = $this->parseStructuralUnits($doc->markdown);
-        $merged = $this->mergeSmallUnits($units);
-        $chunks = $this->buildChunks($merged, $doc, $sourceId);
+        $units = $this->buildChunkUnits($doc->markdown);
+
+        $chunks = [];
+        $chunkNum = 0;
+        foreach ($units as $unit) {
+            $chunkNum++;
+            $chunks[] = new WebChunk(
+                sourceId: $sourceId,
+                chunkId: "{$sourceId}-C{$chunkNum}",
+                url: $doc->url,
+                finalUrl: $doc->finalUrl,
+                title: $doc->title,
+                domain: $doc->domain,
+                publishedAt: $doc->publishedAt,
+                updatedAt: $doc->updatedAt,
+                fetchedAt: $doc->fetchedAt,
+                headingPath: $unit['headingTitles'],
+                sectionType: $unit['type'],
+                text: $unit['text'],
+                position: $chunkNum,
+            );
+        }
 
         return $chunks;
+    }
+
+    public function chunkText(string $text): array
+    {
+        if (empty(trim($text))) {
+            return [];
+        }
+
+        return array_map(fn($u) => $u['text'], $this->buildChunkUnits($text));
+    }
+
+    private function buildChunkUnits(string $md): array
+    {
+        $units = $this->parseStructuralUnits($md);
+        $merged = $this->mergeSmallUnits($units);
+
+        $result = [];
+
+        foreach ($merged as $unit) {
+            $text = $unit['text'];
+            $type = $unit['type'];
+            $headingTitles = array_map(fn($h) => $h['title'], $unit['heading']);
+
+            if ($type === 'table' && strlen($text) > self::TABLE_MAX) {
+                $rows = explode("\n", $text);
+                $header = $rows[0];
+                $sep = $rows[1] ?? '';
+                $dataRows = array_slice($rows, 2);
+                $batch = [$header, $sep];
+                $batchSize = 0;
+
+                foreach ($dataRows as $row) {
+                    if ($batchSize > 1 && strlen(implode("\n", $batch)) + strlen($row) > self::TARGET_CHARS_MAX) {
+                        $result[] = ['text' => implode("\n", $batch), 'type' => 'table', 'headingTitles' => $headingTitles];
+                        $batch = [$header, $sep];
+                        $batchSize = 0;
+                    }
+                    $batch[] = $row;
+                    $batchSize++;
+                }
+
+                if (count($batch) > 2) {
+                    $result[] = ['text' => implode("\n", $batch), 'type' => 'table', 'headingTitles' => $headingTitles];
+                }
+                continue;
+            }
+
+            if ($type !== 'code' && strlen($text) > self::TARGET_CHARS_MAX * 2) {
+                $paragraphs = preg_split('/\n\n+/', $text);
+                $batch = [];
+                $batchLen = 0;
+                $overlap = '';
+
+                foreach ($paragraphs as $p) {
+                    $p = trim($p);
+                    if (empty($p)) continue;
+
+                    if ($batchLen > 0 && $batchLen + strlen($p) > self::TARGET_CHARS_MAX) {
+                        $result[] = ['text' => implode("\n\n", $batch), 'type' => 'paragraph', 'headingTitles' => $headingTitles];
+
+                        if ($type === 'paragraph' && self::OVERLAP_SENTENCES > 0) {
+                            $sentences = preg_split('/(?<=[.!?])\s+/', end($batch));
+                            $overlap = implode(' ', array_slice($sentences, -self::OVERLAP_SENTENCES));
+                        }
+
+                        $batch = $overlap ? [$overlap] : [];
+                        $batchLen = strlen($overlap);
+                    }
+
+                    $batch[] = $p;
+                    $batchLen += strlen($p);
+                }
+
+                if (!empty($batch)) {
+                    $result[] = ['text' => implode("\n\n", $batch), 'type' => $type, 'headingTitles' => $headingTitles];
+                }
+            } elseif (strlen($text) > self::MAX_UNIT_CHARS) {
+                $subChunks = mb_str_split($text, self::TARGET_CHARS_MAX * 4);
+                foreach ($subChunks as $sub) {
+                    $result[] = ['text' => $sub, 'type' => $type, 'headingTitles' => $headingTitles];
+                }
+            } else {
+                $result[] = ['text' => $text, 'type' => $type, 'headingTitles' => $headingTitles];
+            }
+        }
+
+        return $result;
     }
 
     private function parseStructuralUnits(string $md): array
@@ -173,171 +279,5 @@ class StructuralChunker
         $merged[] = $current;
 
         return $merged;
-    }
-
-    private function buildChunks(array $units, ExtractedDocument $doc, string $sourceId): array
-    {
-        $chunks = [];
-        $chunkNum = 0;
-
-        foreach ($units as $unit) {
-            $text = $unit['text'];
-            $type = $unit['type'];
-            $headingTitles = array_map(fn($h) => $h['title'], $unit['heading']);
-
-            if ($type === 'table' && strlen($text) > self::TABLE_MAX) {
-                $rows = explode("\n", $text);
-                $header = $rows[0];
-                $sep = $rows[1] ?? '';
-                $dataRows = array_slice($rows, 2);
-                $batch = [$header, $sep];
-                $batchSize = 0;
-
-                foreach ($dataRows as $row) {
-                    if ($batchSize > 1 && strlen(implode("\n", $batch)) + strlen($row) > self::TARGET_CHARS_MAX) {
-                        $chunkNum++;
-                        $chunks[] = new WebChunk(
-                            sourceId: $sourceId,
-                            chunkId: "{$sourceId}-C{$chunkNum}",
-                            url: $doc->url,
-                            finalUrl: $doc->finalUrl,
-                            title: $doc->title,
-                            domain: $doc->domain,
-                            publishedAt: $doc->publishedAt,
-                            updatedAt: $doc->updatedAt,
-                            fetchedAt: $doc->fetchedAt,
-                            headingPath: $headingTitles,
-                            sectionType: 'table',
-                            text: implode("\n", $batch),
-                            position: $chunkNum,
-                        );
-                        $batch = [$header, $sep];
-                        $batchSize = 0;
-                    }
-                    $batch[] = $row;
-                    $batchSize++;
-                }
-
-                if (count($batch) > 2) {
-                    $chunkNum++;
-                    $chunks[] = new WebChunk(
-                        sourceId: $sourceId,
-                        chunkId: "{$sourceId}-C{$chunkNum}",
-                        url: $doc->url,
-                        finalUrl: $doc->finalUrl,
-                        title: $doc->title,
-                        domain: $doc->domain,
-                        publishedAt: $doc->publishedAt,
-                        updatedAt: $doc->updatedAt,
-                        fetchedAt: $doc->fetchedAt,
-                        headingPath: $headingTitles,
-                        sectionType: 'table',
-                        text: implode("\n", $batch),
-                        position: $chunkNum,
-                    );
-                }
-                continue;
-            }
-
-            if ($type !== 'code' && strlen($text) > self::TARGET_CHARS_MAX * 2) {
-                $paragraphs = preg_split('/\n\n+/', $text);
-                $batch = [];
-                $batchLen = 0;
-                $overlap = '';
-
-                foreach ($paragraphs as $p) {
-                    $p = trim($p);
-                    if (empty($p)) continue;
-
-                    if ($batchLen > 0 && $batchLen + strlen($p) > self::TARGET_CHARS_MAX) {
-                        $chunkNum++;
-                        $chunks[] = new WebChunk(
-                            sourceId: $sourceId,
-                            chunkId: "{$sourceId}-C{$chunkNum}",
-                            url: $doc->url,
-                            finalUrl: $doc->finalUrl,
-                            title: $doc->title,
-                            domain: $doc->domain,
-                            publishedAt: $doc->publishedAt,
-                            updatedAt: $doc->updatedAt,
-                            fetchedAt: $doc->fetchedAt,
-                            headingPath: $headingTitles,
-                            sectionType: 'paragraph',
-                            text: implode("\n\n", $batch),
-                            position: $chunkNum,
-                        );
-
-                        if ($type === 'paragraph' && self::OVERLAP_SENTENCES > 0) {
-                            $sentences = preg_split('/(?<=[.!?])\s+/', end($batch));
-                            $overlap = implode(' ', array_slice($sentences, -self::OVERLAP_SENTENCES));
-                        }
-
-                        $batch = $overlap ? [$overlap] : [];
-                        $batchLen = strlen($overlap);
-                    }
-
-                    $batch[] = $p;
-                    $batchLen += strlen($p);
-                }
-
-                if (!empty($batch)) {
-                    $chunkNum++;
-                    $chunks[] = new WebChunk(
-                        sourceId: $sourceId,
-                        chunkId: "{$sourceId}-C{$chunkNum}",
-                        url: $doc->url,
-                        finalUrl: $doc->finalUrl,
-                        title: $doc->title,
-                        domain: $doc->domain,
-                        publishedAt: $doc->publishedAt,
-                        updatedAt: $doc->updatedAt,
-                        fetchedAt: $doc->fetchedAt,
-                        headingPath: $headingTitles,
-                        sectionType: $type,
-                        text: implode("\n\n", $batch),
-                        position: $chunkNum,
-                    );
-                }
-            } elseif (strlen($text) > self::MAX_UNIT_CHARS) {
-                $subChunks = mb_str_split($text, self::TARGET_CHARS_MAX * 4);
-                foreach ($subChunks as $sub) {
-                    $chunkNum++;
-                    $chunks[] = new WebChunk(
-                        sourceId: $sourceId,
-                        chunkId: "{$sourceId}-C{$chunkNum}",
-                        url: $doc->url,
-                        finalUrl: $doc->finalUrl,
-                        title: $doc->title,
-                        domain: $doc->domain,
-                        publishedAt: $doc->publishedAt,
-                        updatedAt: $doc->updatedAt,
-                        fetchedAt: $doc->fetchedAt,
-                        headingPath: $headingTitles,
-                        sectionType: $type,
-                        text: $sub,
-                        position: $chunkNum,
-                    );
-                }
-            } else {
-                $chunkNum++;
-                $chunks[] = new WebChunk(
-                    sourceId: $sourceId,
-                    chunkId: "{$sourceId}-C{$chunkNum}",
-                    url: $doc->url,
-                    finalUrl: $doc->finalUrl,
-                    title: $doc->title,
-                    domain: $doc->domain,
-                    publishedAt: $doc->publishedAt,
-                    updatedAt: $doc->updatedAt,
-                    fetchedAt: $doc->fetchedAt,
-                    headingPath: $headingTitles,
-                    sectionType: $type,
-                    text: $text,
-                    position: $chunkNum,
-                );
-            }
-        }
-
-        return $chunks;
     }
 }
