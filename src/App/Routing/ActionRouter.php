@@ -11,6 +11,7 @@ use App\Controllers\FileController;
 use App\Controllers\EmailController;
 use App\Enums\Action;
 use App\Enums\ApiAction;
+use App\Controllers\JobController;
 
 class ActionRouter
 {
@@ -58,9 +59,39 @@ class ActionRouter
             $apiAction === ApiAction::UPLOAD_FILE
         );
 
+        $isJobAction = (
+            $apiAction === ApiAction::UPLOAD_CV ||
+            $apiAction === ApiAction::LIST_CVS ||
+            $apiAction === ApiAction::EXTRACT_CV ||
+            $apiAction === ApiAction::DELETE_CV ||
+            $apiAction === ApiAction::SET_ACTIVE_CV ||
+            $apiAction === ApiAction::GET_PROFILE ||
+            $apiAction === ApiAction::SAVE_PROFILE ||
+            $apiAction === ApiAction::LIST_REGISTRY ||
+            $apiAction === ApiAction::ADD_REGISTRY ||
+            $apiAction === ApiAction::UPDATE_REGISTRY ||
+            $apiAction === ApiAction::DELETE_REGISTRY ||
+            $apiAction === ApiAction::LIST_JOBS ||
+            $apiAction === ApiAction::GET_JOB ||
+            $apiAction === ApiAction::TRANSITION_JOB ||
+            $apiAction === ApiAction::RESTORE_JOB ||
+            $apiAction === ApiAction::BATCH_ACTION ||
+            $apiAction === ApiAction::EDIT_JOB ||
+            $apiAction === ApiAction::BLOCK_DOMAIN ||
+            $apiAction === ApiAction::BLOCK_COMPANY ||
+            $apiAction === ApiAction::GET_BLOCKS ||
+            $apiAction === ApiAction::RUN_JOB_SEARCH ||
+            $apiAction === ApiAction::CANCEL_JOB_SEARCH ||
+            $apiAction === ApiAction::GET_RUN_STATUS ||
+            $apiAction === ApiAction::LIST_RUN_LOGS ||
+            $apiAction === ApiAction::PRUNE_JOBS
+        );
+
         if ($isFileAction) {
             $controller = new FileController();
             $controller->setDatabase($this->db);
+        } elseif ($isJobAction) {
+            $controller = new JobController($this->db, $this->agentManager);
         } elseif ($method === 'POST') {
             if ($postAction !== null) {
                 switch ($postAction) {

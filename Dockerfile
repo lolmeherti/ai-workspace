@@ -26,6 +26,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 
 RUN a2enmod rewrite
 
+RUN echo "TimeOut 3600" > /etc/apache2/conf-available/timeout.conf \
+    && a2enconf timeout
+
 WORKDIR /var/www/html
 
 COPY ./src/composer.json ./src/composer.lock* /var/www/html/

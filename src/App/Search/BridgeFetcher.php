@@ -96,6 +96,15 @@ final class BridgeFetcher
             return new BridgeFetchResult('rejected', null, $validationError);
         }
 
+        $host = parse_url($url, PHP_URL_HOST) ?: 'unknown';
+
+        $cooldown = new HostCooldown();
+        if ($cooldown->isCoolingDown($host)) {
+            return new BridgeFetchResult('cooldown', null, 'host in cooldown after a challenge');
+        }
+
+        (new OutboundScheduler())->waitForSlot($host);
+
         $requestId ??= bin2hex(random_bytes(8));
 
         $ch = curl_init($this->baseUrl . '/bridge/fetch');
@@ -136,6 +145,10 @@ final class BridgeFetcher
             if (is_array($decoded)) {
                 $content = $decoded;
             }
+        }
+
+        if (HostCooldown::isBlockSignal($status)) {
+            $cooldown->trip($host, $status);
         }
 
         return new BridgeFetchResult($status, $content, $error);

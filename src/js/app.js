@@ -8,7 +8,7 @@ import { initTabs, switchSidebarTab } from './tabs.js';
 import { initFilePaste, previewFile, removeFile } from './fileHandler.js';
 import { parseMarkdownElements, copyToClipboard } from './markdown.js';
 import { handleChatSubmit, toggleChatEditMode, handleChatSelection, submitMultiDelete } from './chatManager.js';
-import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation, triggerManualCondensation } from './ui.js';
+import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation, triggerManualCondensation, lockChatContext } from './ui.js';
 import './gallery/galleryBootstrap.js';
 import './tabs/tabsBootstrap.js';
 
@@ -55,6 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof initialSessionTokens !== 'undefined' && typeof maxTokensLimit !== 'undefined') {
         updateTokenCounter(initialSessionTokens, maxTokensLimit);
+        if (initialSessionTokens >= (maxTokensLimit - 4096)) {
+            lockChatContext();
+        }
     }
 
     const chatForm = document.getElementById('chatForm');

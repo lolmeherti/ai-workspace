@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Services\ModelLock;
 use Exception;
 
 class AgentManager
@@ -44,91 +45,104 @@ class AgentManager
             'temperature' => $finalTemperature,
         ], 'info', 'AgentManager::chat');
 
-        $ch = curl_init($endpoint);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Accept: text/event-stream'
-        ]);
+        $owns = false;
+        $lockToken = null;
+        if (!ModelLock::isOwner()) {
+            $lockToken = ModelLock::acquireOrBusy(ModelLock::DEFAULT_TTL_MS);
+            $owns = true;
+        }
 
-        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+        try {
+            $ch = curl_init($endpoint);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Accept: text/event-stream'
+            ]);
 
-        $fullResponse = '';
-        $lastUsage = null;
-        $startTime = microtime(true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
 
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, $stream) {
-            $lines = explode("\n", $data);
+            $fullResponse = '';
+            $lastUsage = null;
+            $startTime = microtime(true);
 
-            foreach ($lines as $line) {
-                $line = trim($line);
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, $stream) {
+                $lines = explode("\n", $data);
 
-                if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
-                    $json = json_decode(substr($line, 6), true);
+                foreach ($lines as $line) {
+                    $line = trim($line);
 
-                    if (isset($json['usage'])) {
-                        $lastUsage = $json['usage'];
-                    }
+                    if (str_starts_with($line, 'data: ') && $line !== 'data: [DONE]') {
+                        $json = json_decode(substr($line, 6), true);
 
-                    if (isset($json['choices'][0]['delta']['reasoning_content'])) {
-                        $chunk = $json['choices'][0]['delta']['reasoning_content'];
-                        if ($stream && $streamCallback !== null) {
-                            $streamCallback($chunk, 'reasoning');
+                        if (isset($json['usage'])) {
+                            $lastUsage = $json['usage'];
                         }
-                    }
 
-                    if (isset($json['choices'][0]['delta']['content'])) {
-                        $chunk = $json['choices'][0]['delta']['content'];
-                        $fullResponse .= $chunk;
+                        if (isset($json['choices'][0]['delta']['reasoning_content'])) {
+                            $chunk = $json['choices'][0]['delta']['reasoning_content'];
+                            if ($stream && $streamCallback !== null) {
+                                $streamCallback($chunk, 'reasoning');
+                            }
+                        }
 
-                        if ($stream && $streamCallback !== null) {
-                            $streamCallback($chunk, 'content');
+                        if (isset($json['choices'][0]['delta']['content'])) {
+                            $chunk = $json['choices'][0]['delta']['content'];
+                            $fullResponse .= $chunk;
+
+                            if ($stream && $streamCallback !== null) {
+                                $streamCallback($chunk, 'content');
+                            }
                         }
                     }
                 }
+                return strlen($data);
+            });
+
+            $result = curl_exec($ch);
+            $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($result === false) {
+                $error = curl_error($ch);
+                curl_close($ch);
+
+                \App\Logger::logEvent('llm_connection_error', "LLM connection failed after {$elapsed}ms: {$error}", [
+                    'error' => $error,
+                    'elapsed_ms' => $elapsed,
+                    'endpoint' => $endpoint,
+                ], 'error', 'AgentManager::chat');
+
+                \App\Logger::critical("cURL Error connecting to LLM at {$endpoint}", ['error' => $error]);
+                throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
             }
-            return strlen($data);
-        });
 
-        $result = curl_exec($ch);
-        $elapsed = round((microtime(true) - $startTime) * 1000);
-
-        if ($result === false) {
-            $error = curl_error($ch);
             curl_close($ch);
 
-            \App\Logger::logEvent('llm_connection_error', "LLM connection failed after {$elapsed}ms: {$error}", [
-                'error' => $error,
+            $this->lastUsage = $lastUsage;
+
+            $responseLen = strlen($fullResponse);
+            $level = $responseLen < 20 ? 'warn' : 'info';
+            \App\Logger::logEvent('llm_response_done', "LLM response: {$responseLen} chars in {$elapsed}ms", [
+                'response_length' => $responseLen,
                 'elapsed_ms' => $elapsed,
-                'endpoint' => $endpoint,
-            ], 'error', 'AgentManager::chat');
+                'tokens_used' => $lastUsage,
+            ], $level, 'AgentManager::chat');
 
-            \App\Logger::critical("cURL Error connecting to LLM at {$endpoint}", ['error' => $error]);
-            throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
+            if ($responseLen < 20 && $responseLen > 0) {
+                \App\Logger::logEvent('llm_partial_response', "LLM returned unusually short response ({$responseLen} chars)", [
+                    'response_preview' => mb_substr($fullResponse, 0, 500),
+                    'elapsed_ms' => $elapsed,
+                ], 'warn', 'AgentManager::chat');
+            }
+
+            return \App\ThoughtExtractor::strip($fullResponse);
+        } finally {
+            if ($owns) {
+                ModelLock::release($lockToken);
+            }
         }
-
-        curl_close($ch);
-
-        $this->lastUsage = $lastUsage;
-
-        $responseLen = strlen($fullResponse);
-        $level = $responseLen < 20 ? 'warn' : 'info';
-        \App\Logger::logEvent('llm_response_done', "LLM response: {$responseLen} chars in {$elapsed}ms", [
-            'response_length' => $responseLen,
-            'elapsed_ms' => $elapsed,
-            'tokens_used' => $lastUsage,
-        ], $level, 'AgentManager::chat');
-
-        if ($responseLen < 20 && $responseLen > 0) {
-            \App\Logger::logEvent('llm_partial_response', "LLM returned unusually short response ({$responseLen} chars)", [
-                'response_preview' => mb_substr($fullResponse, 0, 500),
-                'elapsed_ms' => $elapsed,
-            ], 'warn', 'AgentManager::chat');
-        }
-
-        return \App\ThoughtExtractor::strip($fullResponse);
     }
 
     /**
@@ -160,82 +174,95 @@ class AgentManager
             'tool_choice' => $toolChoice,
         ], 'info', 'AgentManager::chatWithTools');
 
-        $ch = curl_init($endpoint);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+        $owns = false;
+        $lockToken = null;
+        if (!ModelLock::isOwner()) {
+            $lockToken = ModelLock::acquireOrBusy(ModelLock::DEFAULT_TTL_MS);
+            $owns = true;
+        }
 
-        $startTime = microtime(true);
-        $result = curl_exec($ch);
-        $elapsed = round((microtime(true) - $startTime) * 1000);
+        try {
+            $ch = curl_init($endpoint);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+            ]);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 600);
 
-        if ($result === false) {
-            $error = curl_error($ch);
+            $startTime = microtime(true);
+            $result = curl_exec($ch);
+            $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($result === false) {
+                $error = curl_error($ch);
+                curl_close($ch);
+
+                \App\Logger::logEvent('llm_connection_error', "LLM tool request failed after {$elapsed}ms: {$error}", [
+                    'error' => $error,
+                    'elapsed_ms' => $elapsed,
+                    'endpoint' => $endpoint,
+                ], 'error', 'AgentManager::chatWithTools');
+
+                throw new \Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
+            }
+
             curl_close($ch);
 
-            \App\Logger::logEvent('llm_connection_error', "LLM tool request failed after {$elapsed}ms: {$error}", [
-                'error' => $error,
-                'elapsed_ms' => $elapsed,
-                'endpoint' => $endpoint,
-            ], 'error', 'AgentManager::chatWithTools');
+            $response = json_decode($result, true);
+            if (!$response) {
+                \App\Logger::logEvent('llm_tool_parse_error', "Failed to parse LLM tool response", [
+                    'raw_len' => strlen($result),
+                    'raw_preview' => mb_substr($result, 0, 500),
+                ], 'error', 'AgentManager::chatWithTools');
 
-            throw new \Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
-        }
-
-        curl_close($ch);
-
-        $response = json_decode($result, true);
-        if (!$response) {
-            \App\Logger::logEvent('llm_tool_parse_error', "Failed to parse LLM tool response", [
-                'raw_len' => strlen($result),
-                'raw_preview' => mb_substr($result, 0, 500),
-            ], 'error', 'AgentManager::chatWithTools');
-
-            return [
-                'finish_reason' => 'error',
-                'content' => null,
-                'tool_calls' => null,
-                'usage' => null,
-            ];
-        }
-
-        $choice = $response['choices'][0] ?? [];
-        $finishReason = $choice['finish_reason'] ?? 'stop';
-        $content = $choice['message']['content'] ?? null;
-        $toolCalls = $choice['message']['tool_calls'] ?? null;
-        $usage = $response['usage'] ?? null;
-
-        $this->lastUsage = $usage;
-
-        $toolCallDetails = [];
-        if ($toolCalls) {
-            foreach ($toolCalls as $tc) {
-                $fn = $tc['function'] ?? [];
-                $toolCallDetails[] = [
-                    'name' => $fn['name'] ?? '?',
-                    'arguments' => $fn['arguments'] ?? '{}',
+                return [
+                    'finish_reason' => 'error',
+                    'content' => null,
+                    'tool_calls' => null,
+                    'usage' => null,
                 ];
             }
+
+            $choice = $response['choices'][0] ?? [];
+            $finishReason = $choice['finish_reason'] ?? 'stop';
+            $content = $choice['message']['content'] ?? null;
+            $toolCalls = $choice['message']['tool_calls'] ?? null;
+            $usage = $response['usage'] ?? null;
+
+            $this->lastUsage = $usage;
+
+            $toolCallDetails = [];
+            if ($toolCalls) {
+                foreach ($toolCalls as $tc) {
+                    $fn = $tc['function'] ?? [];
+                    $toolCallDetails[] = [
+                        'name' => $fn['name'] ?? '?',
+                        'arguments' => $fn['arguments'] ?? '{}',
+                    ];
+                }
+            }
+
+            \App\Logger::logEvent('llm_tool_response_done', "LLM tool response: finish={$finishReason}, " . ($toolCalls ? count($toolCalls) . " tool calls" : 'no tool calls') . ", {$elapsed}ms", [
+                'finish_reason' => $finishReason,
+                'has_content' => $content !== null && $content !== '',
+                'tool_call_count' => $toolCalls ? count($toolCalls) : 0,
+                'tool_calls' => $toolCallDetails,
+                'elapsed_ms' => $elapsed,
+                'tokens_used' => $usage,
+            ], 'info', 'AgentManager::chatWithTools');
+
+            return [
+                'finish_reason' => $finishReason,
+                'content' => $content,
+                'tool_calls' => $toolCalls,
+                'usage' => $usage,
+            ];
+        } finally {
+            if ($owns) {
+                ModelLock::release($lockToken);
+            }
         }
-
-        \App\Logger::logEvent('llm_tool_response_done', "LLM tool response: finish={$finishReason}, " . ($toolCalls ? count($toolCalls) . " tool calls" : 'no tool calls') . ", {$elapsed}ms", [
-            'finish_reason' => $finishReason,
-            'has_content' => $content !== null && $content !== '',
-            'tool_call_count' => $toolCalls ? count($toolCalls) : 0,
-            'tool_calls' => $toolCallDetails,
-            'elapsed_ms' => $elapsed,
-            'tokens_used' => $usage,
-        ], 'info', 'AgentManager::chatWithTools');
-
-        return [
-            'finish_reason' => $finishReason,
-            'content' => $content,
-            'tool_calls' => $toolCalls,
-            'usage' => $usage,
-        ];
     }
 }

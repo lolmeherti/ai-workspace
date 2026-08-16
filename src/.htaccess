@@ -2,3 +2,10 @@ RewriteEngine On
 
 # /logs -> logs.php
 RewriteRule ^logs$ logs.php [L]
+
+# Always revalidate JS/CSS so dev edits are picked up without a hard refresh.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css)$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>

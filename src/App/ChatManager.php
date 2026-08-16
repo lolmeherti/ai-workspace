@@ -4,13 +4,13 @@ namespace App;
 
 use App\Database;
 use App\AgentManager;
-use App\Agents\MemoryExtractor;
 use App\Agents\ContextCondenser;
 use App\Config;
 use App\Scraper;
 use App\Search;
 use App\Search\CitationValidator;
 use App\Services\FileAttachmentService;
+use App\Services\ModelLock;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
 
@@ -28,7 +28,6 @@ class ChatManager
     public function __construct(
         Database $db, 
         AgentManager $agent, 
-        ?MemoryExtractor $memoryExtractor = null,
         ?ContextCondenser $contextCondenser = null
     ) {
         $this->db = $db;
@@ -65,14 +64,27 @@ class ChatManager
 
         $emit('status', ['text' => 'Initializing...']);
 
-        $bypassWarning = (int)($_POST['bypass_warning'] ?? 0);
-        if (!$this->checkTokenThreshold($sessionId, (bool)$bypassWarning, $emit)) {
+        if ($this->isContextFull($sessionId)) {
+            $emit('context_full', [
+                'context_tokens' => $this->getSessionContextTokens($sessionId),
+                'max_tokens' => (int) Config::get('LLM_CTX_SIZE', 0),
+            ]);
             return [
-                'status' => 'warning',
-                'message' => 'Token limit warning triggered'
+                'status' => 'context_full',
+                'message' => 'Context limit reached. Condense the conversation to continue.'
             ];
         }
 
+        $lockToken = ModelLock::acquireOrBusy(ModelLock::PROCESS_TTL_MS);
+        try {
+            return $this->processLocked($sessionId, $query, $imageFile, $activeEditFile, $emit);
+        } finally {
+            ModelLock::release($lockToken);
+        }
+    }
+
+    private function processLocked(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile, callable $emit): array
+    {
         $this->ensureSessionExists($sessionId);
 
         // Always insert user message — tools are always available, no per-turn activation
@@ -209,6 +221,10 @@ class ChatManager
             }
         }
 
+        $this->db->update('chat_sessions', [
+            'context_tokens' => $totalSessionTokens
+        ], ['id' => $sessionId]);
+
         $emit('done', [
             'message' => $cleanResponse,
             'title' => $updatedTitle,
@@ -228,43 +244,19 @@ class ChatManager
         ];
     }
 
-    private function checkTokenThreshold(int $sessionId, bool $bypassWarning, callable $emit): bool
+    private function getSessionContextTokens(int $sessionId): int
     {
-        if ($bypassWarning) {
-            return true;
+        $rows = $this->db->selectSafe('chat_sessions', ['id' => $sessionId]);
+        return (int)($rows[0]['context_tokens'] ?? 0);
+    }
+
+    private function isContextFull(int $sessionId): bool
+    {
+        $ctxSize = (int) Config::get('LLM_CTX_SIZE', 0);
+        if ($ctxSize <= 0) {
+            return false;
         }
-
-        $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-        $keepLimit = (int) Config::get('CONDENSATION_KEEP_LIMIT', 6);
-
-        $filteredHistory = array_filter($history, function($row) {
-            $type = $row['message_type'] ?? '';
-            return $type !== 'tool_call';
-        });
-
-        if (count($filteredHistory) > ($keepLimit * 2)) {
-            $totalTokens = 0;
-            foreach ($filteredHistory as $row) {
-                $totalTokens += (int)($row['token_estimate'] ?? 0);
-            }
-
-            $maxTokens = (int) Config::get('MAX_HISTORY_TOKENS', 0);
-            if ($maxTokens <= 0) {
-                $ctxSize = (int) Config::get('LLM_CTX_SIZE', 0);
-                $maxTokens = $ctxSize > 0
-                    ? max($ctxSize - 8000, 32768)
-                    : 32768;
-            }
-            if ($totalTokens > $maxTokens) {
-                $emit('limit_warning', [
-                    'total_tokens' => $totalTokens,
-                    'max_tokens' => $maxTokens,
-                    'message_count' => count($filteredHistory)
-                ]);
-                return false;
-            }
-        }
-        return true;
+        return $this->getSessionContextTokens($sessionId) >= ($ctxSize - 4096);
     }
 
     private function ensureSessionExists(int $sessionId): void

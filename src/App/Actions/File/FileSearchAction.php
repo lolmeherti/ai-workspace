@@ -3,9 +3,12 @@
 namespace App\Actions\File;
 
 use App\Actions\BaseAction;
+use App\Search\FileRetriever;
 
 class FileSearchAction extends BaseAction
 {
+    private ?FileRetriever $retriever = null;
+
     public function __construct(private $db)
     {
     }
@@ -23,94 +26,72 @@ class FileSearchAction extends BaseAction
 
         $source = $_GET['source'] ?? '';
         $isGallery = ($source === 'gallery');
+        $toolQuery = trim($_GET['query'] ?? '');
 
-        $toolQuery = $_GET['query'] ?? $toolData['query'] ?? '';
-        $cleanQuery = str_replace([',', ';', '/', '-', '_'], ' ', $toolQuery);
-        $cleanQuery = preg_replace('/[^\p{L}\p{N}\s]/u', '', $cleanQuery);
-        $rawKeywords = array_filter(explode(' ', $cleanQuery));
-
-        $stopwords = ['a', 'i', 'of', 'for', 'the', 'and', 'to', 'in', 'my', 'your', 'with', 'on', 'at', 'by', 'an', 'is', 'it', 'or', 'as', 'be', 'we', 'he', 'me', 'us', 'if', 'so', 'no', 'go', 'do', 'up', 'am', 'pm', 'not', 'but', 'all', 'any', 'has', 'had', 'was', 'were', 'are', 'been', 'can', 'will', 'would', 'could', 'should', 'may', 'this', 'that', 'these', 'those', 'there', 'their', 'them', 'then', 'than', 'about', 'into', 'from', 'here', 'more', 'other', 'which', 'what', 'when', 'where', 'who', 'how', 'why', 'just', 'very', 'too', 'only', 'also', 'still', 'even', 'some', 'many', 'much', 'each', 'every', 'both', 'few', 'need', 'want', 'show', 'find', 'give', 'tell', 'please', 'like', 'look', 'make', 'made', 'use', 'used', 'using', 'see', 'know', 'think', 'work', 'take', 'come', 'say', 'mean', 'thing', 'things', 'stuff', 'way', 'file', 'files', 'now', 'get', 'got', 'really', 'again', 'always', 'never', 'back', 'down', 'off', 'out', 'over', 'new', 'old', 'first', 'last', 'next', 'same', 'own', 'well', 'still', 'already', 'yet', 'list', 'search', 'words', 'example', 'keywords', 'comma', 'separated'];
-
-        $keywords = [];
-        foreach ($rawKeywords as $word) {
-            $lowerWord = mb_strtolower($word);
-            if (mb_strlen($word) < 2 || in_array($lowerWord, $stopwords)) {
-                continue;
-            }
-            $keywords[] = $word;
-        }
-
-        $sql = "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at FROM uploaded_files";
-        $conditions = [];
-        $params = [];
-
-        if (!empty($keywords)) {
-            $idx = 0;
-            foreach ($keywords as $word) {
-                if (mb_strlen($word) < 2) {
-                    continue;
-                }
-                $conditions[] = "(generated_title LIKE :w{$idx} OR original_name LIKE :o{$idx})";
-                $params[":w{$idx}"] = "%{$word}%";
-                $params[":o{$idx}"] = "%{$word}%";
-                $idx++;
-            }
-        }
-
-        if (!empty($conditions)) {
-            $sql .= " WHERE " . implode(" OR ", $conditions);
-        }
-
-        $sql .= " ORDER BY uploaded_at DESC";
-
-        if ($isGallery) {
-            $page = max(1, (int)($_GET['page'] ?? 1));
-            $limit = max(1, min(100, (int)($_GET['limit'] ?? 12)));
-            $offset = ($page - 1) * $limit;
-
-            $countSql = "SELECT COUNT(*) as total FROM uploaded_files";
-            if (!empty($conditions)) {
-                $countSql .= " WHERE " . implode(" OR ", $conditions);
+        try {
+            if ($toolQuery === '') {
+                $files = $this->browseAll();
+            } elseif ($isGallery) {
+                $files = $this->retriever()->rankAll($toolQuery);
+            } else {
+                $files = $this->retriever()->rank($toolQuery);
             }
 
-            try {
-                $countResult = $this->db->query($countSql, $params);
-                $total = (int)($countResult[0]['total'] ?? 0);
-
-                $sql .= " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
-                $matchingFiles = $this->db->query($sql, $params);
-
-                foreach ($matchingFiles as &$file) {
-                    $file['snippet'] = $this->getFileSnippet($file['physical_name'], $file['file_type']);
-                }
-
+            if ($isGallery) {
+                $this->respondGallery($files, $toolQuery);
+            } else {
                 $this->jsonResponse([
                     'status' => 'success',
                     'query' => $toolQuery,
-                    'files' => $matchingFiles,
-                    'pagination' => [
-                        'total' => $total,
-                        'page' => $page,
-                        'limit' => $limit,
-                        'pages' => ceil($total / $limit)
-                    ]
+                    'files' => array_slice($files, 0, 5),
                 ]);
-            } catch (\Exception $e) {
-                $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 400);
             }
-        } else {
-            $sql .= " LIMIT 5";
-            try {
-                $matchingFiles = $this->db->query($sql, $params);
-                $this->jsonResponse([
-                    'status' => 'success',
-                    'query' => $toolQuery,
-                    'files' => $matchingFiles
-                ]);
-            } catch (\Exception $e) {
-                $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 400);
-            }
+        } catch (\Exception $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 400);
         }
+    }
+
+    private function retriever(): FileRetriever
+    {
+        if ($this->retriever === null) {
+            $this->retriever = new FileRetriever($this->db);
+        }
+        return $this->retriever;
+    }
+
+    private function browseAll(): array
+    {
+        return $this->db->query(
+            "SELECT id, original_name, physical_name, generated_title, file_type, uploaded_at
+             FROM uploaded_files
+             ORDER BY uploaded_at DESC"
+        );
+    }
+
+    private function respondGallery(array $files, string $query): void
+    {
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $limit = max(1, min(100, (int)($_GET['limit'] ?? 12)));
+        $offset = ($page - 1) * $limit;
+        $total = count($files);
+
+        $pageFiles = array_slice($files, $offset, $limit);
+        foreach ($pageFiles as &$file) {
+            $file['snippet'] = $this->getFileSnippet($file['physical_name'], $file['file_type']);
+        }
+        unset($file);
+
+        $this->jsonResponse([
+            'status' => 'success',
+            'query' => $query,
+            'files' => $pageFiles,
+            'pagination' => [
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit,
+                'pages' => (int)ceil($total / $limit),
+            ],
+        ]);
     }
 
     private function getFileSnippet(string $physicalName, string $fileType): string

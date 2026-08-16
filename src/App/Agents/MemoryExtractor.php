@@ -18,26 +18,6 @@ class MemoryExtractor
         $this->agent = $agent;
     }
 
-    public function runIfThresholdMet(int $sessionId): void
-    {
-        $threshold = (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000);
-        $charThreshold = $threshold * 4;
-
-        $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-        
-        $totalChars = 0;
-        $chatText = "";
-
-        foreach ($history as $row) {
-            $totalChars += mb_strlen($row['message']);
-            $chatText .= ucfirst($row['role']) . ": " . $row['message'] . "\n";
-        }
-
-        if ($totalChars >= $charThreshold) {
-            $this->extractAndSave($chatText);
-        }
-    }
-
     public function extractAndSave(string $chatText, bool $isManual = false): void
     {
         $candidates = [];

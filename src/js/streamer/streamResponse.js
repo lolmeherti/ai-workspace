@@ -4,7 +4,7 @@
  */
 
 import { state } from '../state.js';
-import { showCondensationModal, updateTokenCounter } from '../ui.js';
+import { showCondensationModal, updateTokenCounter, lockChatContext } from '../ui.js';
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
@@ -407,10 +407,32 @@ export async function streamResponse(formData, originalMessage) {
                         const event = payload.event;
                         const data = payload.data;
 
+                        if (event === 'context_full') {
+                            state.isGenerating = false;
+                            if (loadingIndicator && loadingIndicator.parentNode) {
+                                loadingIndicator.remove();
+                            }
+                            lockChatContext();
+                            return;
+                        }
+
                         if (event === 'limit_warning') {
                             state.isGenerating = false;
                             aiWrapper.remove();
                             showCondensationModal(formData, originalMessage);
+                            return;
+                        }
+
+                        if (event === 'error') {
+                            state.isGenerating = false;
+                            if (loadingIndicator && loadingIndicator.parentNode) {
+                                loadingIndicator.remove();
+                            }
+                            const errMsg = document.createElement('div');
+                            errMsg.className = 'text-rose-400 text-sm py-1';
+                            errMsg.textContent = (data && data.message) ? data.message : 'AI is busy with another task.';
+                            textContainer.appendChild(errMsg);
+                            aiBubble.classList.add('parsed');
                             return;
                         }
 
@@ -714,7 +736,7 @@ export async function streamResponse(formData, originalMessage) {
                                     htmlContent = window.parseInlineFiles(htmlContent);
                                 }
 
-                                const cursorHtml = '<span class="animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u258d</span>';
+                                const cursorHtml = '<span class="streaming-cursor animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u258d</span>';
                                 
                                 textContainer.innerHTML = htmlContent + cursorHtml;
                                 textContainer.querySelectorAll('pre code').forEach((block) => {
@@ -734,7 +756,7 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'done') {
-                            const cursor = textContainer.querySelector('.animate-pulse');
+                            const cursor = textContainer.querySelector('.streaming-cursor');
                             if (cursor) cursor.remove();
 
                             // Tool-call detection: scan full text for tool syntax (including multi-line)

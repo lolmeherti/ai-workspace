@@ -215,6 +215,18 @@ export async function applyCondensation() {
     }
 }
 
+export function lockChatContext() {
+    const textarea = document.getElementById('q');
+    const submitBtn = document.querySelector('#chatForm button[type="submit"]');
+    if (textarea) {
+        textarea.disabled = true;
+        textarea.placeholder = 'Context full — condense the conversation to continue.';
+    }
+    if (submitBtn) {
+        submitBtn.disabled = true;
+    }
+}
+
 export function updateTokenCounter(current, max) {
     const counterContainer = document.getElementById('token-counter-container');
     const counterText = document.getElementById('token-counter-text');

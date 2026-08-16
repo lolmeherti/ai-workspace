@@ -269,8 +269,13 @@ class ChatBriefingStreamAction extends BaseAction
                      . "4. Only suggest reminder cards or upcoming scheduling options for genuine future events.\n\n"
                      . "DAILY BRIEFING SUMMARY INSTRUCTIONS:\n"
                      . "When summarizing emails, make sure to highlight any explicit dates, times, invitations, obligations, pickups, or task-like requests mentioned by the senders so the user is fully aware of their commitments. Do not write vague or lazy summaries.\n\n"
-                     . "Visual Card rule: You must preserve and append the exact, literal numeric reference tag (e.g. [Email: 3:26708]) from the source summaries when mentioning any email. Do not modify these numbers or replace them with account names.\n"
-                     . "Action Card rule: Append any pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your response.";
+                     . "Visual Card rule: You must preserve and append the exact, literal numeric reference tag (e.g. [Email: 3:26708]) from the source summaries when mentioning any email. Do not modify these numbers or replace them with account names.\n";
+
+        if (!empty($suggestionsTags)) {
+            $finalSystem .= "Action Card rule: Append the pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your response.";
+        } else {
+            $finalSystem .= "Do NOT invent or append any [TodoistSuggest] action cards. There are no pre-vetted suggestions in this briefing.";
+        }
 
         $finalMessages = [
             ['role' => 'system', 'content' => $finalSystem],

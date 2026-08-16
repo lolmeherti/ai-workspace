@@ -115,31 +115,40 @@ TEXT;
         foreach ($recentHistory as $idx => $row) {
             $hasImage = false;
             $messageContent = $row['message'];
+            $imageParts = [];
+            $docBlocks  = [];
 
-            if (preg_match_all('/\\[File:\\s*([a-zA-Z0-9._\\-]+)\\]/', $messageContent, $matches)) {
-                foreach ($matches[1] as $matchIdx => $matchedFilename) {
-                    $fullFilePath = $this->uploadDir . $matchedFilename;
-                    $txtPath = $fullFilePath . '.txt';
+            if (preg_match_all('/\\[File:\\s*([a-zA-Z0-9._-]+)\\]/', $messageContent, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $m) {
+                    $name = $m[1];
+                    $full = $this->uploadDir . $name;
+                    $txt  = $full . '.txt';
 
-                    if (file_exists($txtPath)) {
-                        $docText = file_get_contents($txtPath);
-                        $messageContent .= "\n\n[Referenced File Content for {$matchedFilename}]:\n{$docText}\n[End of Referenced File Content]";
-                    } elseif (file_exists($fullFilePath)) {
-                        $mimeType = @mime_content_type($fullFilePath) ?: 'application/octet-stream';
-                        if (str_starts_with($mimeType, 'image/')) {
-                            $hasImage = true;
-                            $base64 = base64_encode(file_get_contents($fullFilePath));
-                            
-                            $messages[] = [
-                                'role' => $row['role'],
-                                'content' => [
-                                    ['type' => 'text', 'text' => str_replace($matches[0][$matchIdx], '', $messageContent)],
-                                    ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
-                                ]
-                            ];
-                        }
+                    if (file_exists($txt)) {
+                        $docBlocks[] = "[Referenced File Content for {$name}]:\n" . file_get_contents($txt) . "\n[End]";
+                    } elseif (file_exists($full) && str_starts_with(@mime_content_type($full) ?: '', 'image/')) {
+                        $imageParts[] = [
+                            'type' => 'image_url',
+                            'image_url' => ['url' => 'data:' . @mime_content_type($full) . ';base64,' . base64_encode(file_get_contents($full))]
+                        ];
                     }
+                    $messageContent = str_replace($m[0], '', $messageContent);
                 }
+            }
+
+            if ($imageParts !== []) {
+                $messages[] = [
+                    'role' => $row['role'],
+                    'content' => array_merge(
+                        [['type' => 'text', 'text' => $messageContent]],
+                        $imageParts
+                    )
+                ];
+                continue;
+            }
+
+            if ($docBlocks !== []) {
+                $messageContent .= "\n\n" . implode("\n\n", $docBlocks);
             }
 
             if (!$hasImage) {

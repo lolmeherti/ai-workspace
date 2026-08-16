@@ -6,6 +6,8 @@ use Dotenv\Dotenv;
 
 class Config
 {
+    public const CURRENT_INDEX_VERSION = 1;
+
     private static bool $loaded = false;
 
     public static function load(string $path): void

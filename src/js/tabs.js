@@ -17,8 +17,15 @@ export function initTabs() {
 export function switchSidebarTab(tabId) {
     localStorage.setItem('activeTab', tabId);
 
-    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads', 'panel-emails'];
-    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads', 'tab-btn-emails'];
+    try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tabId);
+        window.history.replaceState(null, '', url);
+    } catch (e) {
+    }
+
+    const panels = ['panel-chats', 'panel-memories', 'panel-queries', 'panel-uploads', 'panel-emails', 'panel-jobs'];
+    const buttons = ['tab-btn-chats', 'tab-btn-memories', 'tab-btn-queries', 'tab-btn-uploads', 'tab-btn-emails', 'tab-btn-jobs'];
 
     panels.forEach(id => {
         const el = document.getElementById(id);
@@ -45,19 +52,29 @@ export function switchSidebarTab(tabId) {
     const chatWorkspace = document.getElementById('chat-workspace');
     const galleryWorkspace = document.getElementById('gallery-workspace');
     const emailWorkspace = document.getElementById('email-workspace');
+    const jobWorkspace = document.getElementById('job-workspace');
 
     if (tabId === 'uploads') {
         if (chatWorkspace) chatWorkspace.classList.add('hidden');
         if (emailWorkspace) emailWorkspace.classList.add('hidden');
+        if (jobWorkspace) jobWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
         document.dispatchEvent(new CustomEvent('gallery-opened'));
     } else if (tabId === 'emails') {
         if (chatWorkspace) chatWorkspace.classList.add('hidden');
         if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (jobWorkspace) jobWorkspace.classList.add('hidden');
         if (emailWorkspace) emailWorkspace.classList.remove('hidden');
+    } else if (tabId === 'jobs') {
+        if (chatWorkspace) chatWorkspace.classList.add('hidden');
+        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
+        if (emailWorkspace) emailWorkspace.classList.add('hidden');
+        if (jobWorkspace) jobWorkspace.classList.remove('hidden');
+        document.dispatchEvent(new CustomEvent('jobs-opened'));
     } else {
         if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
         if (emailWorkspace) emailWorkspace.classList.add('hidden');
+        if (jobWorkspace) jobWorkspace.classList.add('hidden');
         if (chatWorkspace) chatWorkspace.classList.remove('hidden');
     }
 }

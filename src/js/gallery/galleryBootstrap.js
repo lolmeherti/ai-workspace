@@ -708,8 +708,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        const count = data.synced_count || 0;
-                        alert(`Sync complete. Identified and AI-indexed ${count} new file(s).`);
+                        const synced = data.synced_count || 0;
+                        const reindexed = data.reindexed_count || 0;
+                        const failed = data.failed_count || 0;
+                        let msg = `Sync complete. ${synced} new file(s) indexed.`;
+                        if (reindexed > 0) msg += ` ${reindexed} file(s) re-indexed.`;
+                        if (failed > 0) msg += ` ${failed} file(s) failed.`;
+                        alert(msg);
                     } else {
                         alert(`Sync failed: ${data.message}`);
                     }

@@ -78,6 +78,11 @@ try {
 
     $pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
     extract($pageData);
+} catch (\App\Services\ModelBusyException $e) {
+    http_response_code(409);
+    header('Content-Type: application/json');
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    exit;
 } catch (\Throwable $e) {
     \App\Logger::critical("Bootstrap failure in index.php", [
         'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
@@ -99,6 +104,20 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Continuous Chat Session</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            750: '#2a3b55',
+                            850: '#182236',
+                        },
+                    },
+                },
+            },
+        };
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/core.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/icon.iife.js" type="module"></script>
@@ -125,6 +144,10 @@ try {
         <div id="email-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden bg-[#040810]">
             <?php include __DIR__ . '/views/email-workspace.php'; ?>
         </div>
+
+        <div id="job-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden bg-[#040810]">
+            <?php include __DIR__ . '/views/job-workspace.php'; ?>
+        </div>
     </div>
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
@@ -132,10 +155,11 @@ try {
     <script>
         const currentActiveTab = '<?php echo $activeTab; ?>';
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
-        const maxTokensLimit = <?php echo (int) Config::get('MEMORY_EXTRACTION_THRESHOLD_TOKENS', 15000); ?>;
+        const maxTokensLimit = <?php echo (int) Config::get('LLM_CTX_SIZE', 32768); ?>;
     </script>
     <script type="module" src="js/app.js"></script>
     <script type="module" src="js/gallery/galleryBootstrap.js"></script>
     <script type="module" src="js/email/emailWorkspaceBootstrap.js"></script>
+    <script type="module" src="js/jobs/jobWorkspaceBootstrap.js"></script>
 </body>
 </html>
