@@ -17,7 +17,6 @@ import (
 
 type Assets struct {
 	Compose []byte
-	SearXNG []byte
 	Models  []byte
 	Icon    []byte
 }

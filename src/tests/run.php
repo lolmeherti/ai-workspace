@@ -11,7 +11,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/MessageAssemblyTest.php';
 require_once __DIR__ . '/ThoughtExtractionTest.php';
 require_once __DIR__ . '/MultiQueryTest.php';
-require_once __DIR__ . '/SearchPipelineTest.php';
+require_once __DIR__ . '/SourceSequenceTest.php';
 require_once __DIR__ . '/MemorySelectorTest.php';
 require_once __DIR__ . '/JobStateMachineTest.php';
 require_once __DIR__ . '/JobMatcherTest.php';
@@ -25,14 +25,17 @@ require_once __DIR__ . '/FileRetrieverTest.php';
 require_once __DIR__ . '/FileSyncReindexTest.php';
 require_once __DIR__ . '/ModelLockTest.php';
 require_once __DIR__ . '/FileRetrievalEvalTest.php';
+require_once __DIR__ . '/CitationValidatorTest.php';
+require_once __DIR__ . '/ContextBudgetTest.php';
+require_once __DIR__ . '/CondensationTest.php';
+require_once __DIR__ . '/PromptInjectionFilterTest.php';
 
 use App\Config;
 use App\Database;
-use App\AgentManager;
 use App\Tests\MessageAssemblyTest;
 use App\Tests\ThoughtExtractionTest;
 use App\Tests\MultiQueryTest;
-use App\Tests\SearchPipelineTest;
+use App\Tests\SourceSequenceTest;
 use App\Tests\MemorySelectorTest;
 use App\Tests\JobStateMachineTest;
 use App\Tests\JobMatcherTest;
@@ -46,6 +49,10 @@ use App\Tests\FileRetrieverTest;
 use App\Tests\FileSyncReindexTest;
 use App\Tests\ModelLockTest;
 use App\Tests\FileRetrievalEvalTest;
+use App\Tests\CitationValidatorTest;
+use App\Tests\ContextBudgetTest;
+use App\Tests\CondensationTest;
+use App\Tests\PromptInjectionFilterTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -58,12 +65,10 @@ try {
     exit(1);
 }
 
-$agent = new AgentManager();
-
 $allOk = true;
 
 echo "=== Phase 1: Message Assembly Tests ===\n";
-$allOk = (new MessageAssemblyTest($db, $agent, __DIR__ . '/../uploads/'))->run() && $allOk;
+$allOk = (new MessageAssemblyTest($db, __DIR__ . '/../uploads/'))->run() && $allOk;
 
 echo "\n=== Phase 2: Thought Extraction Tests ===\n";
 $allOk = (new ThoughtExtractionTest())->run() && $allOk;
@@ -71,8 +76,8 @@ $allOk = (new ThoughtExtractionTest())->run() && $allOk;
 echo "\n=== Phase 3: Multi-Query Tests ===\n";
 $allOk = (new MultiQueryTest())->run() && $allOk;
 
-echo "\n=== Phase 4: Search Pipeline Tests ===\n";
-$allOk = (new SearchPipelineTest($db, $agent, __DIR__ . '/../uploads/'))->run() && $allOk;
+echo "\n=== Phase 4: Source Sequence Tests ===\n";
+$allOk = (new SourceSequenceTest($db))->run() && $allOk;
 
 echo "\n=== Phase 5: Memory Selector Tests ===\n";
 $allOk = (new MemorySelectorTest($db))->run() && $allOk;
@@ -112,6 +117,18 @@ $allOk = (new FileSyncReindexTest())->run() && $allOk;
 
 echo "\n=== Phase 17: File Retrieval Evaluation ===\n";
 $allOk = (new FileRetrievalEvalTest())->run() && $allOk;
+
+echo "\n=== Phase 18: Citation Validator Tests ===\n";
+$allOk = (new CitationValidatorTest($db))->run() && $allOk;
+
+echo "\n=== Phase 19: Context Budget Tests ===\n";
+$allOk = (new ContextBudgetTest($db))->run() && $allOk;
+
+echo "\n=== Phase 20: Condensation Tests ===\n";
+$allOk = (new CondensationTest($db))->run() && $allOk;
+
+echo "\n=== Phase 21: Prompt Injection Filter Tests ===\n";
+$allOk = (new PromptInjectionFilterTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

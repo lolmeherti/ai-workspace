@@ -14,9 +14,8 @@ reimplement it. The codebase has centralized paths that should always be taken:
   domain repositories (`App\Repositories\`, `App\Jobs\*Repository`). Do not open a
   second connection or hand-roll a parallel query layer.
 - **LLM** — `App\AgentManager` is the single inference endpoint. No other provider.
-- **Fetching / parsing** — `App\Scraper`, `App\Search\BridgeFetcher`, and
-  `App\JsonParser` are the shared substrates; reuse them rather than writing a new
-  fetch or parse path.
+- **Fetching / parsing** — `App\Search\BridgeFetcher` and `App\JsonParser` are
+  the shared substrates; reuse them rather than writing a new fetch or parse path.
 
 The goal is to prevent accidental rewrites and code duplication: when in doubt,
 trace the existing symbol to its definition and usages first.

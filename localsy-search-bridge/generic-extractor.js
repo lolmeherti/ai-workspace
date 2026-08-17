@@ -91,6 +91,20 @@
   // ═══════════════════════════════════════════════════
   // DOM extraction — heading-preserving text walk
   // ═══════════════════════════════════════════════════
+  function selectContentRoot() {
+    const selectors = ['article', 'main', '[role="main"]', '#content', '.content', '#main'];
+    for (const sel of selectors) {
+      const node = document.querySelector(sel);
+      if (node) {
+        const text = cleanText(node.textContent || '');
+        if (text.length > 500) {
+          return node;
+        }
+      }
+    }
+    return document.body;
+  }
+
   function extract() {
     const sections = [];
     let currentHeading = "";
@@ -98,11 +112,11 @@
     let buffer = "";
     let fullBody = "";
 
-    const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NAV", "NOSCRIPT", "IFRAME", "SVG", "TEMPLATE"]);
+    const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NAV", "NOSCRIPT", "IFRAME", "SVG", "TEMPLATE", "HEADER", "FOOTER", "ASIDE"]);
     const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6"]);
 
     const walker = document.createTreeWalker(
-      document.body,
+      selectContentRoot(),
       NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
       {
         acceptNode: (node) => {

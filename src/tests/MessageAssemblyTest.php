@@ -4,27 +4,25 @@ declare(strict_types=1);
 
 namespace App\Tests;
 
-use App\ChatManager;
 use App\Services\PromptAssemblyService;
 
 class MessageAssemblyTest
 {
     private PromptAssemblyService $prompt;
-    private ChatManager $chat;
     private int $passed = 0;
     private int $failed = 0;
     private array $failures = [];
+    private ?string $origWindow = null;
 
-    public function __construct(\App\Database $db, \App\AgentManager $agent, string $uploadDir)
+    public function __construct(\App\Database $db, string $uploadDir)
     {
         $this->prompt = new PromptAssemblyService($db, $uploadDir);
-        $this->chat = new ChatManager($db, $agent);
     }
 
     public function run(): bool
     {
         $this->runPreprocessHistory();
-        $this->runCleanMessagesArray();
+        $this->runBuildMessagesArray();
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);
@@ -67,13 +65,6 @@ class MessageAssemblyTest
         }
     }
 
-    private function invokePrivate(object $obj, string $method, mixed ...$args): mixed
-    {
-        $ref = new \ReflectionMethod($obj, $method);
-        $ref->setAccessible(true);
-        return $ref->invoke($obj, ...$args);
-    }
-
     // ===================================================================
     // preprocessHistory — filters tool_call and super_abilities stubs
     // ===================================================================
@@ -94,7 +85,7 @@ class MessageAssemblyTest
         $this->testEq('filters tool_call message', 3, count($output));
         $this->test('user message preserved',
             $output[0]['role'] === 'user' && $output[0]['message'] === 'find my cv');
-        $this->test('system data_fetching preserved (converted later by cleanMessagesArray)',
+        $this->test('system data_fetching preserved',
             $output[1]['role'] === 'system' && $output[1]['message'] === 'Found: CV_2024.pdf');
         $this->test('assistant text preserved',
             $output[2]['role'] === 'assistant' && $output[2]['message'] === 'I found your CV.');
@@ -138,82 +129,85 @@ class MessageAssemblyTest
     }
 
     // ===================================================================
-    // cleanMessagesArray — converts system→user for non-first positions
+    // buildMessagesArray — Context Data exempt from rolling window
     // ===================================================================
-    private function runCleanMessagesArray(): void
+    private function runBuildMessagesArray(): void
     {
-        echo "\n=== cleanMessagesArray ===\n";
+        echo "\n=== buildMessagesArray ===\n";
 
-        $messages = [
-            ['role' => 'system', 'content' => 'You are a helpful assistant.'],
-            ['role' => 'user', 'content' => 'find my cv'],
-            ['role' => 'system', 'content' => 'Tool result: CV_2024.pdf found.'],
-            ['role' => 'assistant', 'content' => 'I found your CV.'],
-            ['role' => 'user', 'content' => 'thanks'],
+        $this->origWindow = $_ENV['CHAT_ROLLING_WINDOW_LIMIT'] ?? null;
+        $_ENV['CHAT_ROLLING_WINDOW_LIMIT'] = '15';
+
+        $sys = 'SYSTEM_PROMPT';
+
+        $history = [['role' => 'system', 'message' => 'FACT_SENTINEL_AAA', 'message_type' => 'data_fetching']];
+        for ($i = 0; $i < 20; $i++) {
+            $history[] = ['role' => ($i % 2 === 0 ? 'user' : 'assistant'), 'message' => "conv {$i}", 'message_type' => 'text'];
+        }
+        $out = $this->prompt->buildMessagesArray($sys, $history);
+        $this->testEq('fact survives >15 messages: appears exactly once', 1, $this->countContent($out, 'FACT_SENTINEL_AAA'));
+
+        $history2 = [];
+        for ($i = 0; $i < 3; $i++) {
+            $history2[] = ['role' => 'user', 'message' => "q {$i}", 'message_type' => 'text'];
+        }
+        $history2[] = ['role' => 'system', 'message' => 'RECENT_SENTINEL_BBB', 'message_type' => 'data_fetching'];
+        $out2 = $this->prompt->buildMessagesArray($sys, $history2);
+        $this->testEq('exactly-once: recent data_fetching not doubled', 1, $this->countContent($out2, 'RECENT_SENTINEL_BBB'));
+
+        $history3 = [
+            ['role' => 'system', 'message' => 'FIRST_SENTINEL', 'message_type' => 'data_fetching'],
+            ['role' => 'user', 'message' => 'hello', 'message_type' => 'text'],
+            ['role' => 'system', 'message' => 'SECOND_SENTINEL', 'message_type' => 'data_fetching'],
         ];
+        $out3 = $this->prompt->buildMessagesArray($sys, $history3);
+        $posFirst = $this->findContentPos($out3, 'FIRST_SENTINEL');
+        $posSecond = $this->findContentPos($out3, 'SECOND_SENTINEL');
+        $this->test('ordering preserved: first block before second', $posFirst !== -1 && $posSecond !== -1 && $posFirst < $posSecond);
 
-        $cleaned = $this->invokePrivate($this->chat, 'cleanMessagesArray', $messages);
+        $posHello = $this->findContentPos($out3, 'hello');
+        $this->test('evidence injected before conversation (current turn last)',
+            $posFirst !== -1 && $posHello !== -1 && $posFirst < $posHello && $posSecond < $posHello);
 
-        $this->test('position 0 system stays system',
-            $cleaned[0]['role'] === 'system');
-        $this->test('position 0 system content unchanged',
-            $cleaned[0]['content'] === 'You are a helpful assistant.');
-        $this->test('position 1 user stays user',
-            $cleaned[1]['role'] === 'user');
-        $this->test('position 2 system converted to user',
-            $cleaned[2]['role'] === 'user');
-        $this->test('position 2 system gets [System Context / Tool Output] prefix',
-            str_starts_with($cleaned[2]['content'], '[System Context / Tool Output]:'));
-        $this->test('position 2 original content preserved after prefix',
-            str_contains($cleaned[2]['content'], 'CV_2024.pdf found.'));
-        $this->test('position 3 assistant unchanged',
-            $cleaned[3]['role'] === 'assistant' && $cleaned[3]['content'] === 'I found your CV.');
-        $this->test('position 4 user unchanged',
-            $cleaned[4]['role'] === 'user' && $cleaned[4]['content'] === 'thanks');
+        $roles = array_values(array_unique(array_map(fn($m) => $m['role'], $out3)));
+        $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
 
-        // Single system message only
-        $single = [['role' => 'system', 'content' => 'System prompt only.']];
-        $cleanedSingle = $this->invokePrivate($this->chat, 'cleanMessagesArray', $single);
-        $this->test('single system message stays system (position 0)',
-            $cleanedSingle[0]['role'] === 'system');
-
-        // All user messages — no conversions
-        $allUser = [
-            ['role' => 'user', 'content' => 'msg1'],
-            ['role' => 'user', 'content' => 'msg2'],
+        $history4 = [
+            ['role' => 'system', 'message' => 'ACTIVE_SENTINEL', 'message_type' => 'data_fetching', 'active_context' => 1],
+            ['role' => 'system', 'message' => 'EVICTED_SENTINEL', 'message_type' => 'data_fetching', 'active_context' => 0],
+            ['role' => 'user', 'message' => 'hello', 'message_type' => 'text'],
         ];
-        $cleanedAllUser = $this->invokePrivate($this->chat, 'cleanMessagesArray', $allUser);
-        $this->test('all-user: no role changes', !array_filter($cleanedAllUser, fn($m) => $m['role'] !== 'user'));
+        $out4 = $this->prompt->buildMessagesArray($sys, $history4);
+        $this->testEq('active data_fetching injected', 1, $this->countContent($out4, 'ACTIVE_SENTINEL'));
+        $this->testEq('evicted data_fetching excluded', 0, $this->countContent($out4, 'EVICTED_SENTINEL'));
 
-        // Multiple systems after position 0 — all converted
-        $multiSys = [
-            ['role' => 'system', 'content' => 'prompt'],
-            ['role' => 'system', 'content' => 'tool result 1'],
-            ['role' => 'system', 'content' => 'tool result 2'],
-            ['role' => 'user', 'content' => 'user query'],
-        ];
-        $cleanedMultiSys = $this->invokePrivate($this->chat, 'cleanMessagesArray', $multiSys);
-        $this->test('multi-system: position 0 stays system',
-            $cleanedMultiSys[0]['role'] === 'system');
-        $this->test('multi-system: position 1 converted to user',
-            $cleanedMultiSys[1]['role'] === 'user');
-        $this->test('multi-system: position 2 converted to user',
-            $cleanedMultiSys[2]['role'] === 'user');
-        $this->test('multi-system: position 1 has prefix',
-            str_starts_with($cleanedMultiSys[1]['content'], '[System Context / Tool Output]:'));
-        $this->test('multi-system: position 2 has prefix',
-            str_starts_with($cleanedMultiSys[2]['content'], '[System Context / Tool Output]:'));
+        if ($this->origWindow === null) {
+            unset($_ENV['CHAT_ROLLING_WINDOW_LIMIT']);
+        } else {
+            $_ENV['CHAT_ROLLING_WINDOW_LIMIT'] = $this->origWindow;
+        }
+    }
 
-        // Message with missing role key
-        $badMsg = [
-            ['role' => 'system', 'content' => 'prompt'],
-            ['content' => 'no role key'],  // missing role
-        ];
-        $cleanedBad = $this->invokePrivate($this->chat, 'cleanMessagesArray', $badMsg);
-        $this->test('missing role key: does not crash', isset($cleanedBad[1]));
+    private function countContent(array $messages, string $needle): int
+    {
+        $count = 0;
+        foreach ($messages as $m) {
+            $c = $m['content'] ?? '';
+            if (is_string($c) && str_contains($c, $needle)) {
+                $count++;
+            }
+        }
+        return $count;
+    }
 
-        // Empty array
-        $this->testEq('empty array: returns empty', [],
-            $this->invokePrivate($this->chat, 'cleanMessagesArray', []));
+    private function findContentPos(array $messages, string $needle): int
+    {
+        foreach ($messages as $i => $m) {
+            $c = $m['content'] ?? '';
+            if (is_string($c) && str_contains($c, $needle)) {
+                return $i;
+            }
+        }
+        return -1;
     }
 }

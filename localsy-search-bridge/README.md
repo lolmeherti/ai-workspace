@@ -1,5 +1,10 @@
 # Localsy Search Bridge MVP
 
+> **Superseded — Aug 2026.** SearXNG and snippet-only mode were removed. `search_web`
+> is bridge-only now; a bridge outage surfaces as an explicit "web search unavailable
+> / no results" message instead of degrading to snippets. See
+> `.hermes/plans/searxng-removal-handoff.md`.
+
 ## Load into Edge
 
 1. Unzip this folder.

@@ -43,6 +43,74 @@
         </div>
     </header>
 
+    <!-- CONTEXT DATA PANEL -->
+    <?php
+    $contextItems = [];
+    foreach (($history ?? []) as $msg) {
+        if (($msg['message_type'] ?? '') !== 'data_fetching') {
+            continue;
+        }
+        $sourceCount = 0;
+        if (!empty($msg['source_map'])) {
+            $decoded = json_decode($msg['source_map'], true);
+            if (is_array($decoded)) {
+                $sourceCount = count($decoded);
+            }
+        }
+        $active = (int)($msg['active_context'] ?? 1) === 1;
+        $toolName = trim($msg['tool_name'] ?? '');
+        $queryText = trim($msg['search_query'] ?? '');
+        $label = $queryText !== '' ? $queryText : ($toolName !== '' ? $toolName : 'Context Data');
+        $tokens = (int)($msg['token_estimate'] ?? 0);
+        $metaParts = [];
+        if ($toolName !== '') {
+            $metaParts[] = $toolName;
+        }
+        if ($sourceCount > 0) {
+            $metaParts[] = $sourceCount . ' source' . ($sourceCount === 1 ? '' : 's');
+        }
+        $metaParts[] = '~' . $tokens . ' tokens';
+        $contextItems[] = [
+            'id' => (int)$msg['id'],
+            'active' => $active,
+            'label' => $label,
+            'meta' => implode(' · ', $metaParts),
+        ];
+    }
+    ?>
+    <style>
+    #context-data-panel summary { list-style: none; }
+    #context-data-panel summary::-webkit-details-marker { display: none; }
+    #context-data-panel[open] .ctx-chevron { transform: rotate(180deg); }
+    .ctx-chevron { transition: transform 0.2s; }
+    </style>
+    <details id="context-data-panel" class="border-b border-slate-800/80 bg-[#0b1120]">
+        <summary class="flex items-center justify-between px-6 py-2.5 cursor-pointer select-none hover:bg-slate-800/30 transition-colors">
+            <span class="text-[10px] font-semibold tracking-wider uppercase text-cyan-400 flex items-center gap-2">
+                <uk-icon icon="database" class="w-3.5 h-3.5"></uk-icon> Context Data
+                <span id="context-data-count" class="text-slate-500 font-mono normal-case"><?php echo count($contextItems); ?></span>
+            </span>
+            <svg class="ctx-chevron w-3 h-3 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </summary>
+        <div id="context-data-items" class="px-6 pb-4 space-y-2 max-h-[40vh] overflow-y-auto">
+            <?php if (empty($contextItems)): ?>
+                <p id="context-data-empty" class="text-xs text-slate-500 text-center py-4">No retained context data yet.</p>
+            <?php else: ?>
+                <?php foreach ($contextItems as $item): ?>
+                    <div class="context-item flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-700/40 bg-slate-900/30" data-id="<?php echo $item['id']; ?>" data-active="<?php echo $item['active'] ? '1' : '0'; ?>">
+                        <div class="flex flex-col min-w-0 flex-1">
+                            <span class="text-xs text-slate-300 truncate"><?php echo htmlspecialchars($item['label']); ?></span>
+                            <span class="text-[10px] text-slate-500 font-mono"><?php echo htmlspecialchars($item['meta']); ?></span>
+                        </div>
+                        <span class="context-badge text-[9px] px-1.5 py-0.5 rounded-full border <?php echo $item['active'] ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'; ?>"><?php echo $item['active'] ? 'Active' : 'Evicted'; ?></span>
+                        <button type="button" onclick="viewContextItem(<?php echo $item['id']; ?>)" class="context-view-btn shrink-0 text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">View</button>
+                        <button type="button" onclick="toggleContextItem(<?php echo $item['id']; ?>)" class="context-toggle-btn shrink-0 text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 transition-colors cursor-pointer"><?php echo $item['active'] ? 'Evict' : 'Restore'; ?></button>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </details>
+
     <!-- NEW SPLIT-PANE WRAPPER -->
     <div class="flex-1 flex h-full relative overflow-hidden">
         

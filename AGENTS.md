@@ -18,7 +18,7 @@ A hybrid desktop application called **Localsy** that bundles a local AI chat exp
   - `gpu/detect.go` — GPU vendor detection (NVIDIA/AMD/intel)
   - `env/merge.go` — merge user config into generated .env for Docker containers
   - `download/file.go` — progress-tracked HTTP download with systray tooltip updates
-- **Embedded assets** via `//go:embed`: docker-compose.prod.yml, models.json, searxng/settings.yml, icon.ico
+- **Embedded assets** via `//go:embed`: docker-compose.prod.yml, models.json, icon.ico
 
 ### Models configuration (`models.json`)
 Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB). Each tier specifies a GGUF model file + optional multimodal projector (.mmproj), both downloaded from HuggingFace at first run.
@@ -57,13 +57,11 @@ Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB
 | `web` | PHP/Apache app server | 8080:80 |
 | `mysql` | MySQL 8.0 persistence | 3306:3306 |
 | `redis` | Caching layer (7-alpine) | 6379:6379 |
-| `searxng` | Private web search engine | 8888:8080 |
-| `flaresolverr` | Cloudflare/bot bypass for search | 8191:8191 |
 
 ## Key files to know
 
 ### Entry points
-- **`main.go`** — systray binary entry, embeds compose/models/searxng config
+- **`main.go`** — systray binary entry, embeds compose/models config
 - **`internal/launcher/bootstrap.go`** — the full startup sequence (GPU detect -> model select -> download if needed -> Docker up -> llama server -> open browser)
 - **`src/index.php`** — PHP app bootstrap, pulls health check status and page data
 
@@ -71,7 +69,6 @@ Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB
 - **`models.json`** — VRAM-tiered models with HuggingFace URLs
 - **`docker-compose.yml`** — development compose (bind-mounts `./src`)
 - **`docker-compose.prod.yml`** (embedded in binary) — production compose with built assets
-- **`searxng/settings.yml`** — search engine configuration
 - `.env` at root and `src/.env` — environment variables
 
 ### Build & scripts
@@ -86,12 +83,12 @@ Five tiers mapped to VRAM brackets (Tier1 = >=32GB / 5090 up to Tier5 = <=11.9GB
 ```
 main.go
   -> launcher.Bootstrap()
-     1. Create ~/.localy/{bin, models, searxng} dirs
+     1. Create ~/.localy/{bin, models} dirs
      2. GPU detection
      3. Model tier selection from models.json by VRAM
      4. Download .gguf model + optional .mmproj if missing
      5. Ensure Docker WSL backend ready
-     6. Write docker-compose.yml and searxng/settings.yml
+     6. Write docker-compose.yml
      7. Merge user config into generated .env
      8. chmod -R 777 in WSL for file sharing
      9. Start Docker daemon + compose up
@@ -165,11 +162,11 @@ Viewer at `/logs` (not linked from UI): event type counts, expandable samples, r
 - The PHP app has no ORM — raw PDO queries throughout
 - Reuse centralized paths and scan for existing usage before writing — DB access
   only via `App\Database` + repositories, LLM only via `AgentManager`, fetching/
-  parsing via `Scraper`/`BridgeFetcher`/`JsonParser`. Do not reimplement or open a
+  parsing via `BridgeFetcher`/`JsonParser`. Do not reimplement or open a
   parallel path; this is the primary guard against accidental rewrites/duplication.
 
 ## Important constraints
 - **Never read `.env`** — it may contain credentials; use `.env.example` if needed
-- The binary is self-contained: compose, models config, and searxng settings are embedded in the Go binary via `//go:embed`
+- The binary is self-contained: compose and models config are embedded in the Go binary via `//go:embed`
 - User data lives under `%LOCALAPPDATA%\localsy\` (Windows) or equivalent on other platforms
 - File uploads stored at `src/uploads/`, indexed by filename hash

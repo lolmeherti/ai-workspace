@@ -41,7 +41,7 @@ class ToolExecutionService
 
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
         $this->searchLocalTool = new SearchLocalTool($db, $agent, $uploadDir);
-        $this->searchWebTool = new SearchWebTool($db, $agent, $uploadDir, $this->todoist);
+        $this->searchWebTool = new SearchWebTool($db, $uploadDir, $this->todoist);
         $this->createTodoistTaskTool = new CreateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);

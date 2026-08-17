@@ -18,6 +18,7 @@ import { enableManualBlockEdit, handleBlockInput, enableFusedRangeEdit } from '.
 import { streamUpdateBlockContent, commitBlockEditDirectly, evaluateStreamCompletion } from './chatEditorBlockStream.js';
 import { deleteSelectedBlocks, deleteSingleBlockDirectly } from './chatEditorBlockDelete.js';
 import { triggerUnifiedBriefing } from './chatUnifiedBriefing.js';
+import { toggleContextItem, viewContextItem } from './chatContextData.js';
 
 window.toggleFileAccordion = toggleFileAccordion;
 window.showFileInExplorer = showFileInExplorer;
@@ -48,3 +49,5 @@ window.evaluateStreamCompletion = evaluateStreamCompletion;
 window.deleteSelectedBlocks = deleteSelectedBlocks;
 window.deleteSingleBlockDirectly = deleteSingleBlockDirectly;
 window.triggerUnifiedBriefing = triggerUnifiedBriefing;
+window.toggleContextItem = toggleContextItem;
+window.viewContextItem = viewContextItem;

@@ -17,8 +17,6 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - REDIS_HOST=${REDIS_HOST}
-      - SEARXNG_HOST=${SEARXNG_HOST}
-      - FLARESOLVERR_HOST=${FLARESOLVERR_HOST}
       - BRIDGE_HOST=${WINDOWS_HOST_IP}
       # Pass the dynamic Windows Host IP directly to Xdebug 
       - XDEBUG_CONFIG=client_host=${WINDOWS_HOST_IP:-host.docker.internal} client_port=9003
@@ -27,8 +25,6 @@ services:
     depends_on:
       - mysql
       - redis
-      - searxng
-      - flaresolverr
     restart: unless-stopped
 
   mysql:
@@ -52,25 +48,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: unless-stopped
-
-  searxng:
-    image: searxng/searxng:latest
-    container_name: ai_searxng
-    ports:
-      - "8888:8080"
-    volumes:
-      - ./searxng:/etc/searxng:rw
-    restart: unless-stopped
-
-  flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: ai_flaresolverr
-    ports:
-      - "8191:8191"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TZ=${TZ}
     restart: unless-stopped
 
 volumes:

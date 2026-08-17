@@ -220,7 +220,7 @@ export function lockChatContext() {
     const submitBtn = document.querySelector('#chatForm button[type="submit"]');
     if (textarea) {
         textarea.disabled = true;
-        textarea.placeholder = 'Context full — condense the conversation to continue.';
+        textarea.placeholder = 'Context full — evict Context Data or condense to continue.';
     }
     if (submitBtn) {
         submitBtn.disabled = true;

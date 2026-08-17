@@ -4,10 +4,7 @@ namespace App;
 
 use App\Database;
 use App\AgentManager;
-use App\Agents\ContextCondenser;
 use App\Config;
-use App\Scraper;
-use App\Search;
 use App\Search\CitationValidator;
 use App\Services\FileAttachmentService;
 use App\Services\ModelLock;
@@ -16,6 +13,9 @@ use App\Services\ToolExecutionService;
 
 class ChatManager
 {
+    private const OUTPUT_RESERVE_TOKENS = 4096;
+    private const SAFETY_MARGIN_TOKENS = 256;
+
     private Database $db;
     private AgentManager $agent;
     private FileAttachmentService $fileAttachmentService;
@@ -23,35 +23,17 @@ class ChatManager
     private ToolExecutionService $toolExecutionService;
     private string $uploadDir;
 
-    private ?ContextCondenser $contextCondenserService;
-
     public function __construct(
-        Database $db, 
-        AgentManager $agent, 
-        ?ContextCondenser $contextCondenser = null
+        Database $db,
+        AgentManager $agent
     ) {
         $this->db = $db;
         $this->agent = $agent;
         $this->uploadDir = __DIR__ . '/../uploads/';
-        $this->contextCondenserService = $contextCondenser;
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
         $this->promptAssemblyService = new PromptAssemblyService($this->db, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
-    }
-
-    public function cleanMessagesArray(array $messages): array
-    {
-        foreach ($messages as $idx => $msg) {
-            $role = $msg['role'] ?? '';
-            $content = $msg['content'] ?? '';
-            
-            if ($idx > 0 && $role === 'system') {
-                $messages[$idx]['role'] = 'user';
-                $messages[$idx]['content'] = "[System Context / Tool Output]:\n" . $content;
-            }
-        }
-        return $messages;
     }
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?callable $streamCallback = null): array
@@ -64,14 +46,12 @@ class ChatManager
 
         $emit('status', ['text' => 'Initializing...']);
 
-        if ($this->isContextFull($sessionId)) {
-            $emit('context_full', [
-                'context_tokens' => $this->getSessionContextTokens($sessionId),
-                'max_tokens' => (int) Config::get('LLM_CTX_SIZE', 0),
-            ]);
+        $overflow = $this->preflightContext($sessionId, $query, !empty($activeEditFile));
+        if ($overflow !== null) {
+            $emit('context_overflow', $overflow);
             return [
-                'status' => 'context_full',
-                'message' => 'Context limit reached. Condense the conversation to continue.'
+                'status' => 'context_overflow',
+                'message' => $overflow['message'],
             ];
         }
 
@@ -108,8 +88,7 @@ class ChatManager
         }
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], '', false, $query);
-        $currentMessages = $this->cleanMessagesArray($currentMessages);
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
 
         $contextMessageCount = count($currentMessages) - 1;
 
@@ -148,7 +127,8 @@ class ChatManager
                     $toolName, $queries, $sessionId, $emit
                 );
 
-                $sourceMap = array_merge($sourceMap, $this->toolExecutionService->getLastSourceMap());
+                $lastSourceMap = $this->toolExecutionService->getLastSourceMap();
+                $sourceMap = array_merge($sourceMap, $lastSourceMap);
 
                 $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
 
@@ -157,17 +137,28 @@ class ChatManager
                     'role' => 'system',
                     'message' => $result,
                     'message_type' => 'data_fetching',
+                    'tool_name' => $toolName,
+                    'search_query' => $queryList,
+                    'source_map' => !empty($lastSourceMap) ? json_encode($lastSourceMap) : null,
                     'token_estimate' => (int)(mb_strlen($result) / 4),
+                ]);
+
+                $historyId = (int) $this->db->getConnection()->lastInsertId();
+                $emit('context_data_added', [
+                    'id' => $historyId,
+                    'label' => $queryList,
+                    'tool_name' => $toolName,
+                    'query' => $queryList,
+                    'source_count' => count($lastSourceMap),
+                    'token_estimate' => (int)(mb_strlen($result) / 4),
+                    'active' => true,
                 ]);
             }
 
             \App\ProgressWriter::done($sessionId);
 
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-            $currentMessages = $this->promptAssemblyService->buildMessagesArray(
-                $systemPrompt, $history, [], '', false, $query
-            );
-            $currentMessages = $this->cleanMessagesArray($currentMessages);
+            $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
         }
 
         if (!empty($sourceMap)) {
@@ -179,8 +170,9 @@ class ChatManager
         $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
         $finalResponse = $aiRawResponse;
 
+        $visibleSourceIds = $this->promptAssemblyService->extractVisibleSourceIds($history);
         $cleanResponse = (new CitationValidator())
-            ->sanitizeCitations($finalResponse, array_keys($sourceMap));
+            ->sanitizeCitations($finalResponse, $visibleSourceIds);
 
         $usage = $this->agent->lastUsage;
         $assistantTokens = (int)(mb_strlen($cleanResponse) / 4);
@@ -244,19 +236,36 @@ class ChatManager
         ];
     }
 
-    private function getSessionContextTokens(int $sessionId): int
-    {
-        $rows = $this->db->selectSafe('chat_sessions', ['id' => $sessionId]);
-        return (int)($rows[0]['context_tokens'] ?? 0);
-    }
-
-    private function isContextFull(int $sessionId): bool
+    private function preflightContext(int $sessionId, string $query, bool $isEditorMode): ?array
     {
         $ctxSize = (int) Config::get('LLM_CTX_SIZE', 0);
         if ($ctxSize <= 0) {
-            return false;
+            return null;
         }
-        return $this->getSessionContextTokens($sessionId) >= ($ctxSize - 4096);
+
+        $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, $isEditorMode);
+        $breakdown = $this->promptAssemblyService->estimatePromptTokens($systemPrompt, $history, $query);
+
+        if (!PromptAssemblyService::projectsOverflow($breakdown, self::OUTPUT_RESERVE_TOKENS, $ctxSize, self::SAFETY_MARGIN_TOKENS)) {
+            return null;
+        }
+
+        $total = $breakdown['total'] + self::OUTPUT_RESERVE_TOKENS + self::SAFETY_MARGIN_TOKENS;
+        return [
+            'total' => $total,
+            'max' => $ctxSize,
+            'output_reserve' => self::OUTPUT_RESERVE_TOKENS,
+            'breakdown' => $breakdown,
+            'message' => sprintf(
+                'Context limit reached (%d/%d tokens). Context Data ~%d · Chat ~%d · output reserve %d. Evict Context Data or condense chat to continue.',
+                $total,
+                $ctxSize,
+                $breakdown['context_data'],
+                $breakdown['recent_chat'],
+                self::OUTPUT_RESERVE_TOKENS
+            ),
+        ];
     }
 
     private function ensureSessionExists(int $sessionId): void

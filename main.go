@@ -16,9 +16,6 @@ var embeddedCompose []byte
 //go:embed models.json
 var embeddedModels []byte
 
-//go:embed searxng/settings.yml
-var embeddedSearXNG []byte
-
 //go:embed icon.ico
 var iconData []byte
 
@@ -30,7 +27,6 @@ func main() {
 	launcher.SetAssets(launcher.Assets{
 		Compose: embeddedCompose,
 		Models:  embeddedModels,
-		SearXNG: embeddedSearXNG,
 		Icon:    iconData,
 	})
 

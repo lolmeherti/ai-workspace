@@ -1,3 +1,0 @@
-https://medium.com/towardsdev/building-http-middleware-in-go-a-practical-guide-without-third-party-dependencies-0f7727f36764
-https://www.alexedwards.net/blog/making-and-using-middleware
-https://dev.to/shayan_holakouee/building-a-nethttp-middleware-chain-from-scratch-in-go-346b

@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\AgentManager;
 use App\JsonParser;
 use App\Logger;
-use App\Scraper;
 use App\Search\BridgeFetcher;
 use App\Search\BridgeFetchResult;
 use App\Search\HostCooldown;
@@ -224,18 +223,8 @@ PROMPT;
             return null;
         }
 
-        $method = '';
-        $html = Scraper::fetchRaw($url, $method);
-        if ($html !== null) {
-            $text = self::normalizeHtml($html->body);
-            if ($text !== '') {
-                return $text;
-            }
-        }
-
-        Logger::logEvent('job_parse_fetch_failed', 'JobParser: could not fetch page text', [
+        Logger::logEvent('job_parse_fetch_failed', 'JobParser: bridge could not fetch page text', [
             'url' => $url,
-            'scraper_method' => $method,
             'bridge_status' => $result->status,
             'bridge_error' => $result->error,
         ], 'warn', 'JobParser::parse');
