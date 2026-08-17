@@ -15,6 +15,7 @@ class ChatManager
 {
     private const OUTPUT_RESERVE_TOKENS = 4096;
     private const SAFETY_MARGIN_TOKENS = 256;
+    private const ROUTER_MAX_TOKENS = 1024;
 
     private Database $db;
     private AgentManager $agent;
@@ -100,18 +101,17 @@ class ChatManager
         $sourceMap = [];
         $this->toolExecutionService->resetSourceMap();
 
-        // Tool call pass — native function calling via llama.cpp API.
-        // Model receives JSON-schema tool definitions; API enforces format.
-        $tools = $this->buildToolSchemas();
+        // Tool call pass — a dedicated router (Option C) decides the tool, then
+        // falls back to the auto path only if no valid routing call is recovered.
         $emit('status', ['text' => 'Analyzing request...']);
 
-        $toolResult = $this->agent->chatWithTools($currentMessages, $tools, 'auto');
+        $routing = $this->routeRequest($history, $currentMessages);
 
-        if ($toolResult['finish_reason'] === 'tool_calls' && !empty($toolResult['tool_calls'])) {
+        if (!empty($routing['tool_calls'])) {
             \App\ProgressWriter::init('/tmp');
             $emit('status', ['text' => 'Executing tools...']);
 
-            foreach ($toolResult['tool_calls'] as $toolCall) {
+            foreach ($routing['tool_calls'] as $toolCall) {
                 $fn = $toolCall['function'] ?? [];
                 $toolName = $fn['name'] ?? '';
                 $argsJson = $fn['arguments'] ?? '{}';
@@ -339,6 +339,115 @@ class ChatManager
                 ],
             ],
         ];
+    }
+
+    private function noToolSchema(): array
+    {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => 'no_tool',
+                'description' => 'Choose this when the request can be answered directly from your own knowledge or the conversation, with no search or tool needed.',
+                'parameters' => ['type' => 'object', 'properties' => new \stdClass()],
+            ],
+        ];
+    }
+
+    private function buildRouterSchemas(): array
+    {
+        return array_merge($this->buildToolSchemas(), [$this->noToolSchema()]);
+    }
+
+    private function routeRequest(array $history, array $assistantMessages): array
+    {
+        $routerMessages = $this->promptAssemblyService->buildMessagesArray(
+            $this->promptAssemblyService->buildRouterSystemPrompt(),
+            $history
+        );
+
+        $result = $this->agent->chatWithTools(
+            $routerMessages,
+            $this->buildRouterSchemas(),
+            'required',
+            0.0,
+            self::ROUTER_MAX_TOKENS
+        );
+
+        $leaked = $result['content'] ?? null;
+        $leakedChars = $leaked !== null ? mb_strlen($leaked) : 0;
+
+        $realCalls = [];
+        $sawNoTool = false;
+
+        foreach (($result['tool_calls'] ?? []) as $tc) {
+            $fn = $tc['function'] ?? [];
+            $name = $fn['name'] ?? '';
+            $args = json_decode($fn['arguments'] ?? '{}', true) ?: [];
+            $queries = $args['queries'] ?? [];
+
+            if ($name === 'no_tool') {
+                $sawNoTool = true;
+                continue;
+            }
+
+            if ($name !== '' && !empty($queries)) {
+                $realCalls[] = [
+                    'function' => [
+                        'name' => $name,
+                        'arguments' => $fn['arguments'] ?? '{}',
+                    ],
+                ];
+            }
+        }
+
+        if (!empty($realCalls)) {
+            if ($leakedChars > 0) {
+                \App\Logger::logEvent('router_leaked_content', 'Router emitted prose alongside a valid tool call; prose ignored', [
+                    'tools' => array_column(array_column($realCalls, 'function'), 'name'),
+                    'leaked_chars' => $leakedChars,
+                ], 'warn', 'ChatManager::routeRequest');
+            }
+            \App\Logger::logEvent('router_tools', 'Router selected tool(s)', [
+                'tools' => array_column(array_column($realCalls, 'function'), 'name'),
+                'fallback' => false,
+            ], 'info', 'ChatManager::routeRequest');
+            return ['tool_calls' => $realCalls, 'fallback' => false];
+        }
+
+        if ($sawNoTool) {
+            if ($leakedChars > 0) {
+                \App\Logger::logEvent('router_leaked_content', 'Router emitted prose alongside no_tool; prose ignored', [
+                    'leaked_chars' => $leakedChars,
+                ], 'warn', 'ChatManager::routeRequest');
+            }
+            \App\Logger::logEvent('router_no_tool', 'Router selected no_tool', [], 'info', 'ChatManager::routeRequest');
+            return ['tool_calls' => [], 'fallback' => false];
+        }
+
+        \App\Logger::logEvent('router_failure', 'Router produced no valid tool call; falling back to auto-tool path', [
+            'finish_reason' => $result['finish_reason'] ?? null,
+            'content_chars' => $leakedChars,
+            'tool_call_count' => count($result['tool_calls'] ?? []),
+        ], 'warn', 'ChatManager::routeRequest');
+
+        $fallback = $this->agent->chatWithTools($assistantMessages, $this->buildToolSchemas(), 'auto');
+        $fallbackCalls = [];
+        foreach (($fallback['tool_calls'] ?? []) as $tc) {
+            $fn = $tc['function'] ?? [];
+            $name = $fn['name'] ?? '';
+            $args = json_decode($fn['arguments'] ?? '{}', true) ?: [];
+            $queries = $args['queries'] ?? [];
+            if ($name !== '' && !empty($queries)) {
+                $fallbackCalls[] = [
+                    'function' => [
+                        'name' => $name,
+                        'arguments' => $fn['arguments'] ?? '{}',
+                    ],
+                ];
+            }
+        }
+
+        return ['tool_calls' => $fallbackCalls, 'fallback' => true];
     }
 
     private function autoGenerateTitle(int $sessionId, string $query, array $history, callable $emit): ?string

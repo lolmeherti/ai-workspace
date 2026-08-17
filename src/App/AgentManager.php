@@ -152,17 +152,17 @@ class AgentManager
      *
      * @return array{finish_reason: string, content: ?string, tool_calls: ?array, usage: ?array}
      */
-    public function chatWithTools(array $messages, array $tools, string $toolChoice = 'auto'): array
+    public function chatWithTools(array $messages, array $tools, string $toolChoice = 'auto', ?float $temperature = null, int $maxTokens = 4096): array
     {
         $endpoint = $this->apiUrl . '/chat/completions';
-        $finalTemperature = (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
+        $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
 
         $payload = [
             'model' => $this->modelName,
             'messages' => $messages,
             'stream' => false,
             'temperature' => $finalTemperature,
-            'max_tokens' => 4096,
+            'max_tokens' => $maxTokens,
             'tools' => $tools,
             'tool_choice' => $toolChoice,
         ];
