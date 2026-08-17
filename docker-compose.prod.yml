@@ -14,8 +14,6 @@ services:
     depends_on:
       - mysql
       - redis
-      - searxng
-      - flaresolverr
     restart: unless-stopped
 
   mysql:
@@ -39,25 +37,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: unless-stopped
-
-  searxng:
-    image: searxng/searxng:latest
-    container_name: ai_searxng
-    ports:
-      - "8888:8080"
-    volumes:
-      - ./searxng:/etc/searxng:rw
-    restart: unless-stopped
-
-  flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: ai_flaresolverr
-    ports:
-      - "8191:8191"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TZ=${TZ}
     restart: unless-stopped
 
 volumes:

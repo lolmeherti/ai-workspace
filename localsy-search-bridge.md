@@ -1,5 +1,10 @@
 # Localsy Search Bridge
 
+> **Superseded — Aug 2026.** SearXNG and snippet-only mode were removed. `search_web`
+> is bridge-only now; a bridge outage surfaces as an explicit "web search unavailable
+> / no results" message instead of degrading to snippets. See
+> `.hermes/plans/searxng-removal-handoff.md`.
+
 Browser-based search and retrieval. The user's Edge browser handles SERP extraction,
 page rendering, and site-specific structured extraction. SearXNG provides SERP when
 the bridge is unavailable. FlareSolverr is removed entirely — it never worked

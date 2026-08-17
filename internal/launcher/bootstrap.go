@@ -23,11 +23,9 @@ func Bootstrap() {
 	workDir := filepath.Join(appData, "localsy")
 	binDir := filepath.Join(workDir, "bin")
 	modelDir := filepath.Join(workDir, "models")
-	searxngDir := filepath.Join(workDir, "searxng")
 
 	_ = os.MkdirAll(binDir, 0755)
 	_ = os.MkdirAll(modelDir, 0755)
-	_ = os.MkdirAll(searxngDir, 0755)
 
 	excludedMarker := filepath.Join(workDir, ".excluded")
 	serverExe := filepath.Join(binDir, "llama-server.exe")
@@ -94,7 +92,6 @@ func Bootstrap() {
 	docker.EnsureHeadlessReady(binDir, workDir)
 
 	util.WriteConfig(filepath.Join(workDir, "docker-compose.yml"), embedded.Compose)
-	util.WriteConfig(filepath.Join(searxngDir, "settings.yml"), embedded.SearXNG)
 
 	registry, ctxSize, useLocal := env.MergeAndWrite(workDir, modelID, resolved.Name, resolved.CtxSize)
 
@@ -107,7 +104,7 @@ func Bootstrap() {
 		}
 	}()
 
-	StartHTTPServer(defs, hw, binDir, modelDir, searxngDir, relay)
+	StartHTTPServer(defs, hw, binDir, modelDir, relay)
 
 	util.LogPrint("[+] Aligning systemic workspace file rights inside WSL...\n")
 	wslWorkDir := util.ToWslPath(workDir)

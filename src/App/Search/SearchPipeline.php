@@ -4,8 +4,6 @@ namespace App\Search;
 
 use App\AgentManager;
 use App\Config;
-use App\Search;
-use App\Search\OutboundScheduler;
 
 final class SearchPipeline
 {
@@ -17,8 +15,9 @@ final class SearchPipeline
     private SourceCondenser $sourceCondenser;
     private RetrievalPolicy $policy;
     private AgentManager $agent;
-    private OutboundScheduler $scheduler;
     private int $sessionId = 0;
+    private int $sourceStartSeq = 1;
+    private ContentDeduplicator $contentDeduplicator;
 
     public function __construct(AgentManager $agent)
     {
@@ -30,7 +29,7 @@ final class SearchPipeline
         $this->counter = new TokenCounter();
         $this->sourceCondenser = new SourceCondenser($agent);
         $this->policy = RetrievalPolicy::default();
-        $this->scheduler = new OutboundScheduler();
+        $this->contentDeduplicator = new ContentDeduplicator();
     }
 
     public function setSessionId(int $sessionId): void
@@ -38,11 +37,14 @@ final class SearchPipeline
         $this->sessionId = $sessionId;
     }
 
+    public function setSourceStartSeq(int $startSeq): void
+    {
+        $this->sourceStartSeq = $startSeq;
+    }
+
     /**
-     * Run the full search pipeline.
-     *
-     * Bridge connected → browser-based SERP + full page extraction.
-     * Bridge disconnected → SearXNG snippets only (honest fallback).
+     * Run the full search pipeline. Single implementation: browser bridge.
+     * Bridge failure is surfaced explicitly rather than degrading to snippets.
      *
      * @return array{evidence: string, sourceIds: string[], sourceMap: array<string, array{url:string,title:string,domain:string}>}
      */
@@ -50,11 +52,15 @@ final class SearchPipeline
     {
         $bridge = new BridgeFetcher();
 
-        if ($bridge->isConnected()) {
-            return $this->runBridgeMode($query, $messages, $emit, $bridge);
+        if (!$bridge->isConnected()) {
+            $this->emitProgress('search_unavailable', 'Web search unavailable — browser bridge not connected', $emit);
+            \App\Logger::logEvent('bridge_unavailable', 'Bridge disconnected — returning explicit unavailable result', [
+                'query' => $query,
+            ], 'warn', 'SearchPipeline::run');
+            return self::emptyResult('Web search is unavailable: the browser bridge is not connected (Edge extension or relay is offline).');
         }
 
-        return $this->runSnippetMode($query, $emit);
+        return $this->runBridgeMode($query, $messages, $emit, $bridge);
     }
 
     // ── Bridge mode (browser SERP + full extraction) ────────────────────
@@ -69,11 +75,11 @@ final class SearchPipeline
             'raw_count' => count($candidates),
         ], 'info', 'SearchPipeline::runBridgeMode');
         if (empty($candidates)) {
-            $this->emitProgress('search_no_results', 'No browser results, falling back to SearXNG snippets', $emit);
-            \App\Logger::logEvent('bridge_fallback', 'Bridge SERP returned no candidates - falling back to snippet mode', [
+            $this->emitProgress('search_no_results', 'No browser results for this query', $emit);
+            \App\Logger::logEvent('search_no_results', 'Bridge SERP returned no candidates', [
                 'query' => $query,
             ], 'warn', 'SearchPipeline::runBridgeMode');
-            return $this->runSnippetMode($query, $emit);
+            return self::emptyResult('No web search results were returned for this query.');
         }
 
         $deduplicator = new CandidateDeduplicator();
@@ -88,7 +94,7 @@ final class SearchPipeline
 
         $minSources = (int) \App\Config::get('MIN_EVIDENCE_SOURCES', 2);
 
-        $sourceId = 0;
+        $sourceId = $this->sourceStartSeq - 1;
         $allChunks = [];
         $fetchedUrls = [];
 
@@ -120,9 +126,34 @@ final class SearchPipeline
             }
 
             $this->emitProgress('scraping_done', "Scraped {$shortUrl}", $emit, $candidate->url);
-            $fetchedUrls[] = $candidate->url;
 
             $chunks = $this->chunksFromBridgeContent($result->content, $sid, $candidate->url);
+            if (empty($chunks)) {
+                continue;
+            }
+
+            $sourceBody = '';
+            foreach ($chunks as $chunk) {
+                $sourceBody .= $chunk->text . "\n";
+            }
+
+            $decision = $this->contentDeduplicator->evaluate($sourceBody);
+
+            \App\Logger::logEvent('bridge_dedup', $decision['duplicate'] ? 'Near-duplicate source dropped' : 'Source kept', [
+                'url' => $candidate->url,
+                'source_id' => $sid,
+                'decision' => $decision['duplicate'] ? 'drop' : 'keep',
+                'max_similarity' => round($decision['max_similarity'], 4),
+                'matched_source' => $decision['matched_label'],
+                'threshold' => ContentDeduplicator::SIMILARITY_THRESHOLD,
+            ], 'info', 'SearchPipeline::runBridgeMode');
+
+            if ($decision['duplicate']) {
+                continue;
+            }
+            $this->contentDeduplicator->keep($sourceBody, "{$sid} {$candidate->url}");
+
+            $fetchedUrls[] = $candidate->url;
             $allChunks = array_merge($allChunks, $chunks);
 
             // ── Incremental stop decision (raw BM25, no diversity) ────
@@ -164,12 +195,12 @@ final class SearchPipeline
         }
 
         if (empty($allChunks)) {
-            $this->emitProgress('search_no_results', 'No usable bridge content, falling back to SearXNG snippets', $emit);
-            \App\Logger::logEvent('bridge_fallback', 'All bridge fetches failed - falling back to snippet mode', [
+            $this->emitProgress('search_no_results', 'No usable page content was extracted', $emit);
+            \App\Logger::logEvent('search_no_results', 'All bridge fetches failed or yielded no content', [
                 'query' => $query,
                 'candidates_attempted' => count($candidates),
             ], 'warn', 'SearchPipeline::runBridgeMode');
-            return $this->runSnippetMode($query, $emit);
+            return self::emptyResult('Web pages could not be fetched for this query.');
         }
 
         // ── Final BM25 retrieval across all fetched chunks ───────────
@@ -177,12 +208,12 @@ final class SearchPipeline
         $selected = $this->retriever->rank($allChunks, $query, $query, $this->policy);
 
         if (empty($selected)) {
-            $this->emitProgress('search_no_results', 'No usable bridge evidence, falling back to SearXNG snippets', $emit);
-            \App\Logger::logEvent('bridge_fallback', 'All bridge chunks scored zero or were filtered — falling back to snippet mode', [
+            $this->emitProgress('search_no_results', 'No relevant content found in fetched pages', $emit);
+            \App\Logger::logEvent('search_no_results', 'All bridge chunks scored zero or were filtered', [
                 'query' => $query,
                 'total_chunks_extracted' => count($allChunks),
             ], 'warn', 'SearchPipeline::runBridgeMode');
-            return $this->runSnippetMode($query, $emit);
+            return self::emptyResult('No relevant content was found in the fetched pages.');
         }
 
         // ── Three-level evidence fitting ────────────────────────────
@@ -280,46 +311,9 @@ final class SearchPipeline
         return $chunks;
     }
 
-    // ── Snippet mode (SearXNG only, no crawling) ───────────────────────
-
-    private function runSnippetMode(string $query, callable $emit): array
+    private static function emptyResult(string $message): array
     {
-        $this->emitProgress('search_querying', "Querying search engine for: {$query}", $emit);
-
-        $this->scheduler->waitForSlot('searxng', true);
-        $candidates = Search::queryCandidates($query, 12);
-        if (empty($candidates)) {
-            $this->emitProgress('search_no_results', "No results for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceMap' => []];
-        }
-
-        $deduplicator = new CandidateDeduplicator();
-        $candidates = $deduplicator->deduplicate($candidates);
-        $candidates = CandidateRanker::deprioritize($candidates);
-
-        $evidence = EvidenceBuilder::fromSnippets($candidates);
-
-        if (empty($evidence)) {
-            $this->emitProgress('search_no_results', "No usable content for: {$query}", $emit);
-            return ['evidence' => '', 'sourceIds' => [], 'sourceMap' => []];
-        }
-
-        $sourceMap = [];
-        $i = 0;
-        foreach ($candidates as $c) {
-            $i++;
-            $sourceMap["S{$i}"] = [
-                'url'    => $c->url,
-                'title'  => $c->title ?: 'Untitled',
-                'domain' => $c->domain,
-            ];
-        }
-
-        return [
-            'evidence'  => $evidence,
-            'sourceIds' => array_keys($sourceMap),
-            'sourceMap' => $sourceMap,
-        ];
+        return ['evidence' => $message, 'sourceIds' => [], 'sourceMap' => []];
     }
 
     // ── Three-level evidence fitting ────────────────────────────────────
@@ -375,7 +369,7 @@ final class SearchPipeline
             $query
         );
 
-        $ledgerLines = ["RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:\n"];
+        $ledgerLines = [];
         foreach ($ledger as $entry) {
             $sourceChunks = array_filter($chunks, fn($c) => $c->sourceId === $entry['sourceId']);
             $first = reset($sourceChunks);
@@ -401,7 +395,7 @@ final class SearchPipeline
             usort($ledger, fn($a, $b) => count($a['items']) <=> count($b['items']));
             while ($ledgerTokens > $webBudget && count($ledger) > 1) {
                 array_pop($ledger);
-                $slimLines = ["RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:\n"];
+                $slimLines = [];
                 foreach ($ledger as $entry) {
                     $sourceChunks = array_filter($chunks, fn($c) => $c->sourceId === $entry['sourceId']);
                     $first = reset($sourceChunks);

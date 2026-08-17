@@ -14,6 +14,8 @@ use App\Actions\Chat\ChatStarAction;
 use App\Actions\Chat\ChatCondenseAction;
 use App\Actions\Chat\ChatStreamAction;
 use App\Actions\Chat\ChatSessionDeleteAction;
+use App\Actions\Chat\ContextDataToggleAction;
+use App\Actions\Chat\ContextDataViewAction;
 
 class ChatController extends BaseController
 {
@@ -90,6 +92,16 @@ class ChatController extends BaseController
 
         if ($this->db && isset($_GET['toggle_star'])) {
             (new ChatStarAction($this->chatSessionRepository))->execute();
+            return;
+        }
+
+        if ($this->db && isset($_GET['toggle_context'])) {
+            (new ContextDataToggleAction($this->db))->execute();
+            return;
+        }
+
+        if ($this->db && isset($_GET['view_context'])) {
+            (new ContextDataViewAction($this->db))->execute();
             return;
         }
 

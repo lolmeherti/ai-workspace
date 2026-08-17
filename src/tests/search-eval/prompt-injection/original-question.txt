@@ -1,1 +1,0 @@
-What is prompt injection in large language models and how does it work?

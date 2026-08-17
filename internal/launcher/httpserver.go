@@ -18,14 +18,13 @@ import (
 	"localsy/internal/util"
 )
 
-func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware, binDir, modelDir, searxngDir string, relay *bridge.Relay) {
+func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware, binDir, modelDir string, relay *bridge.Relay) {
 	handler := &modelsHandler{
-		defs:       defs,
-		hw:         hw,
-		binDir:     binDir,
-		modelDir:   modelDir,
-		searxngDir: searxngDir,
-		relay:      relay,
+		defs:     defs,
+		hw:       hw,
+		binDir:   binDir,
+		modelDir: modelDir,
+		relay:    relay,
 	}
 
 	go func() {
@@ -36,12 +35,11 @@ func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware,
 }
 
 type modelsHandler struct {
-	defs       map[string]models.ModelDefinition
-	hw         models.Hardware
-	binDir     string
-	modelDir   string
-	searxngDir string
-	relay      *bridge.Relay
+	defs     map[string]models.ModelDefinition
+	hw       models.Hardware
+	binDir   string
+	modelDir string
+	relay    *bridge.Relay
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

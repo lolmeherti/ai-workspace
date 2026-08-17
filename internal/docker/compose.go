@@ -16,7 +16,7 @@ func StartCompose(workDir, binDir, registry string) {
 		"docker", "compose",
 		"--project-directory", wslWorkDir,
 		"-f", wslWorkDir + "/docker-compose.yml",
-		"pull", "mysql", "redis", "searxng", "flaresolverr",
+		"pull", "mysql", "redis",
 	}
 
 	if strings.ToLower(strings.TrimSpace(registry)) != "local" && registry != "" {
@@ -34,7 +34,7 @@ func StartCompose(workDir, binDir, registry string) {
 		"docker", "compose",
 		"--project-directory", wslWorkDir,
 		"-f", wslWorkDir + "/docker-compose.yml",
-		"up", "-d",
+		"up", "-d", "--remove-orphans",
 	}
 	upCmd := util.RunSilentCommand("wsl", upArgs...)
 	upCmd.Stdout = logging.File

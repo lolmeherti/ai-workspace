@@ -8,6 +8,7 @@ import { showCondensationModal, updateTokenCounter, lockChatContext } from '../u
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
+import { addContextItem } from '../chat/chatContextData.js';
 
 function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -407,12 +408,17 @@ export async function streamResponse(formData, originalMessage) {
                         const event = payload.event;
                         const data = payload.data;
 
-                        if (event === 'context_full') {
+                        if (event === 'context_overflow') {
                             state.isGenerating = false;
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
                             lockChatContext();
+                            const overflowMsg = document.createElement('div');
+                            overflowMsg.className = 'text-rose-400 text-sm py-1';
+                            overflowMsg.textContent = (data && data.message) ? data.message : 'Context limit reached.';
+                            textContainer.appendChild(overflowMsg);
+                            aiBubble.classList.add('parsed');
                             return;
                         }
 
@@ -584,6 +590,10 @@ export async function streamResponse(formData, originalMessage) {
                             ctxParts.push(memoryNote);
 
                             addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
+                        }
+
+                        if (event === 'context_data_added') {
+                            addContextItem(data);
                         }
 
                         if (event === 'status') {

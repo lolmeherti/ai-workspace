@@ -25,7 +25,6 @@ if exist "%TARGET%" (
     if exist "%TARGET%\localsy.log" del /f /q "%TARGET%\localsy.log" >nul 2>&1
     
     if exist "%TARGET%\bin" rmdir /s /q "%TARGET%\bin" >nul 2>&1
-    if exist "%TARGET%\searxng" rmdir /s /q "%TARGET%\searxng" >nul 2>&1
     
     echo [+] Safe AppData cleanup complete. Models folder preserved.
 ) else (

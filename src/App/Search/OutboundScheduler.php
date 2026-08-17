@@ -9,7 +9,6 @@ final class OutboundScheduler
 {
     private const GLOBAL_DELAY_MS = 800;
     private const PER_HOST_DELAY_MS = 1500;
-    private const SEARCH_ENGINE_DELAY_MS = 4000;
     private const JITTER_MAX_MS = 700;
 
     private Client $redis;
@@ -25,52 +24,38 @@ final class OutboundScheduler
      *
      * Lua script guarantees no race between concurrent PHP-FPM workers.
      */
-    public function acquireSlot(string $host, bool $isSearchEngine = false): int
+    public function acquireSlot(string $host): int
     {
         $now = self::msNow();
-
-        $serviceKey = $isSearchEngine ? 'outbound:service:searxng:next_allowed_at' : '';
-        $serviceDelay = $isSearchEngine ? self::SEARCH_ENGINE_DELAY_MS : 0;
 
         $script = <<<'LUA'
             local global_key = KEYS[1]
             local host_key = KEYS[2]
-            local service_key = KEYS[3]
             local now = tonumber(ARGV[1])
             local global_delay = tonumber(ARGV[2])
             local host_delay = tonumber(ARGV[3])
-            local service_delay = tonumber(ARGV[4])
-            local jitter = tonumber(ARGV[5])
+            local jitter = tonumber(ARGV[4])
 
             local g_next = tonumber(redis.call('GET', global_key) or 0)
             local h_next = tonumber(redis.call('GET', host_key) or 0)
-            local s_next = 0
-            if service_key ~= '' then
-                s_next = tonumber(redis.call('GET', service_key) or 0)
-            end
 
-            local earliest = math.max(now, g_next, h_next, s_next)
+            local earliest = math.max(now, g_next, h_next)
             local scheduled = earliest + jitter
 
             redis.call('SET', global_key, scheduled + global_delay)
             redis.call('SET', host_key, scheduled + host_delay)
-            if service_key ~= '' then
-                redis.call('SET', service_key, scheduled + service_delay)
-            end
 
             return scheduled
         LUA;
 
         return (int) $this->redis->eval(
             $script,
-            3,
+            2,
             'outbound:global:next_allowed_at',
             "outbound:host:{$host}:next_allowed_at",
-            $serviceKey,
             $now,
             self::GLOBAL_DELAY_MS,
             self::PER_HOST_DELAY_MS,
-            $serviceDelay,
             random_int(0, self::JITTER_MAX_MS),
         );
     }
@@ -78,9 +63,9 @@ final class OutboundScheduler
     /**
      * Reserve a slot and sleep until it's time to proceed.
      */
-    public function waitForSlot(string $host, bool $isSearchEngine = false): void
+    public function waitForSlot(string $host): void
     {
-        $scheduled = $this->acquireSlot($host, $isSearchEngine);
+        $scheduled = $this->acquireSlot($host);
         $now = self::msNow();
 
         if ($scheduled > $now) {
@@ -124,18 +109,18 @@ final class OutboundScheduler
      * can release in finally blocks.
      *
      * Usage:
-     *   $token = $scheduler->acquireWithWait($host, false, 60000);
+     *   $token = $scheduler->acquireWithWait($host, 60000);
      *   try {
-     *       $result = FetchSafety::safeFetchUrl($url);
+     *       $result = (new BridgeFetcher())->fetch($url);
      *   } finally {
      *       $scheduler->releaseGlobalLock($token);
      *   }
      *
      * @param int $lockTimeoutMs Should exceed the longest expected request.
      */
-    public function acquireWithWait(string $host, bool $isSearchEngine = false, int $lockTimeoutMs = 30000): string
+    public function acquireWithWait(string $host, int $lockTimeoutMs = 30000): string
     {
-        $this->waitForSlot($host, $isSearchEngine);
+        $this->waitForSlot($host);
 
         $token = null;
         while ($token === null) {

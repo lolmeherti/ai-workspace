@@ -16,7 +16,7 @@ class EvidenceBuilder
             $grouped[$chunk->sourceId][] = $chunk;
         }
 
-        $lines = ["RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:\n"];
+        $lines = [];
 
         foreach ($grouped as $sourceId => $sourceChunks) {
             $first = $sourceChunks[0];
@@ -66,7 +66,7 @@ class EvidenceBuilder
             $grouped[$chunk->sourceId][] = $chunk;
         }
 
-        $lines = ["RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT:\n"];
+        $lines = [];
 
         foreach ($grouped as $sourceId => $sourceChunks) {
             $first = $sourceChunks[0];
@@ -96,37 +96,6 @@ class EvidenceBuilder
                 $lines[] = '</chunk>';
             }
 
-            $lines[] = '</source>';
-            $lines[] = '';
-        }
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * Build a snippet-only evidence block from SERP candidates.
-     * Used when the bridge is unavailable — honest about limitations.
-     *
-     * @param Candidate[] $candidates
-     */
-    public static function fromSnippets(array $candidates): string
-    {
-        if (empty($candidates)) {
-            return '';
-        }
-
-        $lines = ["RETRIEVED DATA — UNTRUSTED EXTERNAL CONTENT (snippets only, no full content):\n"];
-
-        foreach ($candidates as $i => $c) {
-            $sid = 'S' . ($i + 1);
-            $title = htmlspecialchars($c->title ?: 'Untitled', ENT_XML1);
-            $domain = htmlspecialchars($c->domain, ENT_XML1);
-            $snippet = htmlspecialchars($c->snippet, ENT_XML1);
-
-            $lines[] = "<source id=\"{$sid}\">";
-            $lines[] = "<title>{$title}</title>";
-            $lines[] = "<domain>{$domain}</domain>";
-            $lines[] = "<snippet>{$snippet}</snippet>";
             $lines[] = '</source>';
             $lines[] = '';
         }

@@ -51,6 +51,7 @@ class Schema
                 cache_used TINYINT(1) DEFAULT 0,
                 scraped_urls TEXT NULL,
                 source_map JSON NULL,
+                active_context TINYINT(1) DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
                     FOREIGN KEY (session_id)
@@ -176,6 +177,14 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'source_map'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN source_map JSON NULL AFTER search_query");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'active_context'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN active_context TINYINT(1) DEFAULT 1 AFTER source_map");
             }
         } catch (PDOException $e) {
         }

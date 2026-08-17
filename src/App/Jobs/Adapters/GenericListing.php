@@ -4,7 +4,6 @@ namespace App\Jobs\Adapters;
 
 use App\Jobs\JobSourceAdapter;
 use App\Logger;
-use App\Scraper;
 use App\Search\BridgeFetcher;
 use App\Search\BridgeFetchLogger;
 use App\Search\HostCooldown;
@@ -90,8 +89,8 @@ class GenericListing implements JobSourceAdapter
     protected function fetchListingLinks(string $listingUrl, ?string &$method, ?string &$rawHtml = null): array
     {
         $bridge = new BridgeFetcher();
-        $method = 'scraper';
-        $links = null;
+        $method = 'none';
+        $links = [];
 
         if ($bridge->isConnected()) {
             $result = $bridge->fetch($listingUrl);
@@ -117,25 +116,13 @@ class GenericListing implements JobSourceAdapter
                 ], 'warn', 'GenericListing');
                 return [];
             } else {
-                Logger::logEvent('job_listing_bridge_fail', 'Bridge fetch failed, falling back to Scraper', [
+                Logger::logEvent('job_listing_bridge_fail', 'Bridge fetch failed; skipping source', [
                     'url' => $listingUrl,
                     'status' => $result->status,
                     'error' => $result->error,
                 ], 'warn', 'GenericListing');
-            }
-        }
-
-        if ($links === null) {
-            if ((new HostCooldown())->isCoolingDown(parse_url($listingUrl, PHP_URL_HOST) ?: 'unknown')) {
                 return [];
             }
-            $method = 'scraper';
-            $html = Scraper::fetchRaw($listingUrl);
-            if ($html === null) {
-                throw new \RuntimeException("Fetch failed: {$listingUrl}");
-            }
-            $rawHtml = $html->body;
-            $links = self::extractJobLinks($html->body, $listingUrl);
         }
 
         Logger::logEvent('job_listing_fetch', 'Listing links fetched', [

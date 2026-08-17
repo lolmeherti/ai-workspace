@@ -9,14 +9,10 @@ class HealthCheck
         $status = new \stdClass();
         $status->database = $this->checkDatabase();
         $status->redis = $this->checkRedis();
-        $status->searxng = $this->checkSearxng();
-        $status->flaresolverr = $this->checkFlaresolverr();
         $status->ai = $this->checkAi();
         
-        $status->all_operational = $status->database 
-            && $status->redis 
-            && $status->searxng 
-            && $status->flaresolverr 
+        $status->all_operational = $status->database
+            && $status->redis
             && $status->ai;
 
         return $status;
@@ -41,18 +37,6 @@ class HealthCheck
         } catch (\Exception $e) {
             return false;
         }
-    }
-
-    private function checkSearxng(): bool
-    {
-        $host = rtrim(Config::get('SEARXNG_HOST', 'http://searxng:8080'), '/');
-        return $this->testUrl($host);
-    }
-
-    private function checkFlaresolverr(): bool
-    {
-        $host = rtrim(Config::get('FLARESOLVERR_HOST', 'http://flaresolverr:8191'), '/');
-        return $this->testUrl($host);
     }
 
     private function checkAi(): bool
