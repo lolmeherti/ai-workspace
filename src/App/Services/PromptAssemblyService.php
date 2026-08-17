@@ -52,13 +52,29 @@ If the user asks, search. Whether the information exists is a factual question a
 TEXT;
         }
 
+        $systemPrompt .= "\n\n" . $this->dateContextLine();
+
+        return $systemPrompt;
+    }
+
+    private function dateContextLine(): string
+    {
         $now = time();
         $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;
         $currentDate = date('l, F j, Y', $now) . sprintf(' (%02d:%02d)', (int)date('H', $now), $roundedMinute);
         $cutoffDate = 'early 2024';
-        $systemPrompt .= "\n\nToday's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+        return "Today's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
+    }
 
-        return $systemPrompt;
+    public function buildRouterSystemPrompt(): string
+    {
+        return $this->dateContextLine() . "\n"
+            . "You are a request router. Decide whether the user's request needs a tool and emit exactly one tool call: "
+            . "search_web for current or factual information beyond your knowledge cutoff; "
+            . "search_local for the user's files or memories; "
+            . "search_calendar for tasks or events; "
+            . "no_tool if the request can be answered directly from your knowledge or the conversation. "
+            . "Never write a direct answer — emit exactly one tool call.";
     }
 
     public function preprocessHistory(array $history): array
