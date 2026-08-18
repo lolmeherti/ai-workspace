@@ -218,6 +218,70 @@
                                             </div>
                                         </div>
                                     <?php endif; ?>
+                                <?php $perf = !empty($msg['perf_metrics']) ? json_decode($msg['perf_metrics'], true) : null; ?>
+                                <?php if (!empty($perf['calls'])): ?>
+                                    <?php
+                                    $pmCalls = $perf['calls'];
+                                    $pmLabels = ['firstpass' => 'first pass', 'answer' => 'answer', 'condenser' => 'condenser', 'tools' => 'tools'];
+                                    $pmAc = null;
+                                    foreach ($pmCalls as $pmC) {
+                                        if (($pmC['purpose'] ?? '') === 'answer') { $pmAc = $pmC; break; }
+                                    }
+                                    if ($pmAc === null) {
+                                        foreach ($pmCalls as $pmC) {
+                                            if (($pmC['purpose'] ?? '') === 'firstpass') { $pmAc = $pmC; break; }
+                                        }
+                                    }
+                                    if ($pmAc === null) { $pmAc = $pmCalls[count($pmCalls) - 1]; }
+                                    $pmParts = [count($pmCalls) . ' call' . (count($pmCalls) === 1 ? '' : 's')];
+                                    if (isset($perf['total_ms'])) { $pmParts[] = number_format($perf['total_ms'] / 1000, 1) . 's'; }
+                                    if (!empty($perf['ttft_ms'])) { $pmParts[] = 'TTFT ' . number_format($perf['ttft_ms'] / 1000, 1) . 's'; }
+                                    if ($pmAc && ($pmAc['reasoning_ms'] ?? 0) > 0) { $pmParts[] = 'think ' . number_format($pmAc['reasoning_ms'] / 1000, 1) . 's'; }
+                                    if ($pmAc) {
+                                        $pmTps = 0;
+                                        if (($pmAc['content_ms'] ?? 0) > 0 && ($pmAc['content_tok'] ?? 0) > 0) { $pmTps = ($pmAc['content_tok'] ?? 0) / (($pmAc['content_ms'] ?? 1) / 1000); }
+                                        elseif (($pmAc['pred_tps'] ?? 0) > 0) { $pmTps = $pmAc['pred_tps']; }
+                                        if ($pmTps > 0) { $pmParts[] = (int)round($pmTps) . ' tok/s'; }
+                                        if (($pmAc['prompt_tokens'] ?? 0) > 0) { $pmParts[] = (int)round(($pmAc['cache_n'] ?? 0) / $pmAc['prompt_tokens'] * 100) . '% cached'; }
+                                    }
+                                    $pmSummary = implode(' · ', $pmParts);
+                                    $pmChain = implode(' → ', array_map(fn($c) => $pmLabels[$c['purpose'] ?? ''] ?? ($c['purpose'] ?? '?'), $pmCalls));
+                                    ?>
+                                    <details class="metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40">
+                                        <summary class="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none text-slate-300">
+                                            <span class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                                <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                                metrics
+                                            </span>
+                                            <span class="text-[11px] font-mono text-slate-400 truncate"><?php echo htmlspecialchars($pmSummary); ?></span>
+                                        </summary>
+                                        <div class="px-3 pb-3 border-t border-slate-800/60">
+                                            <div class="text-[10px] text-slate-500 font-mono py-1.5"><?php echo htmlspecialchars($pmChain); ?></div>
+                                            <table class="w-full text-[10px] font-mono text-slate-400">
+                                                <thead><tr class="text-slate-500 text-left">
+                                                    <th class="py-1 pr-2 font-normal">call</th><th class="py-1 pr-2 font-normal">time</th><th class="py-1 pr-2 font-normal">prefill</th><th class="py-1 pr-2 font-normal">think</th><th class="py-1 font-normal">text</th>
+                                                </tr></thead>
+                                                <tbody>
+                                                <?php foreach ($pmCalls as $pmC): ?>
+                                                    <?php
+                                                    $pmLabel = $pmLabels[$pmC['purpose'] ?? ''] ?? ($pmC['purpose'] ?? '?');
+                                                    $pmPrefill = ($pmC['prompt_ms'] ?? 0) > 0 ? (int)round($pmC['prompt_ms']) . 'ms · ' . ($pmC['prompt_n'] ?? 0) . ' tok' . (($pmC['cache_n'] ?? 0) > 0 ? ' · ' . $pmC['cache_n'] . ' cached' : '') : '—';
+                                                    $pmThink = ($pmC['reasoning_ms'] ?? 0) > 0 ? (int)round($pmC['reasoning_ms']) . 'ms · ' . ($pmC['reasoning_tok'] ?? 0) . ' tok' : '—';
+                                                    $pmText = ($pmC['content_ms'] ?? 0) > 0 ? (int)round($pmC['content_ms']) . 'ms · ' . ($pmC['content_tok'] ?? 0) . ' tok' : '—';
+                                                    ?>
+                                                    <tr class="border-t border-slate-800/40">
+                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmLabel); ?></td>
+                                                        <td class="py-1 pr-2"><?php echo (int)round($pmC['elapsed_ms'] ?? 0); ?>ms</td>
+                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmPrefill); ?></td>
+                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmThink); ?></td>
+                                                        <td class="py-1"><?php echo htmlspecialchars($pmText); ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
                                 <?php else: ?>
                                     <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
                                 <?php endif; ?>

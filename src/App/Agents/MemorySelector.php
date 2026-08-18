@@ -15,31 +15,32 @@ class MemorySelector
     }
 
     /**
-     * Performs direct, database-only memory lookup without triggering secondary LLM calls.
+     * Match memories using the original retrieval semantics (FULLTEXT boolean
+     * OR, then a LIKE %word% fallback) and return them as structured rows so
+     * callers can deduplicate by id. No token filtering — broad fuzzy recall
+     * is intentional.
+     *
+     * @return array<int, array{id:int, memory_text:string}>
      */
-    public function selectRelevantMemory(string $userPrompt): ?string
+    public function selectRelevantMemories(string $userPrompt): array
     {
         $cleanPrompt = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $userPrompt);
         $words = array_filter(preg_split('/\s+/', $cleanPrompt));
-        
+
         if (empty($words)) {
-            return null;
+            return [];
         }
 
         $boolQuery = $this->buildBoolQuery($words);
         $memories = [];
 
-        $sqlFulltext = <<<TEXT
-SELECT id, memory_text 
-FROM memories 
-WHERE MATCH(memory_text) AGAINST(:prompt IN BOOLEAN MODE) 
-LIMIT 50
-TEXT;
-
         try {
-            $memories = $this->db->query($sqlFulltext, [
-                ':prompt' => $boolQuery
-            ]);
+            $memories = $this->db->query(
+                "SELECT id, memory_text FROM memories
+                 WHERE MATCH(memory_text) AGAINST(:prompt IN BOOLEAN MODE)
+                 LIMIT 50",
+                [':prompt' => $boolQuery]
+            );
         } catch (\Throwable $e) {
             $memories = [];
         }
@@ -49,26 +50,36 @@ TEXT;
             $params = [];
             foreach (array_values($words) as $index => $word) {
                 if (strlen($word) < 2) {
-                    continue; 
+                    continue;
                 }
-                $paramName = ":word_" . $index;
+                $paramName = ':word_' . $index;
                 $conditions[] = "memory_text LIKE " . $paramName;
-                $params[$paramName] = "%" . $word . "%";
+                $params[$paramName] = '%' . $word . '%';
             }
 
             if (!empty($conditions)) {
-                $sqlLike = "SELECT id, memory_text FROM memories WHERE " . implode(" OR ", $conditions) . " ORDER BY id DESC LIMIT 20";
-                $memories = $this->db->query($sqlLike, $params);
+                $memories = $this->db->query(
+                    "SELECT id, memory_text FROM memories WHERE "
+                    . implode(' OR ', $conditions)
+                    . " ORDER BY id DESC LIMIT 20",
+                    $params
+                );
             }
         }
 
-        if (empty($memories)) {
+        return $memories;
+    }
+
+    public function selectRelevantMemory(string $userPrompt): ?string
+    {
+        $rows = $this->selectRelevantMemories($userPrompt);
+        if (empty($rows)) {
             return null;
         }
 
         $selectedMemories = [];
-        foreach ($memories as $memory) {
-            $selectedMemories[] = "- " . $memory['memory_text'];
+        foreach ($rows as $memory) {
+            $selectedMemories[] = '- ' . $memory['memory_text'];
         }
 
         return implode("\n", $selectedMemories);

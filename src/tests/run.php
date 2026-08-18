@@ -13,6 +13,7 @@ require_once __DIR__ . '/ThoughtExtractionTest.php';
 require_once __DIR__ . '/MultiQueryTest.php';
 require_once __DIR__ . '/SourceSequenceTest.php';
 require_once __DIR__ . '/MemorySelectorTest.php';
+require_once __DIR__ . '/SearchMemoriesToolTest.php';
 require_once __DIR__ . '/JobStateMachineTest.php';
 require_once __DIR__ . '/JobMatcherTest.php';
 require_once __DIR__ . '/JobRepositoryTest.php';
@@ -29,6 +30,8 @@ require_once __DIR__ . '/CitationValidatorTest.php';
 require_once __DIR__ . '/ContextBudgetTest.php';
 require_once __DIR__ . '/CondensationTest.php';
 require_once __DIR__ . '/PromptInjectionFilterTest.php';
+require_once __DIR__ . '/EvidenceConsolidationTest.php';
+require_once __DIR__ . '/AtomizationPolicyTest.php';
 
 use App\Config;
 use App\Database;
@@ -37,6 +40,7 @@ use App\Tests\ThoughtExtractionTest;
 use App\Tests\MultiQueryTest;
 use App\Tests\SourceSequenceTest;
 use App\Tests\MemorySelectorTest;
+use App\Tests\SearchMemoriesToolTest;
 use App\Tests\JobStateMachineTest;
 use App\Tests\JobMatcherTest;
 use App\Tests\JobRepositoryTest;
@@ -53,6 +57,8 @@ use App\Tests\CitationValidatorTest;
 use App\Tests\ContextBudgetTest;
 use App\Tests\CondensationTest;
 use App\Tests\PromptInjectionFilterTest;
+use App\Tests\EvidenceConsolidationTest;
+use App\Tests\AtomizationPolicyTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -81,6 +87,9 @@ $allOk = (new SourceSequenceTest($db))->run() && $allOk;
 
 echo "\n=== Phase 5: Memory Selector Tests ===\n";
 $allOk = (new MemorySelectorTest($db))->run() && $allOk;
+
+echo "\n=== Phase 5b: Search Memories Tool (dedup) Tests ===\n";
+$allOk = (new SearchMemoriesToolTest())->run() && $allOk;
 
 echo "\n=== Phase 6: Job State Machine Tests ===\n";
 $allOk = (new JobStateMachineTest())->run() && $allOk;
@@ -129,6 +138,12 @@ $allOk = (new CondensationTest($db))->run() && $allOk;
 
 echo "\n=== Phase 21: Prompt Injection Filter Tests ===\n";
 $allOk = (new PromptInjectionFilterTest())->run() && $allOk;
+
+echo "\n=== Phase 22: Evidence Consolidation Tests ===\n";
+$allOk = (new EvidenceConsolidationTest($db))->run() && $allOk;
+
+echo "\n=== Phase 23: Atomization Policy Tests ===\n";
+$allOk = (new AtomizationPolicyTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";
