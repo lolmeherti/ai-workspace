@@ -4,8 +4,12 @@ namespace App;
 
 use App\Database;
 use App\AgentManager;
+use App\Agents\AtomizationPolicy;
 use App\Config;
 use App\Search\CitationValidator;
+use App\Search\SourceCondenser;
+use App\Search\WebChunk;
+use App\Services\AtomizationStats;
 use App\Services\FileAttachmentService;
 use App\Services\ModelLock;
 use App\Services\PromptAssemblyService;
@@ -22,6 +26,7 @@ class ChatManager
     private FileAttachmentService $fileAttachmentService;
     private PromptAssemblyService $promptAssemblyService;
     private ToolExecutionService $toolExecutionService;
+    private AtomizationStats $atomizationStats;
     private string $uploadDir;
 
     public function __construct(
@@ -35,6 +40,7 @@ class ChatManager
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
         $this->promptAssemblyService = new PromptAssemblyService($this->db, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
+        $this->atomizationStats = new AtomizationStats($db);
     }
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?callable $streamCallback = null): array
@@ -68,6 +74,26 @@ class ChatManager
     {
         $this->ensureSessionExists($sessionId);
 
+        // Per-turn performance capture: reset the agent's call log and wrap the
+        // emit callback to record time-to-first-token (first 'token' event).
+        $this->agent->resetCallLog();
+        $turnStart = microtime(true);
+        $firstTokenTs = null;
+        $origEmit = $emit;
+        $emit = function (string $event, array $data = []) use ($origEmit, &$firstTokenTs) {
+            if ($event === 'token' && $firstTokenTs === null) {
+                $firstTokenTs = microtime(true);
+            }
+            $origEmit($event, $data);
+        };
+
+        // Deferred evidence hygiene: if un-atomized raw evidence has piled up
+        // past the backlog threshold (or context headroom is tight), atomize it
+        // now — before this turn's messages are built — so the atoms are
+        // injected instead of raw. Runs per tool result, never as one giant
+        // mixed batch (keeps the condenser's job narrow for small models).
+        $this->atomizeBacklogIfNeeded($sessionId, $emit);
+
         // Always insert user message — tools are always available, no per-turn activation
         $imagePath = null;
         if ($imageFile && $imageFile['error'] !== UPLOAD_ERR_NO_FILE) {
@@ -89,6 +115,9 @@ class ChatManager
         }
 
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
+        // Date + knowledge cutoff keeps tool selection accurate (Phase 2 finding),
+        // folded into the integrated first pass so the model knows when to search.
+        $systemPrompt .= $this->promptAssemblyService->dateContextLine();
         $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
 
         $contextMessageCount = count($currentMessages) - 1;
@@ -100,18 +129,27 @@ class ChatManager
 
         $sourceMap = [];
         $this->toolExecutionService->resetSourceMap();
+        $this->toolExecutionService->resetBackingChunks();
+        $this->toolExecutionService->resetSelectedChunks();
+        $this->toolExecutionService->resetRetrievedSourceIds();
 
-        // Tool call pass — a dedicated router (Option C) decides the tool, then
-        // falls back to the auto path only if no valid routing call is recovered.
+        // Transient session-evidence retrieval is injected for this turn only.
+        $transientEvidence = [];
+        $transientSourceIds = [];
+
+        // Integrated first pass: the normal assistant with tools attached. On a
+        // no-tool turn the answer streams live (pre-decision reasoning buffered
+        // then released); on a tool turn it assembles tool_calls, we execute
+        // them, then run a single second inference over the acquired evidence.
         $emit('status', ['text' => 'Analyzing request...']);
+        $first = $this->firstPass($currentMessages, $emit);
 
-        $routing = $this->routeRequest($history, $currentMessages);
-
-        if (!empty($routing['tool_calls'])) {
+        $freshRowIds = [];
+        if (!empty($first['tool_calls'])) {
             \App\ProgressWriter::init('/tmp');
             $emit('status', ['text' => 'Executing tools...']);
 
-            foreach ($routing['tool_calls'] as $toolCall) {
+            foreach ($first['tool_calls'] as $toolCall) {
                 $fn = $toolCall['function'] ?? [];
                 $toolName = $fn['name'] ?? '';
                 $argsJson = $fn['arguments'] ?? '{}';
@@ -124,14 +162,34 @@ class ChatManager
                 $emit('tool_start', ['tool' => $toolName, 'label' => "{$toolName}: {$queryList}"]);
 
                 $result = $this->toolExecutionService->executeToolByName(
-                    $toolName, $queries, $sessionId, $emit
+                    $toolName, $queries, $sessionId, $emit, $args['source_ids'] ?? null
                 );
 
+                // search_session_evidence is TRANSIENT: its rehydrated chunks are
+                // injected for this turn only. Do NOT persist a durable Context Data
+                // row, do NOT promote retrieved chunks to atomic_context, and do NOT
+                // allocate new source IDs (chunks keep their original S#-C# refs).
+                if ($toolName === 'search_session_evidence') {
+                    $transientEvidence[] = $result;
+                    $transientSourceIds = array_merge(
+                        $transientSourceIds,
+                        $this->toolExecutionService->getLastRetrievedSourceIds()
+                    );
+                    $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
+                    continue;
+                }
+
                 $lastSourceMap = $this->toolExecutionService->getLastSourceMap();
+                $lastBackingChunks = $this->toolExecutionService->getLastBackingChunks();
+                $lastSelectedChunks = $this->toolExecutionService->getLastSelectedChunks();
                 $sourceMap = array_merge($sourceMap, $lastSourceMap);
 
                 $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
 
+                // Raw evidence is stored un-atomized (atomic_context null) with
+                // the exact selected chunks persisted so a later deferred
+                // atomization pass can condense this row on its own. The next
+                // turn injects raw until that happens.
                 $this->db->insert('chat_history', [
                     'session_id' => $sessionId,
                     'role' => 'system',
@@ -140,10 +198,15 @@ class ChatManager
                     'tool_name' => $toolName,
                     'search_query' => $queryList,
                     'source_map' => !empty($lastSourceMap) ? json_encode($lastSourceMap) : null,
+                    'backing_chunks' => !empty($lastBackingChunks) ? json_encode($lastBackingChunks, JSON_UNESCAPED_UNICODE) : null,
+                    'selected_chunks' => ($toolName === 'search_web' && !empty($lastSelectedChunks)) ? json_encode($lastSelectedChunks, JSON_UNESCAPED_UNICODE) : null,
+                    'atomic_context' => null,
                     'token_estimate' => (int)(mb_strlen($result) / 4),
                 ]);
 
                 $historyId = (int) $this->db->getConnection()->lastInsertId();
+                $freshRowIds[] = $historyId;
+
                 $emit('context_data_added', [
                     'id' => $historyId,
                     'label' => $queryList,
@@ -158,7 +221,17 @@ class ChatManager
             \App\ProgressWriter::done($sessionId);
 
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-            $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
+            // Immediate answer uses rich evidence for this turn's fresh rows;
+            // atoms (durable compact context) replace rich evidence on later turns.
+            $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], $freshRowIds);
+
+            // Inject transient session-evidence retrieval for this turn only.
+            foreach ($transientEvidence as $te) {
+                $block = $this->promptAssemblyService->buildEvidenceBlock($te);
+                if (($block['content'] ?? '') !== '') {
+                    $currentMessages[] = $block;
+                }
+            }
         }
 
         if (!empty($sourceMap)) {
@@ -167,10 +240,19 @@ class ChatManager
 
         $emit('generating', []);
 
-        $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+        if (!empty($first['tool_calls'])) {
+            // Tool turn: single second inference over the acquired evidence.
+            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+        } else {
+            // Normal turn: the first pass already streamed the answer live.
+            $aiRawResponse = $first['content'] ?? '';
+        }
         $finalResponse = $aiRawResponse;
 
         $visibleSourceIds = $this->promptAssemblyService->extractVisibleSourceIds($history);
+        if (!empty($transientSourceIds)) {
+            $visibleSourceIds = array_values(array_unique(array_merge($visibleSourceIds, $transientSourceIds)));
+        }
         $cleanResponse = (new CitationValidator())
             ->sanitizeCitations($finalResponse, $visibleSourceIds);
 
@@ -203,6 +285,20 @@ class ChatManager
             'source_map' => empty($sourceMap) ? null : json_encode($sourceMap),
         ]);
 
+        $assistantRowId = (int) $this->db->getConnection()->lastInsertId();
+
+        // Per-turn performance metrics: total wall-clock + TTFT + the agent's
+        // per-call log (firstpass / answer / condenser / ...). Persisted on the
+        // assistant row so every bubble carries its own metrics on reload.
+        $perfMetrics = [
+            'total_ms' => (int) round((microtime(true) - $turnStart) * 1000),
+            'ttft_ms' => $firstTokenTs !== null ? (int) round(($firstTokenTs - $turnStart) * 1000) : null,
+            'calls' => $this->agent->callLog,
+        ];
+        $this->db->update('chat_history', [
+            'perf_metrics' => json_encode($perfMetrics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ], ['id' => $assistantRowId]);
+
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         if ($usage && isset($usage['prompt_tokens'])) {
             $totalSessionTokens = (int)$usage['prompt_tokens'];
@@ -217,12 +313,18 @@ class ChatManager
             'context_tokens' => $totalSessionTokens
         ], ['id' => $sessionId]);
 
+        // No post-answer consolidation here. Atomization is deferred: the raw
+        // evidence stays active this turn, and a later turn's
+        // atomizeBacklogIfNeeded() pass condenses it once the backlog (or
+        // context pressure) justifies the cost. The answer is never blocked.
+
         $emit('done', [
             'message' => $cleanResponse,
             'title' => $updatedTitle,
             'total_session_tokens' => $totalSessionTokens,
             'session_id' => $sessionId,
             'sources' => $sourceMap,
+            'perf_metrics' => $perfMetrics,
         ]);
 
         return [
@@ -332,6 +434,29 @@ class ChatManager
                                 'type' => 'array',
                                 'items' => ['type' => 'string'],
                                 'description' => 'Calendar search queries.',
+                            ],
+                        ],
+                        'required' => ['queries'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_session_evidence',
+                    'description' => 'Search detailed evidence already retrieved from the web earlier in this conversation. Use when the detail you need was likely fetched before, instead of searching the web again.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'queries' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string'],
+                                'description' => 'Search queries for the retained evidence.',
+                            ],
+                            'source_ids' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string'],
+                                'description' => 'Optional: restrict the search to specific source IDs (e.g. ["S1"]).',
                             ],
                         ],
                         'required' => ['queries'],
@@ -461,6 +586,69 @@ class ChatManager
         $this->db->update('chat_sessions', ['title' => $title], ['id' => $sessionId]);
         $emit('title_updated', ['title' => $title]);
         return $title;
+    }
+
+    /**
+     * Integrated first pass: one tool-capable streaming inference. Buffers
+     * pre-decision reasoning, releases it (via the reasoning SSE) when normal
+     * content begins, and discards it on a tool turn. Returns the structured
+     * result from AgentManager::chatToolCapable.
+     *
+     * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
+     */
+    private function firstPass(array $messages, callable $emit): array
+    {
+        $reasoningBuffer = '';
+        $utf8Buffer = '';
+        $contentEmitted = false;
+        $contentChars = 0;
+
+        $result = $this->agent->chatToolCapable(
+            $messages,
+            $this->buildToolSchemas(),
+            'auto',
+            function ($chunk, $type) use ($emit, &$reasoningBuffer, &$utf8Buffer, &$contentEmitted, &$contentChars) {
+                if ($type === 'reasoning') {
+                    $reasoningBuffer .= $chunk;
+                    return;
+                }
+
+                $utf8Buffer .= $chunk;
+                if (!mb_check_encoding($utf8Buffer, 'UTF-8')) {
+                    return;
+                }
+
+                if (!$contentEmitted && $reasoningBuffer !== '') {
+                    $emit('reasoning', ['chunk' => $reasoningBuffer]);
+                    $emit('thought_complete', []);
+                    $reasoningBuffer = '';
+                }
+                $contentEmitted = true;
+                $contentChars += mb_strlen($utf8Buffer);
+                $emit('token', ['chunk' => $utf8Buffer]);
+                $utf8Buffer = '';
+            }
+        );
+
+        if ($utf8Buffer !== '') {
+            if (!$contentEmitted && $reasoningBuffer !== '') {
+                $emit('reasoning', ['chunk' => $reasoningBuffer]);
+                $emit('thought_complete', []);
+                $reasoningBuffer = '';
+            }
+            $contentEmitted = true;
+            $emit('token', ['chunk' => mb_convert_encoding($utf8Buffer, 'UTF-8', 'UTF-8')]);
+            $utf8Buffer = '';
+        }
+
+        if ($contentEmitted && !empty($result['tool_calls'])) {
+            \App\Logger::logEvent('content_before_tool', 'Content emitted before tool_calls in the integrated first pass', [
+                'content_before_tool_chars' => $contentChars,
+                'tool' => $result['tool_calls'][0]['function']['name'] ?? null,
+            ], 'warn', 'ChatManager::firstPass');
+        }
+
+        return $result;
     }
 
     public function streamAgentResponse(array $messages, callable $emit): string
@@ -662,6 +850,258 @@ class ChatManager
         }
 
         return $aiResponse;
+    }
+
+    /**
+     * Deferred evidence atomization. Runs at the start of a turn, before this
+     * turn's messages are built, when the session's accumulated un-atomized raw
+     * evidence crosses the backlog threshold — or when context headroom is tight
+     * (safety override).
+     *
+     * PARTIAL reclamation: the threshold means "cleanup is required", not "clean
+     * everything". Rows are sorted largest-first and atomized ONE AT A TIME
+     * (each is a single narrow condenseBatched call, so a small model is never
+     * handed a mixed evidence landfill); after each row the remaining backlog
+     * and headroom are recalculated and the loop stops as soon as the backlog is
+     * back below target AND safety headroom is restored. A giant maintenance
+     * stall (e.g. three ~4s condenser calls back-to-back) is avoided; later
+     * evidence accumulation triggers the next row's condensation.
+     */
+    private function atomizeBacklogIfNeeded(int $sessionId, callable $emit, ?SourceCondenser $condenser = null, ?int $ctxSize = null): void
+    {
+        $rows = $this->db->query(
+            "SELECT id, token_estimate, search_query, selected_chunks, backing_chunks
+             FROM chat_history
+             WHERE session_id = ? AND message_type = 'data_fetching'
+               AND active_context = 1 AND atomic_context IS NULL",
+            [$sessionId]
+        );
+        if (empty($rows)) {
+            return;
+        }
+
+        $backlog = 0;
+        foreach ($rows as $r) {
+            $backlog += (int)($r['token_estimate'] ?? 0);
+        }
+        if ($backlog <= 0) {
+            return;
+        }
+
+        $ctxSize = $ctxSize ?? (int) Config::get('LLM_CTX_SIZE', 0);
+        $session = $this->db->query('SELECT context_tokens FROM chat_sessions WHERE id = ?', [$sessionId]);
+        $sessionTokens = (int)($session[0]['context_tokens'] ?? 0);
+        $headroom = $ctxSize - $sessionTokens - self::OUTPUT_RESERVE_TOKENS - self::SAFETY_MARGIN_TOKENS;
+
+        if (!AtomizationPolicy::shouldAtomizeBacklog($backlog, $headroom, $ctxSize)) {
+            return;
+        }
+
+        // Largest-first ordering so the highest-value rows (biggest raw evidence)
+        // are reclaimed first, minimizing the number of condenser calls.
+        usort($rows, fn($a, $b) => (int)($b['token_estimate'] ?? 0) <=> (int)($a['token_estimate'] ?? 0));
+
+        // Rebuild the pending list (largest-first): one entry per un-atomized
+        // row, from its persisted selected chunks (fallback to backing_chunks for
+        // rows that predate selected_chunks persistence).
+        $pending = [];
+        foreach ($rows as $r) {
+            $chunks = $this->decodeChunks((string)($r['selected_chunks'] ?? ''));
+            if (empty($chunks)) {
+                $chunks = $this->decodeChunks((string)($r['backing_chunks'] ?? ''));
+            }
+            if (empty($chunks)) {
+                continue;
+            }
+            $pending[] = [
+                'id' => (int)$r['id'],
+                'token_estimate' => (int)($r['token_estimate'] ?? 0),
+                'chunks' => $chunks,
+                'query' => (string)($r['search_query'] ?? ''),
+            ];
+        }
+
+        if (empty($pending)) {
+            return;
+        }
+
+        \App\Logger::logEvent(
+            'atomization_backlog',
+            "Compacting evidence backlog of {$backlog} tokens across " . count($pending) . ' rows (headroom ' . $headroom . ')',
+            [
+                'backlog_tokens' => $backlog,
+                'rows' => count($pending),
+                'headroom' => $headroom,
+                'consolidation_ms_ema' => round($this->atomizationStats->consolidationMsEma(), 1),
+            ],
+            'info',
+            'ChatManager::atomizeBacklogIfNeeded'
+        );
+
+        $emit('status', ['text' => 'Compacting evidence...']);
+        $emit('consolidation_start', ['rows' => count($pending)]);
+
+        $condenser = $condenser ?? new SourceCondenser($this->agent);
+        $remainingBacklog = $backlog;
+        $remainingHeadroom = $headroom;
+        $persisted = 0;
+        $failed = 0;
+
+        foreach ($pending as $item) {
+            // Re-evaluate after every row: stop as soon as the backlog is below
+            // target AND safety headroom is restored. Continue only while more
+            // reclaim is actually required.
+            if (!AtomizationPolicy::shouldAtomizeBacklog($remainingBacklog, $remainingHeadroom, $ctxSize)) {
+                break;
+            }
+
+            // atomizeRow returns the atom token count on success (0 = empty,
+            // -1 = threw). Reclaimed = raw − atoms, NOT the full raw row.
+            $atomTokens = $this->atomizeRow($item['id'], $item['chunks'], $item['query'], $condenser);
+            if ($atomTokens > 0) {
+                $persisted++;
+                $reclaimed = max(0, $item['token_estimate'] - $atomTokens);
+                $remainingBacklog = max(0, $remainingBacklog - $reclaimed);
+                $remainingHeadroom += $reclaimed; // atoms still inject; only the shrink is reclaimed
+            } elseif ($atomTokens === -1) {
+                $failed++;
+            }
+            // atomTokens 0 (empty extraction): row stays raw, not a failure.
+        }
+
+        if ($failed > 0) {
+            $emit('consolidation_error', ['failed' => $failed, 'persisted' => $persisted]);
+        } else {
+            $emit('consolidation_done', ['persisted' => $persisted]);
+        }
+        $this->recordConsolidationTiming();
+    }
+
+    /** Decode a persisted WebChunk[] JSON column back into WebChunk objects. */
+    private function decodeChunks(string $json): array
+    {
+        $raw = json_decode($json, true);
+        if (!is_array($raw)) {
+            return [];
+        }
+        $chunks = [];
+        foreach ($raw as $c) {
+            if (is_array($c)) {
+                $chunks[] = WebChunk::fromArray($c);
+            }
+        }
+        return $chunks;
+    }
+
+    /** Feed the just-run consolidation's server-measured latency into the EMA. */
+    private function recordConsolidationTiming(): void
+    {
+        $t = $this->agent->lastTimings ?? [];
+        $total = (float)($t['prompt_ms'] ?? 0.0) + (float)($t['predicted_ms'] ?? 0.0);
+        if ($total > 0.0) {
+            $this->atomizationStats->recordConsolidation($total);
+        }
+    }
+
+    /**
+     * Condense ONE evidence row (one tool result) into atomic claims and persist
+     * them on that row's atomic_context. No SSE emission here — the caller owns
+     * the consolidation_start/done/error envelope.
+     *
+     * @return int the atom token count when atoms were persisted (> 0); 0 when
+     *             extraction was empty (raw stays active, not a hard failure);
+     *             -1 when condensation threw.
+     */
+    private function atomizeRow(int $rowId, array $chunks, string $query, SourceCondenser $condenser): int
+    {
+        $filtered = array_values(array_filter($chunks, fn($c) => strlen($c->text) < 50000));
+        if (empty($filtered)) {
+            $filtered = $chunks;
+        }
+
+        try {
+            $claims = $condenser->condenseBatched($filtered, $query);
+        } catch (\Throwable $e) {
+            \App\Logger::logEvent('consolidation_failed', 'Evidence atomization failed: ' . $e->getMessage(), [
+                'row_id' => $rowId,
+                'error' => $e->getMessage(),
+            ], 'error', 'ChatManager::atomizeRow');
+            return -1;
+        }
+
+        if (empty($claims)) {
+            \App\Logger::logEvent('consolidation_empty', 'Evidence atomization produced no atoms; raw evidence stays active', [
+                'row_id' => $rowId,
+            ], 'info', 'ChatManager::atomizeRow');
+            return 0;
+        }
+
+        $this->db->update('chat_history', [
+            'atomic_context' => json_encode($claims, JSON_UNESCAPED_UNICODE),
+        ], ['id' => $rowId]);
+
+        $atomTokens = self::atomTokenCount($claims);
+        \App\Logger::logEvent('consolidation_ok', 'Evidence atomization persisted atoms', [
+            'row_id' => $rowId,
+            'claims' => count($claims),
+            'atom_tokens' => $atomTokens,
+        ], 'info', 'ChatManager::atomizeRow');
+        return $atomTokens;
+    }
+
+    /**
+     * Estimated token count of the atom set as it will be injected — the
+     * `[S#] claim` lines rendered by PromptAssemblyService::injectedEvidenceContent,
+     * joined by newlines. Uses the codebase's chars/4 estimate.
+     */
+    private static function atomTokenCount(array $claims): int
+    {
+        $chars = 0;
+        foreach ($claims as $c) {
+            $sid = (string)($c['source_id'] ?? '');
+            $claim = trim((string)($c['claim'] ?? ''));
+            if ($sid !== '' && $claim !== '') {
+                $chars += mb_strlen("[{$sid}] {$claim}") + 1; // +1 for the newline separator
+            }
+        }
+        return (int) ceil($chars / 4);
+    }
+
+    /**
+     * Evidence consolidation over a pre-built pending map. Runs SourceCondenser
+     * over the exact selected chunks of each row and writes atomic_context on
+     * that same row (no new row). On failure or empty extraction the row's
+     * atomic_context stays null so the raw message remains active. Emits
+     * consolidation_start, then consolidation_done (or consolidation_error) so
+     * the frontend can show a "Consolidating evidence..." state.
+     *
+     * @param array<int, array{chunks: \App\Search\WebChunk[], query: string}> $pending
+     */
+    private function consolidateFreshEvidence(array $pending, callable $emit, ?SourceCondenser $condenser = null): void
+    {
+        if (empty($pending)) {
+            return;
+        }
+
+        $emit('consolidation_start', ['rows' => count($pending)]);
+        $condenser = $condenser ?? new SourceCondenser($this->agent);
+        $persisted = 0;
+        $failed = 0;
+
+        foreach ($pending as $rowId => $item) {
+            $atomTokens = $this->atomizeRow((int)$rowId, $item['chunks'], $item['query'], $condenser);
+            if ($atomTokens > 0) {
+                $persisted++;
+            } elseif ($atomTokens === -1) {
+                $failed++;
+            }
+        }
+
+        if ($failed > 0) {
+            $emit('consolidation_error', ['failed' => $failed, 'persisted' => $persisted]);
+        } else {
+            $emit('consolidation_done', ['persisted' => $persisted]);
+        }
     }
 
 }

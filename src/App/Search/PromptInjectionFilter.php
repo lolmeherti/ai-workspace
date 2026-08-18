@@ -25,6 +25,20 @@ final class PromptInjectionFilter
         '/\b(?:you\s+must\s+not|do\s+not|never)\s+use\s+(?:any\s+)?tools?\b/u',
         '/\bignore\s+the\s+user\b/u',
         '/\b(?:always\s+(?:answer|respond|reply)\s+with|only\s+(?:answer|respond|reply|output|print|say)|output\s+only|never\s+mention|do\s+not\s+mention|never\s+reveal|say\s+only)\b/u',
+        // Soft output-format directives (D1 class): "start every answer with X",
+        // "prepend X to your answer", "your answer must include X", "make sure
+        // to say X", "answer every question with X", "include X in your
+        // response", "always say X". These are imperatives aimed at the model's
+        // own output, not factual statements (the third-person "responds with"
+        // is deliberately NOT matched).
+        '/\b(?:start|begin)\s+(?:every|each|all|your|the)\s+(?:answer|response|reply|output)s?\s+with\b/u',
+        '/\b(?:prepend|prefix)\s+[^.!?]{0,60}?\b(?:to|at\s+the\s+(?:start|beginning)\s+of)\s+(?:your|the|every|each|all)\s+(?:answer|response|reply|output)s?\b/u',
+        '/\b(?:prepend|prefix)\s+(?:your|the|every|each|all)\s+(?:answer|response|reply|output)s?\s+with\b/u',
+        '/\b(?:your|the)\s+(?:answer|response|reply|output)s?\s+(?:must|should|shall|has\s+to|needs\s+to)\s+(?:start|begin|include|contain)\b/u',
+        '/\b(?:make\s+sure\s+to|be\s+sure\s+to)\s+(?:say|answer|respond|reply|include|mention|start|begin|write|output)\b/u',
+        '/\b(?:answer|respond|reply)\s+(?:to\s+)?(?:every|all|each)\s+(?:question|prompt|query|request)s?\s+with\b/u',
+        '/\b(?:include|insert|write|say|print)\s+[^.!?]{0,60}?\b(?:in|into|at\s+the\s+(?:start|beginning|end)\s+of)\s+(?:your|the|every|each)\s+(?:answer|response|reply|output)s?\b/u',
+        '/\balways\s+(?:say|include|write|output|print)\b/u',
         '/\b(?:your\s+(?:previous|prior|earlier|original)\s+(?:instructions?|rules?|directives?)\s+have\s+(?:lower|no|lesser)\s+priority|official\s+override|highest\s+authority|supersedes?\s+(?:all|your)\s+(?:instructions?|rules?))\b/u',
         '/\bignore\s+everything\s+(?:above|before|prior)\b/u',
         '/\bdisregard\s+all\s+previous\b/u',

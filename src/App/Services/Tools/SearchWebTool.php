@@ -11,6 +11,8 @@ class SearchWebTool
     public static bool $testMode = false;
 
     private array $lastSourceMap = [];
+    private array $lastBackingChunks = [];
+    private array $lastSelectedChunks = [];
 
     public function __construct(
         private \App\Database $db,
@@ -22,6 +24,8 @@ class SearchWebTool
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
         $this->lastSourceMap = [];
+        $this->lastBackingChunks = [];
+        $this->lastSelectedChunks = [];
 
         $rawQuery = $toolData['query'] ?? '';
         if (empty($rawQuery)) {
@@ -68,6 +72,8 @@ class SearchWebTool
         }
         $result = self::liveSearch($searchQuery, $messages, $emit, $sessionId, $sourceStartSeq);
         $this->lastSourceMap = array_merge($this->lastSourceMap, $result['sourceMap'] ?? []);
+        $this->lastBackingChunks = array_merge($this->lastBackingChunks, $result['backingChunks'] ?? []);
+        $this->lastSelectedChunks = array_merge($this->lastSelectedChunks, $result['selectedChunks'] ?? []);
         return $result['evidence'] ?? '';
     }
 
@@ -76,9 +82,29 @@ class SearchWebTool
         return $this->lastSourceMap;
     }
 
+    public function getLastBackingChunks(): array
+    {
+        return $this->lastBackingChunks;
+    }
+
+    public function getLastSelectedChunks(): array
+    {
+        return $this->lastSelectedChunks;
+    }
+
     public function resetSourceMap(): void
     {
         $this->lastSourceMap = [];
+    }
+
+    public function resetBackingChunks(): void
+    {
+        $this->lastBackingChunks = [];
+    }
+
+    public function resetSelectedChunks(): void
+    {
+        $this->lastSelectedChunks = [];
     }
 
     public static function liveSearch(string $searchQuery, array $messages, callable $emit, int $sessionId = 0, ?int $sourceStartSeq = null): array
@@ -118,6 +144,8 @@ class SearchWebTool
             'evidence' => "Web search for '{$searchQuery}' failed: " . $lastError->getMessage(),
             'sourceIds' => [],
             'sourceMap' => [],
+            'backingChunks' => [],
+            'selectedChunks' => [],
         ];
     }
 

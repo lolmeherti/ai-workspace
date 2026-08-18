@@ -159,20 +159,40 @@
       }
     },
 
-    "qwen3-5-4b": {
-      "name": "Qwen3.5-4B",
+      "qwen3-5-9b-iq4nl": {
+      "name": "Qwen3.5 9B IQ4_NL (unsloth)",
       "reasoning_budget": 4096,
       "model": {
-        "file": "Qwen3.5-4B-Q8_0.gguf",
-        "url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q8_0.gguf"
+        "file": "Qwen3.5-9B-IQ4_NL.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-IQ4_NL.gguf"
       },
       "mmproj": {
-        "file": "mmproj-Qwen3.5-4B-BF16.gguf",
-        "url": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/mmproj-Qwen3.5-4B-BF16.gguf"
+        "file": "mmproj-Qwen3.5-9B-unsloth-BF16.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-BF16.gguf"
       },
       "profiles": {
-        "t4": { "ctx_size": 40000, "requirements": { "vram_min": 10 } },
-        "t5": { "ctx_size": 40000, "requirements": { "vram_min": 6 } }
+        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 100000, "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 65000,  "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 32768,  "requirements": { "vram_min": 10 } }
+      }
+    },
+      "bonsai-27b-q1": {
+      "name": "Bonsai 27B Q1_0",
+      "reasoning_budget": 4096,
+      "model": {
+        "file": "Bonsai-27B-Q1_0.gguf",
+        "url": "https://huggingface.co/prism-ml/Bonsai-27B-gguf/resolve/main/Bonsai-27B-Q1_0.gguf"
+      },
+      "mmproj": {
+        "file": "Bonsai-27B-mmproj-Q8_0.gguf",
+        "url": "https://huggingface.co/prism-ml/Bonsai-27B-gguf/resolve/main/Bonsai-27B-mmproj-Q8_0.gguf"
+      },
+      "profiles": {
+        "t1": { "ctx_size": 160000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 160000, "requirements": { "vram_min": 22 } },
+        "t3": { "ctx_size": 100000, "requirements": { "vram_min": 14 } },
+        "t4": { "ctx_size": 50000,  "requirements": { "vram_min": 10 } }
       }
     }
   }

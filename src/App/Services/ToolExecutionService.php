@@ -9,6 +9,7 @@ use App\Services\Tools\TodoistApiClient;
 use App\Services\Tools\SearchFilesTool;
 use App\Services\Tools\SearchLocalTool;
 use App\Services\Tools\SearchWebTool;
+use App\Services\Tools\SearchSessionEvidenceTool;
 use App\Services\Tools\CreateTodoistTaskTool;
 use App\Services\Tools\GetTodoistTasksTool;
 use App\Services\Tools\DeleteTodoistTaskTool;
@@ -25,6 +26,7 @@ class ToolExecutionService
     private SearchFilesTool $searchFilesTool;
     private SearchLocalTool $searchLocalTool;
     private SearchWebTool $searchWebTool;
+    private SearchSessionEvidenceTool $searchSessionEvidenceTool;
     private CreateTodoistTaskTool $createTodoistTaskTool;
     private GetTodoistTasksTool $getTodoistTasksTool;
     private DeleteTodoistTaskTool $deleteTodoistTaskTool;
@@ -42,6 +44,7 @@ class ToolExecutionService
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
         $this->searchLocalTool = new SearchLocalTool($db, $agent, $uploadDir);
         $this->searchWebTool = new SearchWebTool($db, $uploadDir, $this->todoist);
+        $this->searchSessionEvidenceTool = new SearchSessionEvidenceTool($db);
         $this->createTodoistTaskTool = new CreateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
@@ -50,9 +53,12 @@ class ToolExecutionService
         $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
     }
 
-    public function executeToolByName(string $toolName, array $queries, int $sessionId, callable $emit): string
+    public function executeToolByName(string $toolName, array $queries, int $sessionId, callable $emit, ?array $sourceIds = null): string
     {
         $toolData = ['tool' => $toolName, 'queries' => $queries, 'query' => implode(', ', $queries)];
+        if ($sourceIds !== null) {
+            $toolData['source_ids'] = $sourceIds;
+        }
 
         \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$toolName}: " . implode(', ', $queries), 'slate');
 
@@ -68,9 +74,39 @@ class ToolExecutionService
         return $this->searchWebTool->getLastSourceMap();
     }
 
+    public function getLastBackingChunks(): array
+    {
+        return $this->searchWebTool->getLastBackingChunks();
+    }
+
+    public function getLastSelectedChunks(): array
+    {
+        return $this->searchWebTool->getLastSelectedChunks();
+    }
+
     public function resetSourceMap(): void
     {
         $this->searchWebTool->resetSourceMap();
+    }
+
+    public function resetBackingChunks(): void
+    {
+        $this->searchWebTool->resetBackingChunks();
+    }
+
+    public function resetSelectedChunks(): void
+    {
+        $this->searchWebTool->resetSelectedChunks();
+    }
+
+    public function getLastRetrievedSourceIds(): array
+    {
+        return $this->searchSessionEvidenceTool->getLastRetrievedSourceIds();
+    }
+
+    public function resetRetrievedSourceIds(): void
+    {
+        $this->searchSessionEvidenceTool->resetRetrievedSourceIds();
     }
 
     private function executeTool(string $toolName, array $toolData, int $sessionId, array $messages, callable $emit): string
@@ -94,6 +130,7 @@ class ToolExecutionService
                 Tool::UPDATE_TODOIST_TASK => $this->updateTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::GET_EMAIL_BRIEFING => $this->getEmailBriefingTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::SEARCH_SESSION_EVIDENCE => $this->searchSessionEvidenceTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
             };
 
             \App\Logger::logEvent('tool_executed', "Tool {$toolName} executed successfully", [

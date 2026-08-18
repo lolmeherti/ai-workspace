@@ -46,7 +46,7 @@ final class SearchPipeline
      * Run the full search pipeline. Single implementation: browser bridge.
      * Bridge failure is surfaced explicitly rather than degrading to snippets.
      *
-     * @return array{evidence: string, sourceIds: string[], sourceMap: array<string, array{url:string,title:string,domain:string}>}
+     * @return array{evidence: string, sourceIds: string[], sourceMap: array<string, array{url:string,title:string,domain:string}>, backingChunks: \App\Search\WebChunk[], selectedChunks: \App\Search\WebChunk[]}
      */
     public function run(string $query, array $messages, callable $emit): array
     {
@@ -221,13 +221,13 @@ final class SearchPipeline
         $fit = $this->threeLevelFit($selected, $query, $messages);
 
         $sourceIds = [];
-        foreach ($fit['chunks'] as $chunk) {
+        foreach ($allChunks as $chunk) {
             $sourceIds[] = $chunk->sourceId;
         }
         $sourceIds = array_values(array_unique($sourceIds));
 
         $sourceMap = [];
-        foreach ($fit['chunks'] as $chunk) {
+        foreach ($allChunks as $chunk) {
             if (isset($sourceMap[$chunk->sourceId])) continue;
             $sourceMap[$chunk->sourceId] = [
                 'url'    => $chunk->finalUrl ?: $chunk->url,
@@ -244,10 +244,16 @@ final class SearchPipeline
             'source_count' => count($sourceIds),
         ], 'info', 'SearchPipeline::runBridgeMode');
 
+        // Atomic extraction has MOVED OUT of SearchPipeline: it now runs as a
+        // post-answer consolidation inference in ChatManager over the selected
+        // chunks returned here. This keeps a web turn at 2 blocking inferences
+        // to the visible answer (plus 1 consolidation after it).
         return [
             'evidence'  => $fit['evidence'],
             'sourceIds' => $sourceIds,
             'sourceMap' => $sourceMap,
+            'backingChunks' => $allChunks,
+            'selectedChunks' => $selected,
         ];
     }
 
@@ -313,7 +319,7 @@ final class SearchPipeline
 
     private static function emptyResult(string $message): array
     {
-        return ['evidence' => $message, 'sourceIds' => [], 'sourceMap' => []];
+        return ['evidence' => $message, 'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [], 'selectedChunks' => []];
     }
 
     // ── Three-level evidence fitting ────────────────────────────────────

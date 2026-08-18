@@ -95,6 +95,92 @@ function renderSourcesList(bubble, sources) {
     bubble.appendChild(panel);
 }
 
+const PURPOSE_LABELS = {
+    firstpass: 'first pass',
+    answer: 'answer',
+    condenser: 'condenser',
+    tools: 'tools',
+};
+
+function fmtMs(ms) {
+    return Math.round(ms) + 'ms';
+}
+
+function fmtS(ms) {
+    return (ms / 1000).toFixed(1) + 's';
+}
+
+function pickAnswerCall(calls) {
+    if (!calls || !calls.length) return null;
+    return calls.find(c => c.purpose === 'answer') || calls.find(c => c.purpose === 'firstpass') || calls[calls.length - 1];
+}
+
+/**
+ * Render a per-turn "metrics" section at the bottom of an assistant bubble.
+ * Compact summary line (calls / total / TTFT / reasoning / tok/s / cache%)
+ * with an expandable per-call breakdown, so a slow/fast turn is explainable.
+ */
+function renderMetricsBubble(bubble, metrics) {
+    if (!metrics || !Array.isArray(metrics.calls) || !metrics.calls.length) return;
+    const calls = metrics.calls;
+    const ac = pickAnswerCall(calls);
+
+    const parts = [calls.length + ' call' + (calls.length === 1 ? '' : 's')];
+    if (metrics.total_ms != null) parts.push(fmtS(metrics.total_ms));
+    if (metrics.ttft_ms != null) parts.push('TTFT ' + fmtS(metrics.ttft_ms));
+    if (ac && ac.reasoning_ms > 0) parts.push('think ' + fmtS(ac.reasoning_ms));
+    if (ac) {
+        let tps = 0;
+        if (ac.content_ms > 0 && ac.content_tok > 0) tps = ac.content_tok / (ac.content_ms / 1000);
+        else if (ac.pred_tps) tps = ac.pred_tps;
+        if (tps > 0) parts.push(Math.round(tps) + ' tok/s');
+        if (ac.prompt_tokens > 0) parts.push(Math.round(ac.cache_n / ac.prompt_tokens * 100) + '% cached');
+    }
+    const summary = parts.join(' \u00b7 ');
+
+    const chain = calls.map(c => PURPOSE_LABELS[c.purpose] || c.purpose).join(' \u2192 ');
+
+    const details = document.createElement('details');
+    details.className = 'metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40';
+    details.innerHTML = `
+        <summary class="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none text-slate-300">
+            <span class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                metrics
+            </span>
+            <span class="text-[11px] font-mono text-slate-400 truncate">${summary}</span>
+        </summary>
+        <div class="px-3 pb-3 border-t border-slate-800/60">
+            <div class="text-[10px] text-slate-500 font-mono py-1.5">${chain}</div>
+            <table class="w-full text-[10px] font-mono text-slate-400">
+                <thead><tr class="text-slate-500 text-left">
+                    <th class="py-1 pr-2 font-normal">call</th>
+                    <th class="py-1 pr-2 font-normal">time</th>
+                    <th class="py-1 pr-2 font-normal">prefill</th>
+                    <th class="py-1 pr-2 font-normal">think</th>
+                    <th class="py-1 font-normal">text</th>
+                </tr></thead>
+                <tbody>
+                    ${calls.map(c => {
+                        const label = PURPOSE_LABELS[c.purpose] || c.purpose;
+                        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} \u00b7 ${c.prompt_n} tok${c.cache_n > 0 ? ' \u00b7 ' + c.cache_n + ' cached' : ''}` : '\u2014';
+                        const think = c.reasoning_ms > 0 ? `${fmtMs(c.reasoning_ms)} \u00b7 ${c.reasoning_tok} tok` : '\u2014';
+                        const text = c.content_ms > 0 ? `${fmtMs(c.content_ms)} \u00b7 ${c.content_tok} tok` : '\u2014';
+                        return `<tr class="border-t border-slate-800/40">
+                            <td class="py-1 pr-2">${label}</td>
+                            <td class="py-1 pr-2">${fmtMs(c.elapsed_ms)}</td>
+                            <td class="py-1 pr-2">${prefill}</td>
+                            <td class="py-1 pr-2">${think}</td>
+                            <td class="py-1">${text}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    bubble.appendChild(details);
+}
+
 class TypewriterEffect {
     constructor(targetEl, peekEl) {
         this.targetEl = targetEl;
@@ -375,6 +461,7 @@ export async function streamResponse(formData, originalMessage) {
     let sourceIds = [];
     let isFirstToken = true;
     let reasoningSeen = false;
+    let consolidatingBadge = null;
     let thinkingTypewriter = new TypewriterEffect(thinkingContent, thinkingPeek);
 
     try {
@@ -598,6 +685,29 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'status') {
                             loadingText.textContent = data.text;
+                        }
+
+                        if (event === 'consolidation_start') {
+                            // Deferred atomization runs at the START of this turn
+                            // (before the answer) — so this badge is a current-turn
+                            // status on the pending message, not a post-answer step
+                            // on the previous assistant message. The editor lock
+                            // overlay + state.isGenerating stay held (stream is still
+                            // open) so the next submission stays blocked until the
+                            // compaction finishes.
+                            if (!consolidatingBadge && aiLabelContainer) {
+                                consolidatingBadge = document.createElement('span');
+                                consolidatingBadge.className = 'text-[0.65rem] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm';
+                                consolidatingBadge.innerHTML = '<span class="uk-spinner uk-spinner-xs animate-spin shrink-0" uk-spinner="ratio: 0.5"></span> Consolidating evidence...';
+                                aiLabelContainer.appendChild(consolidatingBadge);
+                            }
+                        }
+
+                        if (event === 'consolidation_done' || event === 'consolidation_error') {
+                            if (consolidatingBadge) {
+                                consolidatingBadge.remove();
+                                consolidatingBadge = null;
+                            }
                         }
 
                         if (event === 'file_choices') {
@@ -881,6 +991,9 @@ export async function streamResponse(formData, originalMessage) {
                             }
                             if (currentSources.length) {
                                 renderSourcesList(aiBubble, currentSources);
+                            }
+                            if (data.perf_metrics) {
+                                renderMetricsBubble(aiBubble, data.perf_metrics);
                             }
 
                             scrollIfStuck(chatWindow);

@@ -52,6 +52,9 @@ class Schema
                 scraped_urls TEXT NULL,
                 source_map JSON NULL,
                 active_context TINYINT(1) DEFAULT 1,
+                backing_chunks JSON NULL,
+                atomic_context JSON NULL,
+                perf_metrics JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
                     FOREIGN KEY (session_id)
@@ -189,6 +192,38 @@ class Schema
         } catch (PDOException $e) {
         }
 
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'backing_chunks'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN backing_chunks JSON NULL AFTER active_context");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'atomic_context'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN atomic_context JSON NULL AFTER backing_chunks");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'selected_chunks'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN selected_chunks JSON NULL AFTER atomic_context");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'perf_metrics'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN perf_metrics JSON NULL AFTER selected_chunks");
+            }
+        } catch (PDOException $e) {
+        }
+
         $this->db->executeStatement("
             CREATE TABLE IF NOT EXISTS app_events (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -200,6 +235,15 @@ class Schema
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_event_type (event_type),
                 INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        $this->db->executeStatement("
+            CREATE TABLE IF NOT EXISTS atomization_stats (
+                id TINYINT PRIMARY KEY,
+                consolidation_ms_ema DOUBLE NOT NULL DEFAULT 4500,
+                samples INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 

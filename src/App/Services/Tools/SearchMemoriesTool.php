@@ -27,29 +27,55 @@ class SearchMemoriesTool
         $queries = SearchWebTool::splitQueries($rawQuery);
         $totalQueries = count($queries);
 
-        $allResults = [];
+        $selector = new MemorySelector($this->db);
+        $allRows = [];
+
         foreach ($queries as $i => $q) {
             if ($totalQueries > 1) {
                 \App\ProgressWriter::write($sessionId, 'search_querying', "Search {$i}/{$totalQueries}: {$q}", 'slate');
             }
-            $selector = new MemorySelector($this->db);
-            $results = $selector->selectRelevantMemory($q);
-            $allResults[] = $results ?: '';
+            foreach ($selector->selectRelevantMemories($q) as $row) {
+                $allRows[] = $row;
+            }
         }
 
-        $nonEmpty = array_filter($allResults);
-        if (empty($nonEmpty)) {
+        // One stored memory appears once, regardless of how many expanded
+        // sub-queries matched it.
+        $uniqueRows = self::deduplicateRows($allRows);
+
+        if (empty($uniqueRows)) {
             \App\ProgressWriter::write($sessionId, 'search_no_results', "No memories found for: {$rawQuery}", 'rose');
             return "No specific relevant memories found for this query in the long-term database.";
         }
 
         \App\ProgressWriter::write($sessionId, 'search_done', 'Memories retrieved.', 'emerald');
 
-        if (count($queries) === 1) {
-            return "Found the following relevant memories:\n\n" . $allResults[0];
+        $lines = [];
+        foreach ($uniqueRows as $row) {
+            $lines[] = '- ' . $row['memory_text'];
         }
 
-        $combined = SearchWebTool::combineResults($queries, $allResults, 'Memory');
-        return "Found the following relevant memories:\n\n" . $combined;
+        return "Found the following relevant memories:\n\n" . implode("\n", $lines);
+    }
+
+    /**
+     * Deduplicate rows by memory id, preserving first-seen (query) order.
+     *
+     * @param array<int, array{id:int, memory_text:string}> $rows
+     * @return array<int, array{id:int, memory_text:string}>
+     */
+    public static function deduplicateRows(array $rows): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($rows as $row) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id <= 0 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $unique[] = $row;
+        }
+        return $unique;
     }
 }

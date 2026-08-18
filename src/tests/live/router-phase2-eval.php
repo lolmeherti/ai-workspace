@@ -42,7 +42,7 @@ class CountingAgent extends AgentManager
 {
     public array $calls = [];
 
-    public function chatWithTools(array $messages, array $tools, string $toolChoice = 'auto', ?float $temperature = null, int $maxTokens = 4096): array
+    public function chatWithTools(array $messages, array $tools, string $toolChoice = 'auto', ?float $temperature = null, int $maxTokens = 4096, ?string $purpose = null): array
     {
         $start = microtime(true);
         $r = parent::chatWithTools($messages, $tools, $toolChoice, $temperature, $maxTokens);

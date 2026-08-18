@@ -57,7 +57,7 @@ TEXT;
         return $systemPrompt;
     }
 
-    private function dateContextLine(): string
+    public function dateContextLine(): string
     {
         $now = time();
         $roundedMinute = (int)date('i', $now) >= 30 ? 30 : 0;
@@ -110,6 +110,22 @@ TEXT;
             if ((int)($row['active_context'] ?? 1) !== 1) {
                 continue;
             }
+
+            // Atomic evidence: source IDs come from atomic_context (only sources
+            // whose atoms are actually injected are citable).
+            $atomic = $row['atomic_context'] ?? null;
+            if (!empty($atomic)) {
+                $decoded = json_decode($atomic, true);
+                if (is_array($decoded)) {
+                    foreach ($decoded as $c) {
+                        if (!empty($c['source_id'])) {
+                            $ids[] = $c['source_id'];
+                        }
+                    }
+                }
+                continue;
+            }
+
             $msg = $row['message'] ?? '';
             if ($msg !== '' && preg_match_all('/<source\s+id="([^"]+)"/', $msg, $m)) {
                 $ids = array_merge($ids, $m[1]);
@@ -148,7 +164,7 @@ TEXT;
      * @param array<string> $validSourceIds Source IDs referenced in evidence (e.g. ['S1','S2']).
      *                                      Extracted from evidence rows when empty.
      */
-    public function buildMessagesArray(string $systemPrompt, array $history, array $validSourceIds = []): array
+    public function buildMessagesArray(string $systemPrompt, array $history, array $validSourceIds = [], array $richRowIds = []): array
     {
         $history = $this->preprocessHistory($history);
 
@@ -169,9 +185,12 @@ TEXT;
         ];
 
         // Inject Context Data immediately after the system prompt so the current
-        // user turn stays the last message the model sees.
+        // user turn stays the last message the model sees. Rows in $richRowIds
+        // (this turn's fresh tool results) inject the full message so the
+        // immediate answer is not starved of detail; other rows with
+        // atomic_context inject HOT atoms instead of the full message.
         foreach ($evidenceRows as $row) {
-            $content = trim($row['message'] ?? '');
+            $content = $this->injectedEvidenceContent($row, $richRowIds);
             if ($content === '') {
                 continue;
             }
@@ -280,7 +299,10 @@ TEXT;
         $recentChat = array_slice($partition['conversation'], -$rollingLimit);
 
         $systemTokens = $count($systemPrompt);
-        $contextDataTokens = $count(implode("\n", array_column($partition['evidence'], 'message')));
+        $contextDataTokens = $count(implode("\n", array_map(
+            fn($r) => $this->injectedEvidenceContent($r),
+            $partition['evidence']
+        )));
         $chatTokens = $count(implode("\n", array_column($recentChat, 'message')));
         $turnTokens = $count($query);
 
@@ -309,11 +331,45 @@ TEXT;
     }
 
     /**
+     * Render the injected (HOT) content for one data_fetching row. Rows in
+     * $richRowIds (this turn's fresh tool results) render the full message so the
+     * immediate answer is not starved of detail. Otherwise, when the row carries
+     * atomic_context, render compact source-prefixed fact lines (durable HOT
+     * atoms) instead of the full message; fall back to the message otherwise.
+     * Returns '' when there is nothing to inject.
+     */
+    private function injectedEvidenceContent(array $row, array $richRowIds = []): string
+    {
+        if (!empty($richRowIds) && in_array((int)($row['id'] ?? 0), $richRowIds, true)) {
+            return trim($row['message'] ?? '');
+        }
+
+        $atomic = $row['atomic_context'] ?? null;
+        if (!empty($atomic)) {
+            $decoded = json_decode($atomic, true);
+            if (is_array($decoded)) {
+                $lines = [];
+                foreach ($decoded as $c) {
+                    $sid = $c['source_id'] ?? '';
+                    $claim = trim($c['claim'] ?? '');
+                    if ($sid !== '' && $claim !== '') {
+                        $lines[] = "[{$sid}] {$claim}";
+                    }
+                }
+                if (!empty($lines)) {
+                    return implode("\n", $lines);
+                }
+            }
+        }
+        return trim($row['message'] ?? '');
+    }
+
+    /**
      * Build a single untrusted evidence block with appropriate role.
      *
      * @return array{role:string, content:string}
      */
-    private function buildEvidenceBlock(string $content): array
+    public function buildEvidenceBlock(string $content): array
     {
         $content = PromptInjectionFilter::sanitize($content);
         $useToolRole = (bool) Config::get('LLM_EVIDENCE_TOOL_ROLE', false);
