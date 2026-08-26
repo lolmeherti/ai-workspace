@@ -3,6 +3,7 @@
 namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
+use App\Services\Tools\TodoistApiClient;
 
 class ChatTodoistCreateAction extends BaseAction
 {
@@ -35,32 +36,9 @@ class ChatTodoistCreateAction extends BaseAction
                 $response = $toolService->makeTodoistRequest('GET', '/tasks');
                 $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
 
-                $normalizedProposedDue = preg_replace('/\s+at\s+/i', ' ', $dueString);
-                $proposedTimestamp = strtotime($normalizedProposedDue);
-
-                $conflictTask = null;
-                $isExactDuplicate = false;
-
-                foreach ($tasks as $t) {
-                    if (strcasecmp(trim($t['content']), trim($content)) === 0) {
-                        $conflictTask = $t;
-                        $isExactDuplicate = true;
-                        break;
-                    }
-
-                    if ($proposedTimestamp !== false && $proposedTimestamp > 0) {
-                        $tDueStr = isset($t['due']['datetime']) ? $t['due']['datetime'] : (isset($t['due']['date']) ? $t['due']['date'] : '');
-                        if (!empty($tDueStr)) {
-                            $tTimestamp = strtotime($tDueStr);
-                            if ($tTimestamp !== false && $tTimestamp > 0) {
-                                if (abs($tTimestamp - $proposedTimestamp) < 1800) {
-                                    $conflictTask = $t;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+                $conflict = TodoistApiClient::detectConflict($tasks, $content, $dueString);
+                $conflictTask = $conflict['task'] ?? null;
+                $isExactDuplicate = $conflict['is_duplicate'] ?? false;
 
                 if ($conflictTask !== null) {
                     $tDueStr = isset($conflictTask['due']['datetime']) ? $conflictTask['due']['datetime'] : (isset($conflictTask['due']['date']) ? $conflictTask['due']['date'] : '');

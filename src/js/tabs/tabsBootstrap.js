@@ -7,8 +7,9 @@ import './tabsMemoryEdit.js';
 import './tabsChatFilter.js';
 import { toggleStarSession } from './tabsChatStar.js';
 import { setChatFilter } from './tabsChatFilter.js';
-import { toggleCustomImapFields } from './tabsEmailAccount.js';
+import { toggleCustomImapFields, submitEmailAccount } from './tabsEmailAccount.js';
 
 window.toggleStarSession = toggleStarSession;
 window.setChatFilter = setChatFilter;
 window.toggleCustomImapFields = toggleCustomImapFields;
+window.submitEmailAccount = submitEmailAccount;

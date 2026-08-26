@@ -177,6 +177,22 @@
         "t4": { "ctx_size": 32768,  "requirements": { "vram_min": 10 } }
       }
     },
+      "qwen3-8-27b-udq5kxl": {
+      "name": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+      "reasoning_budget": 4096,
+      "model": {
+        "file": "Qwen3.8-27B-UD-Q5_K_XL.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q5_K_XL.gguf"
+      },
+      "mmproj": {
+        "file": "mmproj-Qwen3.8-27b-unsloth-q5-k-xl-BF16.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/mmproj-BF16.gguf"
+      },
+      "profiles": {
+        "t1": { "ctx_size": 128000, "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 65536,  "requirements": { "vram_min": 22 } }
+      }
+    },
       "bonsai-27b-q1": {
       "name": "Bonsai 27B Q1_0",
       "reasoning_budget": 4096,

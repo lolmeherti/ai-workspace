@@ -67,7 +67,7 @@ class AgentManager
         $this->modelName = Config::get('LLM_MODEL_NAME', 'local-model');
     }
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
     {
         $endpoint = $this->apiUrl . '/chat/completions';
         $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
@@ -80,6 +80,12 @@ class AgentManager
             'temperature' => $finalTemperature,
             'max_tokens' => 4096,
         ];
+        // For mechanical sub-tasks (e.g. evidence atomization) pass 'none' so a
+        // native-thinking model (Gemma 4) emits content directly instead of
+        // spending its whole max_tokens budget on reasoning_content.
+        if ($reasoningEffort !== null) {
+            $payload['reasoning_effort'] = $reasoningEffort;
+        }
 
         $msgCount = count($messages);
         $estTokens = 0;

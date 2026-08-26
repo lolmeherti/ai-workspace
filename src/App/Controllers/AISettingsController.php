@@ -36,15 +36,11 @@ class AISettingsController extends BaseController
         $sessionId = (int)($_POST['session_id'] ?? $_GET['session_id'] ?? 0);
         $activeTab = Tab::tryFrom($_POST['tab'] ?? $_GET['tab'] ?? '') ?? Tab::CHATS;
 
-        if (isset($_POST['switch_model'])) {
-            $this->switchModel($sessionId, $activeTab);
-        } else {
-            $action = $this->resolvePostAction();
-            if ($action === Action::SAVE_SETTINGS) {
-                $this->saveSettings($sessionId, $activeTab);
-            } elseif ($action === Action::CLEAR_ALL) {
-                $this->clearAllData();
-            }
+        $action = $this->resolvePostAction();
+        if ($action === Action::SAVE_SETTINGS) {
+            $this->saveSettings($sessionId, $activeTab);
+        } elseif ($action === Action::CLEAR_ALL) {
+            $this->clearAllData();
         }
     }
 
@@ -53,6 +49,8 @@ class AISettingsController extends BaseController
         $apiAction = ApiAction::tryFrom($_GET['api_action'] ?? '');
         if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
             $this->handleTokenLimit();
+        } elseif ($apiAction === ApiAction::GET_SWITCH_STATUS) {
+            $this->handleSwitchStatus();
         }
     }
 
@@ -62,13 +60,82 @@ class AISettingsController extends BaseController
         $newEnv = [];
 
         foreach (array_keys($currentEnv) as $key) {
-            if (isset($_POST[$key])) {
+            if (isset($_POST[$key]) && !in_array($key, ['LLM_MODEL_ID', 'LLM_MODEL_NAME', 'LLM_CTX_SIZE'], true)) {
                 $newEnv[$key] = $_POST[$key];
             }
         }
 
-        $this->envEditor->write($newEnv);
-        $this->redirect($this->buildUrl($sessionId, $activeTab));
+        $modelId = trim($_POST['model_id'] ?? '', '\"\' ');
+        $ctxSize = (int)($_POST['ctx_size'] ?? 0);
+
+        // Re-sync .env model keys with the model llama is actually running. A
+        // switch that timed out mid-download leaves .env stale, which both shows
+        // the wrong model in the UI and defeats change detection on the next save.
+        $loaded = $this->getLoadedModel();
+        if ($loaded !== null && !empty($loaded['id'])
+            && (trim($currentEnv['LLM_MODEL_ID'] ?? '', '\"\' ') !== $loaded['id']
+                || trim($currentEnv['LLM_MODEL_NAME'] ?? '', '\"\' ') !== $loaded['name'])) {
+            $this->envEditor->write([
+                'LLM_MODEL_ID'   => $loaded['id'],
+                'LLM_MODEL_NAME' => $loaded['name'],
+            ]);
+            $currentEnv['LLM_MODEL_ID']   = $loaded['id'];
+            $currentEnv['LLM_MODEL_NAME'] = $loaded['name'];
+        }
+
+        if (!$this->envEditor->write($newEnv)) {
+            $this->respond($sessionId, $activeTab, ['status' => 'error', 'message' => 'Failed to write settings to .env.']);
+            return;
+        }
+
+        $modelChanged = $modelId !== '' && $modelId !== trim($currentEnv['LLM_MODEL_ID'] ?? '', '\"\' ');
+        $ctxChanged = $ctxSize > 0 && $ctxSize !== (int)($currentEnv['LLM_CTX_SIZE'] ?? 0);
+
+        if ($modelChanged || $ctxChanged) {
+            $this->respond($sessionId, $activeTab, $this->switchModel());
+        } else {
+            $this->respond($sessionId, $activeTab, ['status' => 'saved']);
+        }
+    }
+
+    private function getLoadedModel(): ?array
+    {
+        $apiUrl = rtrim(\App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
+
+        $ch = curl_init($apiUrl . '/models');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+        ]);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        if ($response === false || $response === '') {
+            return null;
+        }
+        $data = json_decode($response, true);
+        $loadedName = $data['data'][0]['id'] ?? null;
+        if (!$loadedName) {
+            return null;
+        }
+
+        $modelsUrl = $this->goApiBase('api/models');
+
+        $ch = curl_init($modelsUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+        ]);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        if ($response === false || $response === '') {
+            return null;
+        }
+        foreach (json_decode($response, true) ?: [] as $m) {
+            if (($m['name'] ?? '') === $loadedName) {
+                return ['id' => $m['model_id'] ?? null, 'name' => $loadedName];
+            }
+        }
+        return null;
     }
 
     private function clearAllData(): void
@@ -79,21 +146,13 @@ class AISettingsController extends BaseController
         $this->redirect("index.php?new_chat=1");
     }
 
-    private function switchModel(int $sessionId, Tab $activeTab): void
+    private function switchModel(): array
     {
         $modelId = trim($_POST['model_id'] ?? '', '\"\' ');
         $ctxSize = (int)($_POST['ctx_size'] ?? 0);
 
         if ($modelId === '') {
-            $this->redirect($this->buildUrl($sessionId, $activeTab));
-            return;
-        }
-
-        $goApiUrl = \App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
-        $goApiUrl = str_replace('/v1', '', rtrim($goApiUrl, '/'));
-        $goApiUrl = preg_replace('#:\d{1,5}/?$#', ':9876/api/model-switch', $goApiUrl);
-        if ($goApiUrl === '' || $goApiUrl === \App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1')) {
-            $goApiUrl = 'http://host.docker.internal:9876/api/model-switch';
+            return ['status' => 'saved'];
         }
 
         $payload = json_encode([
@@ -101,33 +160,99 @@ class AISettingsController extends BaseController
             'ctx_size' => max($ctxSize, 512),
         ]);
 
-        $ch = curl_init($goApiUrl);
+        $ch = curl_init($this->goApiBase('api/model-switch'));
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
             CURLOPT_POSTFIELDS     => $payload,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 120,
+            CURLOPT_TIMEOUT        => 30,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false || $response === '') {
+            return ['status' => 'error', 'message' => 'Launcher did not respond: ' . ($curlErr ?: 'empty response')];
+        }
+
+        $data = json_decode($response, true) ?: [];
+
+        if ($httpCode === 202 || ($httpCode === 200 && ($data['status'] ?? '') === 'ok')) {
+            return [
+                'status'   => 'switching',
+                'model_id' => $modelId,
+                'name'     => $data['name'] ?? $modelId,
+                'ctx_size' => $ctxSize,
+            ];
+        }
+
+        if ($httpCode === 409) {
+            return [
+                'status'   => 'busy',
+                'model_id' => $data['model_id'] ?? $modelId,
+                'name'     => $data['name'] ?? $modelId,
+                'stage'    => $data['stage'] ?? 'downloading',
+                'progress' => $data['progress'] ?? 0,
+            ];
+        }
+
+        return ['status' => 'error', 'message' => $data['error'] ?? ('Model switch failed (HTTP ' . $httpCode . ')')];
+    }
+
+    private function goApiBase(string $endpoint): string
+    {
+        $apiUrl = \App\Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
+        $host = str_replace('/v1', '', rtrim($apiUrl, '/'));
+        $base = preg_replace('#:\d{1,5}/?$#', ':9876/' . ltrim($endpoint, '/'), $host);
+        if ($base === null || $base === '' || $base === $host) {
+            $base = 'http://host.docker.internal:9876/' . ltrim($endpoint, '/');
+        }
+        return $base;
+    }
+
+    private function respond(int $sessionId, Tab $activeTab, array $result): void
+    {
+        if ($this->isApiRequest()) {
+            $this->jsonResponse($result);
+        } else {
+            $this->redirect($this->buildUrl($sessionId, $activeTab));
+        }
+    }
+
+    private function handleSwitchStatus(): void
+    {
+        $ch = curl_init($this->goApiBase('api/switch-status'));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($httpCode === 200 && !empty($response)) {
-            $data = json_decode($response, true);
-            if (isset($data['status']) && $data['status'] === 'ok') {
-                $envUpdates = [
-                    'LLM_MODEL_ID'   => $modelId,
-                    'LLM_MODEL_NAME' => $data['name'] ?? $modelId,
-                ];
-                if ($ctxSize > 0) {
-                    $envUpdates['LLM_CTX_SIZE'] = (string)$ctxSize;
-                }
-                $this->envEditor->write($envUpdates);
-            }
+        if ($httpCode !== 200 || $response === false || $response === '') {
+            $this->jsonResponse(['active' => false, 'stage' => 'error', 'error' => 'switch status unavailable'], 502);
+            return;
         }
 
-        $this->redirect($this->buildUrl($sessionId, $activeTab));
+        $status = json_decode($response, true) ?: [];
+
+        // Persist the model identity to the PHP .env once the switch lands,
+        // so the UI reflects the new model after the page reloads.
+        if (empty($status['active']) && ($status['stage'] ?? '') === 'loaded' && !empty($status['model_id'])) {
+            $envUpdates = [
+                'LLM_MODEL_ID'   => $status['model_id'],
+                'LLM_MODEL_NAME' => $status['name'] ?? $status['model_id'],
+            ];
+            if (!empty($status['ctx_size'])) {
+                $envUpdates['LLM_CTX_SIZE'] = (string)$status['ctx_size'];
+            }
+            $this->envEditor->write($envUpdates);
+        }
+
+        $this->jsonResponse($status);
     }
 
     private function handleTokenLimit(): void

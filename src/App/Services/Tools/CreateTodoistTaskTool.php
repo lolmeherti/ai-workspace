@@ -2,8 +2,6 @@
 
 namespace App\Services\Tools;
 
-use App\Agents\SchedulingAgent;
-
 class CreateTodoistTaskTool
 {
 
@@ -17,51 +15,61 @@ class CreateTodoistTaskTool
 
     public function execute(array $toolData, int $sessionId, array $messages, callable $emit, string $cleanJson): string
     {
+        $content = $toolData['content'] ?? $toolData['query'] ?? '';
+        $dueString = $toolData['due_string'] ?? $toolData['due_date'] ?? null;
 
-                
-                $content = $toolData['content'] ?? $toolData['query'] ?? '';
-                $dueString = $toolData['due_string'] ?? $toolData['due_date'] ?? null;
+        if (!empty($dueString) && preg_match('/^(?:asap|whenever|no\s+rush|when\s+possible)$/i', trim($dueString))) {
+            $dueString = 'today';
+        }
 
-                if (!empty($dueString) && preg_match('/^(?:asap|whenever|no\s+rush|when\s+possible)$/i', trim($dueString))) {
-                    $dueString = 'today';
-                }
+        if (empty($content)) {
+            throw new \Exception("Task content is required.");
+        }
 
-                if (empty($content)) {
-                    throw new \Exception("Task content is required.");
-                }
+        $response = $this->todoist->request('GET', '/tasks');
+        $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
 
-                $response = $this->todoist->request('GET', '/tasks');
-                $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
+        $conflict = TodoistApiClient::detectConflict($tasks, $content, $dueString);
+        if ($conflict !== null) {
+            $existing = $conflict['task'];
+            $existingDue = $existing['due']['datetime'] ?? $existing['due']['date'] ?? 'No due date';
 
-                $schedulingAgent = new SchedulingAgent($this->agent);
-                $analysis = $schedulingAgent->analyzeTask($content, $dueString, $tasks);
+            $note = "System conflict while creating Todoist task \"{$content}\": an existing task \""
+                . ($existing['content'] ?? '') . "\" (due: {$existingDue}) matches.\n\n"
+                . "[SYSTEM NOTE]: Do NOT claim the task was created. Briefly tell the user a matching or overlapping task already exists";
+            if (!empty($dueString)) {
+                $note .= " and append the pre-vetted card verbatim so they can choose to schedule it anyway:\n"
+                    . "[TodoistSuggest: {$content} | {$dueString}]";
+            } else {
+                $note .= ".";
+            }
+            return $note;
+        }
 
-                if (is_array($analysis) && isset($analysis['status']) && $analysis['status'] !== 'clear') {
-                    $instructions = "System scheduling analysis:\n";
-                    $instructions .= "Status: " . $analysis['status'] . "\n";
-                    $instructions .= $analysis['analysis'] . "\n\n";
-                    $instructions .= "[SYSTEM NOTE]: The scheduling agent detected a conflict. Present this analysis to the user and ask how they'd like to proceed (reschedule, skip, or create anyway).";
-                    return $instructions;
-                }
+        $postData = ['content' => $content];
+        if (!empty($dueString)) {
+            $postData['due_string'] = $dueString;
+        }
 
-                $postData = ['content' => $content];
-                if (!empty($dueString)) {
-                    $postData['due_string'] = $dueString;
-                }
+        $task = $this->todoist->request('POST', '/tasks', $postData);
 
-                $task = $this->todoist->request('POST', '/tasks', $postData);
+        $dueFormatted = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : 'No due date');
 
-                $dueFormatted = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : 'No due date');
-                
-                $taskUrl = $task['url'] ?? (isset($task['id']) ? "https://todoist.com/showTask?id=" . $task['id'] : "https://todoist.com");
+        $taskUrl = $task['url'] ?? (isset($task['id']) ? "https://todoist.com/showTask?id=" . $task['id'] : "https://todoist.com");
 
-                $instructions = "System successfully created the task in Todoist:\n";
-                $instructions .= "- Task: \"{$task['content']}\"\n";
-                $instructions .= "- ID: {$task['id']}\n";
-                $instructions .= "- Due: {$dueFormatted}\n";
-                $instructions .= "- Link: {$taskUrl}\n\n";
-                $instructions .= "[SYSTEM NOTE]: Present a short, friendly confirmation message to the user confirming the task details. Keep it brief.";
+        $emit('todoist_created', [
+            'content' => $task['content'] ?? $content,
+            'due' => $dueFormatted,
+            'url' => $taskUrl,
+        ]);
 
-                return $instructions;
+        $instructions = "System successfully created the task in Todoist:\n";
+        $instructions .= "- Task: \"{$task['content']}\"\n";
+        $instructions .= "- ID: {$task['id']}\n";
+        $instructions .= "- Due: {$dueFormatted}\n";
+        $instructions .= "- Link: {$taskUrl}\n\n";
+        $instructions .= "[SYSTEM NOTE]: Present a short, friendly confirmation message to the user confirming the task details. Keep it brief.";
+
+        return $instructions;
     }
 }

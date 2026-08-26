@@ -40,6 +40,8 @@ class ChatBriefingStreamAction extends BaseAction
         $emit('status', ['text' => "Connecting to inbox services..."]);
         $emit('tool_start', ['tool' => 'email_fetch', 'label' => 'Checking connected inboxes...']);
 
+        $tokenCounter = new \App\Search\TokenCounter();
+
         $emailService = new \App\Services\EmailService($this->db);
         $emails = $emailService->fetchRecentEmails($includeUnseen, function ($emailAddress, $label) use ($emit) {
             $emit('status', ['text' => "Gathering emails from {$emailAddress}..."]);
@@ -86,13 +88,14 @@ class ChatBriefingStreamAction extends BaseAction
         \App\Logger::info('Briefing email fetch: ' . $fetchSummary);
 
         if ($this->db) {
+            $fetchMessage = $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects);
             $this->db->insert('chat_history', [
                 'session_id'    => $sessionId,
                 'role'          => 'system',
-                'message'       => $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects),
+                'message'       => $fetchMessage,
                 'message_type'  => 'data_fetching',
                 'tool_name'     => 'email_fetch',
-                'token_estimate' => (int)(mb_strlen($fetchSummary) / 4)
+                'token_estimate' => $tokenCounter->count($fetchMessage)
             ]);
         }
 
@@ -142,7 +145,7 @@ class ChatBriefingStreamAction extends BaseAction
                         'message'       => $summary,
                         'message_type'  => 'data_fetching',
                         'tool_name'     => 'email_summarize',
-                        'token_estimate' => (int)(mb_strlen($summary) / 4)
+                        'token_estimate' => $tokenCounter->count($summary)
                     ]);
                 }
 

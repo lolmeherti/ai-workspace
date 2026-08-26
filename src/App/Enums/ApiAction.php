@@ -7,6 +7,7 @@ enum ApiAction: string
     case SHOW_IN_EXPLORER = 'show_in_explorer';
     case GET_FILE_CONTENT = 'get_file_content';
     case SYNC_LMSTUDIO_LIMIT = 'sync_lmstudio_limit';
+    case GET_SWITCH_STATUS = 'get_switch_status';
     case SEARCH_FILES = 'search_files';
 
     case OPEN_DRAFT = 'open_draft';

@@ -173,8 +173,8 @@ class MessageAssemblyTest
         $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
 
         $history4 = [
-            ['role' => 'system', 'message' => 'ACTIVE_SENTINEL', 'message_type' => 'data_fetching', 'active_context' => 1],
-            ['role' => 'system', 'message' => 'EVICTED_SENTINEL', 'message_type' => 'data_fetching', 'active_context' => 0],
+            ['role' => 'system', 'message' => 'ACTIVE_SENTINEL', 'message_type' => 'data_fetching', 'raw_evicted' => 0],
+            ['role' => 'system', 'message' => 'EVICTED_SENTINEL', 'message_type' => 'data_fetching', 'raw_evicted' => 1],
             ['role' => 'user', 'message' => 'hello', 'message_type' => 'text'],
         ];
         $out4 = $this->prompt->buildMessagesArray($sys, $history4);

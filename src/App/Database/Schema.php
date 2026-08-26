@@ -52,8 +52,10 @@ class Schema
                 scraped_urls TEXT NULL,
                 source_map JSON NULL,
                 active_context TINYINT(1) DEFAULT 1,
+                raw_evicted TINYINT(1) DEFAULT 0,
                 backing_chunks JSON NULL,
                 atomic_context JSON NULL,
+                atomic_tokens INT NULL,
                 perf_metrics JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
@@ -221,6 +223,33 @@ class Schema
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN perf_metrics JSON NULL AFTER selected_chunks");
             }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'raw_evicted'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN raw_evicted TINYINT(1) DEFAULT 0 AFTER active_context");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'atomic_tokens'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN atomic_tokens INT NULL AFTER atomic_context");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // One-time migration: the old whole-row `active_context` toggle is superseded
+        // by `raw_evicted` + atoms presence. Rows evicted under the old model
+        // (active_context = 0) become raw-evicted; the vestigial flag is reset so a
+        // later Restore (raw_evicted = 0) is not silently re-evicted on the next boot.
+        try {
+            $this->db->executeStatement(
+                "UPDATE chat_history SET raw_evicted = 1, active_context = 1 WHERE COALESCE(active_context, 1) = 0"
+            );
         } catch (PDOException $e) {
         }
 
