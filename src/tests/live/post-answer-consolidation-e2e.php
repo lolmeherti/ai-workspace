@@ -38,7 +38,7 @@ final class CountingAgent extends AgentManager
         return $r;
     }
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
     {
         $start = microtime(true);
         $this->calls[] = 'chat';

@@ -40,6 +40,7 @@ class EvidenceConsolidationTest
         $this->runPartialReclamationReclaimsOnlyEnough();
         $this->runContextProfilesChangeTrigger();
         $this->runReclaimedIsRawMinusAtom();
+        $this->runInjectionRuleMatrix();
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);
@@ -92,6 +93,9 @@ class EvidenceConsolidationTest
             $this->test('atomic_context written on target row',
                 is_array($decoded) && count($decoded) === 1 && ($decoded[0]['claim'] ?? '') === 'Knicks won the 2026 NBA Finals');
             $this->test('other data_fetching row untouched', ($byId[$rowB]['atomic_context'] ?? null) === null);
+            $this->test('atomic_tokens written on target row', (int)($byId[$rowA]['atomic_tokens'] ?? 0) > 0);
+            $this->testEq('raw_evicted set on target row (summary state)', 1, (int)($byId[$rowA]['raw_evicted'] ?? 0));
+            $this->testEq('other row raw_evicted untouched', 0, (int)($byId[$rowB]['raw_evicted'] ?? 0));
             $this->testEq('no new chat_history row created', $before, count($rows));
             $this->test('emits consolidation_start then consolidation_done',
                 ($events[0]['event'] ?? '') === 'consolidation_start'
@@ -155,6 +159,8 @@ class EvidenceConsolidationTest
 
             $row = $this->db->selectSafe('chat_history', ['id' => $rowId])[0];
             $this->test('atomic_context stays null on failure', ($row['atomic_context'] ?? null) === null);
+            $this->test('atomic_tokens stays null on failure', ($row['atomic_tokens'] ?? null) === null);
+            $this->testEq('raw_evicted stays 0 on failure', 0, (int)($row['raw_evicted'] ?? 0));
 
             $svc = new PromptAssemblyService($this->db, '/tmp');
             $this->test('raw evidence still injected', $this->injectedContent($svc, $row, []) === 'full raw evidence text');
@@ -187,6 +193,8 @@ class EvidenceConsolidationTest
 
             $row = $this->db->selectSafe('chat_history', ['id' => $rowId])[0];
             $this->test('atomic_context stays null on empty atoms', ($row['atomic_context'] ?? null) === null);
+            $this->test('atomic_tokens stays null on empty atoms', ($row['atomic_tokens'] ?? null) === null);
+            $this->testEq('raw_evicted stays 0 on empty atoms', 0, (int)($row['raw_evicted'] ?? 0));
 
             $svc = new PromptAssemblyService($this->db, '/tmp');
             $this->test('raw evidence still injected', $this->injectedContent($svc, $row, []) === 'full raw evidence text');
@@ -327,11 +335,60 @@ class EvidenceConsolidationTest
     }
 
     // ===================================================================
+    // 9. injection rule matrix — raw_evicted gates raw; atoms always inject
+    // ===================================================================
+    private function runInjectionRuleMatrix(): void
+    {
+        echo "\n=== injection rule: raw_evicted + atoms presence ===\n";
+
+        $sessionId = $this->seedSession();
+        try {
+            $atoms = json_encode([['source_id' => 'S1', 'chunk_ids' => ['S1-C1'], 'claim' => 'atom fact']]);
+            $svc = new PromptAssemblyService($this->db, '/tmp');
+
+            $c1 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'RAW_TEXT', 0, $atoms)), []);
+            $this->test('raw live + atoms -> raw AND atoms injected',
+                str_contains($c1, 'RAW_TEXT') && str_contains($c1, '[S1] atom fact'));
+
+            $c2 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'RAW_ONLY', 0, null)), []);
+            $this->test('raw live, no atoms -> raw only', $c2 === 'RAW_ONLY');
+
+            $c3 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'EVICTED_RAW', 1, $atoms)), []);
+            $this->test('raw evicted + atoms -> atoms only',
+                !str_contains($c3, 'EVICTED_RAW') && str_contains($c3, '[S1] atom fact'));
+
+            $c4 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'OFF_RAW', 1, null)), []);
+            $this->test('raw evicted, no atoms -> empty (off)', $c4 === '');
+        } finally {
+            $this->db->query('DELETE FROM chat_sessions WHERE id = ?', [$sessionId]);
+        }
+    }
+
+    // ===================================================================
     // helpers
     // ===================================================================
+    private function seedRowWithState(int $sessionId, string $message, int $rawEvicted, ?string $atomic): int
+    {
+        $this->db->insert('chat_history', [
+            'session_id' => $sessionId,
+            'role' => 'system',
+            'message' => $message,
+            'message_type' => 'data_fetching',
+            'raw_evicted' => $rawEvicted,
+            'atomic_context' => $atomic,
+        ]);
+        return (int)$this->db->getConnection()->lastInsertId();
+    }
+
+    private function fetchRow(int $id): array
+    {
+        return $this->db->selectSafe('chat_history', ['id' => $id])[0];
+    }
+
     private function makeChatManager(): ChatManager
     {
-        return new ChatManager($this->db, new AgentManager());
+        // Deterministic chars/4 stub — no llama /tokenize HTTP in the test suite.
+        return new ChatManager($this->db, new AgentManager(), fn(string $s): int => (int)ceil(mb_strlen($s) / 4));
     }
 
     private function stubCondenser(array $claims = [], bool $throw = false): SourceCondenser
@@ -446,7 +503,7 @@ class EvidenceConsolidationTest
             'role' => 'system',
             'message' => str_repeat('raw evidence ', 200),
             'message_type' => 'data_fetching',
-            'active_context' => 1,
+            'raw_evicted' => 0,
             'atomic_context' => null,
             'selected_chunks' => json_encode([$chunk]),
             'search_query' => 'who won',

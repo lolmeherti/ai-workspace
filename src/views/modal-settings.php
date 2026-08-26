@@ -26,9 +26,11 @@
                         <?php 
                         $envPath = __DIR__ . '/../.env';
                         $currentModelId = '';
+                        $currentCtxSize = 0;
                         if (file_exists($envPath)) {
                             $envData = (new \App\EnvEditor($envPath))->read();
                             $currentModelId = trim($envData['LLM_MODEL_ID'] ?? '', '"\'\' ');
+                            $currentCtxSize = (int)preg_replace('/[^0-9]/', '', $envData['LLM_CTX_SIZE'] ?? '0');
                         }
 
                         $grouped = [];
@@ -49,7 +51,7 @@
                                 if ($ctxSize >= 1000) {
                                     $label .= ' — ' . number_format($ctxSize) . ' ctx';
                                 }
-                                $isSelected = ($mId !== '' && $mId === $currentModelId) ? 'selected' : '';
+                                $isSelected = ($mId !== '' && $mId === $currentModelId && ($currentCtxSize === 0 || $ctxSize === $currentCtxSize)) ? 'selected' : '';
                             ?>
                                 <option value="<?php echo htmlspecialchars($mId); ?>"
                                         data-ctx="<?php echo $ctxSize; ?>"
@@ -96,16 +98,17 @@
                 <?php endforeach; ?>
             </div>
             
-            <div class="flex justify-between items-center gap-3 p-6 border-t border-slate-800 bg-slate-900/40 shrink-0">
-                <button type="submit" name="switch_model" value="1" 
-                        onclick="const opt = document.querySelector('#model_id option:checked'); if (!opt || !opt.value) return false; const v = parseInt(opt.dataset.ctx); if (!isNaN(v) && v > 0) { document.getElementById('ctx_size').value = v; } return true;"
-                        class="px-5 py-2 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-md transition-colors">
-                    Switch Model & Restart
-                </button>
-                <div class="flex gap-3">
+            <div class="p-6 border-t border-slate-800 bg-slate-900/40 shrink-0">
+                <div id="switch-status" class="hidden items-center gap-3 mb-3">
+                    <span id="switch-status-spinner" class="switch-spinner"></span>
+                    <span id="switch-status-label" class="text-sm text-slate-300 whitespace-nowrap">Preparing…</span>
+                    <progress id="switch-status-bar" class="flex-1 h-2 rounded-full" max="100" value="0"></progress>
+                    <span id="switch-status-pct" class="text-sm text-cyan-400 font-semibold w-12 text-right"></span>
+                </div>
+                <div id="switch-error" class="hidden text-xs text-red-400 mb-3"></div>
+                <div class="flex justify-end items-center gap-3">
                     <button type="button" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors uk-modal-close">Cancel</button>
-                    <button type="submit" name="save_settings" value="1" 
-                            onclick="document.getElementById('model_id').value=''; document.getElementById('ctx_size').value=''"
+                    <button type="submit" id="save-settings-btn" name="save_settings" value="1" 
                             class="btn-futuristic px-5 py-2 rounded-lg text-sm font-semibold">Save Configuration</button>
                 </div>
             </div>
@@ -127,5 +130,119 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const form = document.querySelector('#settings-modal form');
+    if (!form) return;
+
+    const statusRow = document.getElementById('switch-status');
+    const statusLabel = document.getElementById('switch-status-label');
+    const statusBar = document.getElementById('switch-status-bar');
+    const statusPct = document.getElementById('switch-status-pct');
+    const errorRow = document.getElementById('switch-error');
+    const saveBtn = document.getElementById('save-settings-btn');
+
+    const stageLabel = {
+        resolving: 'Resolving model…',
+        downloading: 'Downloading model…',
+        starting: 'Starting llama-server… (large models take a moment)',
+    };
+
+    let polling = false;
+
+    function showStatus() {
+        statusRow.classList.remove('hidden');
+        statusRow.classList.add('flex');
+        errorRow.classList.add('hidden');
+        errorRow.textContent = '';
+    }
+    function hideStatus() {
+        statusRow.classList.add('hidden');
+        statusRow.classList.remove('flex');
+    }
+    function setBusy(busy) {
+        saveBtn.disabled = busy;
+    }
+    function showError(msg) {
+        errorRow.textContent = msg;
+        errorRow.classList.remove('hidden');
+        hideStatus();
+        setBusy(false);
+    }
+    function updateProgress(st) {
+        const label = stageLabel[st.stage] || 'Working…';
+        statusLabel.textContent = label;
+        if (st.stage === 'downloading') {
+            statusBar.classList.remove('hidden');
+            statusPct.classList.remove('hidden');
+            const pct = Math.round(Number(st.progress) || 0);
+            statusBar.value = pct;
+            statusPct.textContent = pct + '%';
+        } else {
+            statusBar.classList.add('hidden');
+            statusPct.classList.add('hidden');
+        }
+    }
+
+    function pollSwitchStatus() {
+        if (polling) return;
+        polling = true;
+        const tick = async () => {
+            try {
+                const resp = await fetch('index.php?api_action=get_switch_status', {
+                    headers: { 'Accept': 'application/json' },
+                });
+                const st = await resp.json();
+                if (st.active === false) {
+                    polling = false;
+                    if (st.stage === 'loaded') {
+                        window.location.reload();
+                    } else {
+                        showError(st.error || 'Model switch failed.');
+                    }
+                    return;
+                }
+                updateProgress(st);
+                setTimeout(tick, 2000);
+            } catch (err) {
+                setTimeout(tick, 3000);
+            }
+        };
+        tick();
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        showStatus();
+        statusLabel.textContent = 'Saving…';
+        statusBar.classList.add('hidden');
+        statusPct.classList.add('hidden');
+        setBusy(true);
+
+        try {
+            const resp = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' },
+                body: new FormData(form),
+            });
+            let data = {};
+            try { data = await resp.json(); } catch (_) {}
+            const status = data.status || 'error';
+
+            if (status === 'switching') {
+                statusLabel.textContent = 'Switching to ' + (data.name || 'model') + '…';
+                pollSwitchStatus();
+            } else if (status === 'busy') {
+                statusLabel.textContent = 'Switch already in progress…';
+                updateProgress({ stage: data.stage || 'downloading', progress: data.progress || 0 });
+                pollSwitchStatus();
+            } else if (status === 'saved') {
+                window.location.reload();
+            } else {
+                showError(data.message || 'Failed to save settings.');
+            }
+        } catch (err) {
+            showError('Network error: ' + err.message);
+        }
+    });
 });
 </script>

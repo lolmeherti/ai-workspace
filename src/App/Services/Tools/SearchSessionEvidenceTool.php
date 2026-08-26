@@ -51,12 +51,15 @@ class SearchSessionEvidenceTool
             $sourceFilter = null;
         }
 
-        // Load active Context Data rows only (evicted rows are excluded).
-        $rows = $this->db->selectSafe('chat_history', [
-            'session_id' => $sessionId,
-            'message_type' => 'data_fetching',
-            'active_context' => 1,
-        ]);
+        // Load active Context Data rows only: raw-live OR atomized. Fully-off
+        // rows (raw evicted AND no atoms) are excluded, matching the old
+        // active_context eviction semantics under the raw_evicted model.
+        $rows = $this->db->query(
+            "SELECT * FROM chat_history
+             WHERE session_id = ? AND message_type = 'data_fetching'
+               AND (raw_evicted = 0 OR atomic_context IS NOT NULL)",
+            [$sessionId]
+        );
 
         $chunks = [];
         foreach ($rows as $row) {

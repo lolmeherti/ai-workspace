@@ -19,7 +19,7 @@ namespace App\Agents;
  * threshold):
  *   - backlog: the session's accumulated un-atomized raw evidence (sum of
  *     `token_estimate` over rows with `atomic_context IS NULL` and
- *     `active_context = 1`) reaches backlogThresholdForContext(ctxSize).
+ *     `raw_evicted = 0`) reaches backlogThresholdForContext(ctxSize).
  *   - safety: remaining context headroom falls below
  *     safetyHeadroomForContext(ctxSize) — atomize early to reclaim before the
  *     overflow wall.

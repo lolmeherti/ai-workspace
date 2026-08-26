@@ -56,7 +56,7 @@ final class CapturingAgent extends AgentManager
 {
     public ?string $lastRaw = null;
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
     {
         $out = parent::chat($messages, $stream, $streamCallback, $temperature);
         $this->lastRaw = $out;

@@ -127,7 +127,7 @@ class ActionRouter
                 $controller = new ChatController($this->db, $this->chatSessionRepository, $this->agentManager, $this->memoryExtractor, $this->status);
             }
         } else {
-            if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT) {
+            if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT || $apiAction === ApiAction::GET_SWITCH_STATUS) {
                 $controller = new AISettingsController($this->db, $this->chatSessionRepository, $this->envEditor);
             } elseif ($apiAction === ApiAction::GET_EMAILS || $apiAction === ApiAction::GET_EMAIL_BODY) {
                 $controller = new EmailController($this->db);

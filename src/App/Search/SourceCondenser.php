@@ -103,7 +103,7 @@ PROMPT;
         $raw = $this->agent->chat([
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userMessage],
-        ], false, null, $temperature, 'condenser');
+        ], false, null, $temperature, 'condenser', 'none');
 
         return $this->parseClaimsBatched($raw, $validSet);
     }
@@ -211,7 +211,7 @@ PROMPT;
         $raw = $this->agent->chat([
             ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'user', 'content' => $userMessage],
-        ], false, null, $temperature, 'condenser');
+        ], false, null, $temperature, 'condenser', 'none');
 
         return $this->parseClaims($raw, $validSet);
     }

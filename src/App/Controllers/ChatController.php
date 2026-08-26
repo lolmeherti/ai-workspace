@@ -16,6 +16,7 @@ use App\Actions\Chat\ChatStreamAction;
 use App\Actions\Chat\ChatSessionDeleteAction;
 use App\Actions\Chat\ContextDataToggleAction;
 use App\Actions\Chat\ContextDataViewAction;
+use App\Actions\Chat\ContextDataAtomizeAction;
 
 class ChatController extends BaseController
 {
@@ -55,6 +56,11 @@ class ChatController extends BaseController
         $action = $_POST['action'] ?? null;
         if ($action === Action::DELETE_MULTIPLE_SESSIONS->value || isset($_POST[Action::DELETE_MULTIPLE_SESSIONS->value])) {
             (new ChatSessionDeleteAction($this->db, $this->chatSessionRepository))->execute();
+        }
+
+        if ($action === Action::ATOMIZE_CONTEXT->value) {
+            (new ContextDataAtomizeAction($this->db, $this->agentManager))->execute();
+            return;
         }
     }
 
@@ -134,11 +140,6 @@ class ChatController extends BaseController
 
         if ($action === Action::CONDENSE) {
             (new ChatCondenseAction($this->db, $this->agentManager))->execute();
-            return;
-        }
-
-        if ($action === Action::TOOL_APPROVE) {
-            (new ToolApprovalAction($this->db, $this->agentManager, $this->memoryExtractor))->execute();
             return;
         }
 

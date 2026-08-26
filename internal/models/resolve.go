@@ -20,19 +20,12 @@ func ResolveModel(
 	modelDir string,
 	onProgress func(float64),
 ) (*ResolvedModel, error) {
-	def, ok := defs[modelID]
-	if !ok {
-		return nil, fmt.Errorf("model %q not found", modelID)
+	if err := ValidateModel(modelID, defs, hw); err != nil {
+		return nil, err
 	}
 
-	if def.Model.File == "" || def.Model.URL == "" {
-		return nil, fmt.Errorf("model %q has no artifact configured", modelID)
-	}
-
+	def := defs[modelID]
 	profileID, profile := selectProfile(def.Profiles, hw)
-	if profileID == "" {
-		return nil, fmt.Errorf("model %q has no profile matching hardware (%.1f GB VRAM)", modelID, hw.VRAMGB)
-	}
 
 	if err := validateExtraArgs(profile.ExtraArgs); err != nil {
 		return nil, fmt.Errorf("model %q profile %q: %w", modelID, profileID, err)
@@ -108,6 +101,25 @@ func ResolveModel(
 	}
 
 	return resolved, nil
+}
+
+// ValidateModel verifies a model ID resolves to a deployable profile for the
+// given hardware WITHOUT downloading any artifacts. It performs the same
+// existence/artifact/profile checks ResolveModel does before its download phase,
+// so callers can reject a bad switch request synchronously before deferring the
+// (potentially long) download + restart to the background.
+func ValidateModel(modelID string, defs map[string]ModelDefinition, hw Hardware) error {
+	def, ok := defs[modelID]
+	if !ok {
+		return fmt.Errorf("model %q not found", modelID)
+	}
+	if def.Model.File == "" || def.Model.URL == "" {
+		return fmt.Errorf("model %q has no artifact configured", modelID)
+	}
+	if profileID, _ := selectProfile(def.Profiles, hw); profileID == "" {
+		return fmt.Errorf("model %q has no profile matching hardware (%.1f GB VRAM)", modelID, hw.VRAMGB)
+	}
+	return nil
 }
 
 func selectProfile(profiles map[string]DeploymentProfile, hw Hardware) (string, DeploymentProfile) {

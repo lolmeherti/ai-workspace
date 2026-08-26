@@ -95,8 +95,10 @@ TEXT;
     }
 
     /**
-     * Extract the union of source IDs referenced by data_fetching rows —
-     * the sources actually rendered in the prompt.
+     * Extract the union of source IDs actually rendered in the prompt. A source
+     * contributes its IDs from the raw `<source id="S#">` blocks when raw is live,
+     * and from its atoms (`[S#] claim` lines) whenever atoms are present. A fully
+     * off source (raw evicted, no atoms) contributes nothing.
      *
      * @return array<string>
      */
@@ -107,12 +109,19 @@ TEXT;
             if (($row['message_type'] ?? '') !== 'data_fetching') {
                 continue;
             }
-            if ((int)($row['active_context'] ?? 1) !== 1) {
-                continue;
+
+            $rawEvicted = (int)($row['raw_evicted'] ?? 0) === 1;
+
+            // Raw evidence: source IDs come from the injected <source id="S#"> blocks.
+            if (!$rawEvicted) {
+                $msg = $row['message'] ?? '';
+                if ($msg !== '' && preg_match_all('/<source\s+id="([^"]+)"/', $msg, $m)) {
+                    $ids = array_merge($ids, $m[1]);
+                }
             }
 
-            // Atomic evidence: source IDs come from atomic_context (only sources
-            // whose atoms are actually injected are citable).
+            // Atomic evidence: source IDs come from atomic_context (always injected
+            // when atoms exist, regardless of raw_evicted).
             $atomic = $row['atomic_context'] ?? null;
             if (!empty($atomic)) {
                 $decoded = json_decode($atomic, true);
@@ -123,12 +132,6 @@ TEXT;
                         }
                     }
                 }
-                continue;
-            }
-
-            $msg = $row['message'] ?? '';
-            if ($msg !== '' && preg_match_all('/<source\s+id="([^"]+)"/', $msg, $m)) {
-                $ids = array_merge($ids, $m[1]);
             }
         }
 
@@ -136,8 +139,9 @@ TEXT;
     }
 
     /**
-     * Split history into active Context Data (evidence) vs conversation.
-     * Evicted data_fetching rows belong to neither.
+     * Split history into active Context Data (evidence) vs conversation. Every
+     * data_fetching row is a candidate evidence row; rows with nothing to inject
+     * (raw evicted AND no atoms) are dropped later by injectedEvidenceContent().
      *
      * @return array{evidence:array, conversation:array}
      */
@@ -147,9 +151,7 @@ TEXT;
         $conversation = [];
         foreach ($history as $row) {
             if (($row['message_type'] ?? '') === 'data_fetching') {
-                if ((int)($row['active_context'] ?? 1) === 1) {
-                    $evidence[] = $row;
-                }
+                $evidence[] = $row;
                 continue;
             }
             $conversation[] = $row;
@@ -299,10 +301,13 @@ TEXT;
         $recentChat = array_slice($partition['conversation'], -$rollingLimit);
 
         $systemTokens = $count($systemPrompt);
-        $contextDataTokens = $count(implode("\n", array_map(
-            fn($r) => $this->injectedEvidenceContent($r),
-            $partition['evidence']
-        )));
+        // Only count evidence rows that actually inject something — mirror the
+        // empty-content skip in buildMessagesArray so the estimate matches reality.
+        $evidenceContent = array_values(array_filter(
+            array_map(fn($r) => $this->injectedEvidenceContent($r), $partition['evidence']),
+            fn($c) => $c !== ''
+        ));
+        $contextDataTokens = $count(implode("\n", $evidenceContent));
         $chatTokens = $count(implode("\n", array_column($recentChat, 'message')));
         $turnTokens = $count($query);
 
@@ -332,11 +337,13 @@ TEXT;
 
     /**
      * Render the injected (HOT) content for one data_fetching row. Rows in
-     * $richRowIds (this turn's fresh tool results) render the full message so the
-     * immediate answer is not starved of detail. Otherwise, when the row carries
-     * atomic_context, render compact source-prefixed fact lines (durable HOT
-     * atoms) instead of the full message; fall back to the message otherwise.
-     * Returns '' when there is nothing to inject.
+     * $richRowIds (this turn's fresh tool results) render the full raw message so
+     * the immediate answer is not starved of detail. Otherwise the injection rule is:
+     *
+     *     content = (raw_evicted == 0 ? raw : '') + (atoms if present else '')
+     *
+     * Atoms are always injected when they exist; raw_evicted only gates the raw.
+     * Returns '' when there is nothing to inject (raw evicted AND no atoms).
      */
     private function injectedEvidenceContent(array $row, array $richRowIds = []): string
     {
@@ -344,24 +351,40 @@ TEXT;
             return trim($row['message'] ?? '');
         }
 
-        $atomic = $row['atomic_context'] ?? null;
-        if (!empty($atomic)) {
-            $decoded = json_decode($atomic, true);
-            if (is_array($decoded)) {
-                $lines = [];
-                foreach ($decoded as $c) {
-                    $sid = $c['source_id'] ?? '';
-                    $claim = trim($c['claim'] ?? '');
-                    if ($sid !== '' && $claim !== '') {
-                        $lines[] = "[{$sid}] {$claim}";
-                    }
-                }
-                if (!empty($lines)) {
-                    return implode("\n", $lines);
-                }
+        $raw = trim($row['message'] ?? '');
+        $rawEvicted = (int)($row['raw_evicted'] ?? 0) === 1;
+
+        $decoded = json_decode($row['atomic_context'] ?? '', true);
+        $atoms = is_array($decoded) ? self::renderAtomLines($decoded) : '';
+
+        $parts = [];
+        if (!$rawEvicted && $raw !== '') {
+            $parts[] = $raw;
+        }
+        if ($atoms !== '') {
+            $parts[] = $atoms;
+        }
+        return implode("\n", $parts);
+    }
+
+    /**
+     * Render a decoded atom set (from atomic_context) into the compact `[S#] claim`
+     * lines that are injected into the prompt. Shared so ChatManager's atom-token
+     * accounting measures the exact text the prompt will carry.
+     *
+     * @param array<int, array{source_id:string, claim:string}> $claims
+     */
+    public static function renderAtomLines(array $claims): string
+    {
+        $lines = [];
+        foreach ($claims as $c) {
+            $sid = (string)($c['source_id'] ?? '');
+            $claim = trim((string)($c['claim'] ?? ''));
+            if ($sid !== '' && $claim !== '') {
+                $lines[] = "[{$sid}] {$claim}";
             }
         }
-        return trim($row['message'] ?? '');
+        return implode("\n", $lines);
     }
 
     /**

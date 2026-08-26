@@ -25,7 +25,7 @@ Config::load(dirname(__DIR__, 2));
 final class CountingAgent extends AgentManager
 {
     public int $calls = 0;
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
     {
         $this->calls++;
         return parent::chat($messages, $stream, $streamCallback, $temperature);

@@ -8,6 +8,7 @@ use App\Agents\AtomizationPolicy;
 use App\Config;
 use App\Search\CitationValidator;
 use App\Search\SourceCondenser;
+use App\Search\TokenCounter;
 use App\Search\WebChunk;
 use App\Services\AtomizationStats;
 use App\Services\FileAttachmentService;
@@ -28,13 +29,17 @@ class ChatManager
     private ToolExecutionService $toolExecutionService;
     private AtomizationStats $atomizationStats;
     private string $uploadDir;
+    /** @var callable(string):int */
+    private $countTokens;
 
     public function __construct(
         Database $db,
-        AgentManager $agent
+        AgentManager $agent,
+        ?callable $countTokens = null
     ) {
         $this->db = $db;
         $this->agent = $agent;
+        $this->countTokens = $countTokens ?? [new TokenCounter(), 'count'];
         $this->uploadDir = __DIR__ . '/../uploads/';
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
@@ -156,13 +161,16 @@ class ChatManager
                 $args = json_decode($argsJson, true) ?: [];
                 $queries = $args['queries'] ?? [];
 
-                if (empty($toolName) || empty($queries)) continue;
+                if (empty($toolName)) continue;
+                if (empty($queries) && $toolName !== 'create_todoist_task') continue;
 
-                $queryList = implode(', ', $queries);
+                $queryList = $toolName === 'create_todoist_task'
+                    ? ($args['content'] ?? '')
+                    : implode(', ', $queries);
                 $emit('tool_start', ['tool' => $toolName, 'label' => "{$toolName}: {$queryList}"]);
 
                 $result = $this->toolExecutionService->executeToolByName(
-                    $toolName, $queries, $sessionId, $emit, $args['source_ids'] ?? null
+                    $toolName, $args, $sessionId, $emit
                 );
 
                 // search_session_evidence is TRANSIENT: its rehydrated chunks are
@@ -201,7 +209,7 @@ class ChatManager
                     'backing_chunks' => !empty($lastBackingChunks) ? json_encode($lastBackingChunks, JSON_UNESCAPED_UNICODE) : null,
                     'selected_chunks' => ($toolName === 'search_web' && !empty($lastSelectedChunks)) ? json_encode($lastSelectedChunks, JSON_UNESCAPED_UNICODE) : null,
                     'atomic_context' => null,
-                    'token_estimate' => (int)(mb_strlen($result) / 4),
+                    'token_estimate' => ($this->countTokens)($result),
                 ]);
 
                 $historyId = (int) $this->db->getConnection()->lastInsertId();
@@ -213,7 +221,7 @@ class ChatManager
                     'tool_name' => $toolName,
                     'query' => $queryList,
                     'source_count' => count($lastSourceMap),
-                    'token_estimate' => (int)(mb_strlen($result) / 4),
+                    'token_estimate' => ($this->countTokens)($result),
                     'active' => true,
                 ]);
             }
@@ -360,7 +368,7 @@ class ChatManager
             'output_reserve' => self::OUTPUT_RESERVE_TOKENS,
             'breakdown' => $breakdown,
             'message' => sprintf(
-                'Context limit reached (%d/%d tokens). Context Data ~%d · Chat ~%d · output reserve %d. Evict Context Data or condense chat to continue.',
+                'Context limit reached (%d/%d tokens). Context Data ~%d · Chat ~%d · output reserve %d. Evict raw context or condense chat to continue.',
                 $total,
                 $ctxSize,
                 $breakdown['context_data'],
@@ -460,6 +468,27 @@ class ChatManager
                             ],
                         ],
                         'required' => ['queries'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'create_todoist_task',
+                    'description' => 'Create a task in the user\'s Todoist list.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'content' => [
+                                'type' => 'string',
+                                'description' => 'Task content.',
+                            ],
+                            'due_string' => [
+                                'type' => 'string',
+                                'description' => 'Natural-language due date, e.g. "Sep 29 10:00".',
+                            ],
+                        ],
+                        'required' => ['content'],
                     ],
                 ],
             ],
@@ -873,7 +902,7 @@ class ChatManager
             "SELECT id, token_estimate, search_query, selected_chunks, backing_chunks
              FROM chat_history
              WHERE session_id = ? AND message_type = 'data_fetching'
-               AND active_context = 1 AND atomic_context IS NULL",
+               AND raw_evicted = 0 AND atomic_context IS NULL",
             [$sessionId]
         );
         if (empty($rows)) {
@@ -961,6 +990,12 @@ class ChatManager
             if ($atomTokens > 0) {
                 $persisted++;
                 $reclaimed = max(0, $item['token_estimate'] - $atomTokens);
+                $emit('context_data_atomized', [
+                    'id' => $item['id'],
+                    'raw_tokens' => $item['token_estimate'],
+                    'atom_tokens' => $atomTokens,
+                    'reclaimed' => $reclaimed,
+                ]);
                 $remainingBacklog = max(0, $remainingBacklog - $reclaimed);
                 $remainingHeadroom += $reclaimed; // atoms still inject; only the shrink is reclaimed
             } elseif ($atomTokens === -1) {
@@ -978,7 +1013,7 @@ class ChatManager
     }
 
     /** Decode a persisted WebChunk[] JSON column back into WebChunk objects. */
-    private function decodeChunks(string $json): array
+    public static function decodeChunks(string $json): array
     {
         $raw = json_decode($json, true);
         if (!is_array($raw)) {
@@ -1036,11 +1071,14 @@ class ChatManager
             return 0;
         }
 
+        $atomTokens = $this->atomTokenCount($claims);
+
         $this->db->update('chat_history', [
             'atomic_context' => json_encode($claims, JSON_UNESCAPED_UNICODE),
+            'atomic_tokens' => $atomTokens,
+            'raw_evicted' => 1,
         ], ['id' => $rowId]);
 
-        $atomTokens = self::atomTokenCount($claims);
         \App\Logger::logEvent('consolidation_ok', 'Evidence atomization persisted atoms', [
             'row_id' => $rowId,
             'claims' => count($claims),
@@ -1050,21 +1088,15 @@ class ChatManager
     }
 
     /**
-     * Estimated token count of the atom set as it will be injected — the
-     * `[S#] claim` lines rendered by PromptAssemblyService::injectedEvidenceContent,
-     * joined by newlines. Uses the codebase's chars/4 estimate.
+     * Real token count of the atom set as it will be injected — the `[S#] claim`
+     * lines rendered by PromptAssemblyService::renderAtomLines. Uses the injectable
+     * TokenCounter (llama /tokenize, md5-cached, chars/4 fallback) so the viewer's
+     * arrow shows real reclaimed tokens, not a chars/4 guess.
      */
-    private static function atomTokenCount(array $claims): int
+    private function atomTokenCount(array $claims): int
     {
-        $chars = 0;
-        foreach ($claims as $c) {
-            $sid = (string)($c['source_id'] ?? '');
-            $claim = trim((string)($c['claim'] ?? ''));
-            if ($sid !== '' && $claim !== '') {
-                $chars += mb_strlen("[{$sid}] {$claim}") + 1; // +1 for the newline separator
-            }
-        }
-        return (int) ceil($chars / 4);
+        $lines = PromptAssemblyService::renderAtomLines($claims);
+        return ($this->countTokens)($lines);
     }
 
     /**

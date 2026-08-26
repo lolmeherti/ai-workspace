@@ -8,7 +8,7 @@ import { showCondensationModal, updateTokenCounter, lockChatContext } from '../u
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
-import { addContextItem } from '../chat/chatContextData.js';
+import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
 
 function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -462,7 +462,136 @@ export async function streamResponse(formData, originalMessage) {
     let isFirstToken = true;
     let reasoningSeen = false;
     let consolidatingBadge = null;
+    let turnHadEdit = false;
     let thinkingTypewriter = new TypewriterEffect(thinkingContent, thinkingPeek);
+
+    // ── Incremental streaming render ─────────────────────────────────────
+    // Full-buffer marked.parse + innerHTML rebuild on every token is O(n^2)
+    // and thrashes layout (the vertical "wiggle" + dropped frames). Instead:
+    // completed markdown blocks are parsed once and appended to a stable
+    // container; the in-progress block renders as a cheap tail; the final
+    // authoritative render happens once in the `done` event handler.
+    const committedEl = document.createElement('div');
+    committedEl.className = 'streaming-committed';
+    const tailEl = document.createElement('p');
+    tailEl.className = 'streaming-tail';
+    const cursorEl = document.createElement('span');
+    cursorEl.className = 'streaming-cursor animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block';
+    cursorEl.textContent = '\u258d';
+    tailEl.appendChild(cursorEl);
+    textContainer.appendChild(committedEl);
+    textContainer.appendChild(tailEl);
+
+    let renderRawLen = 0;      // index into the renderable text already committed
+    let lastRenderable = '';   // last fully-stripped display text (for the done flush)
+    let renderScheduled = false;
+
+    function escapeHtml(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Positions of every fenced-code-block marker (``` or ~~~ at line start).
+    function fenceMarkers(text) {
+        const re = /^```|^~~~/gm;
+        const positions = [];
+        let m;
+        while ((m = re.exec(text)) !== null) positions.push(m.index);
+        return positions;
+    }
+
+    function isInsideOpenFence(text) {
+        return fenceMarkers(text).length % 2 === 1;
+    }
+
+    // Last index in `text` where markdown is structurally stable. Blocks are
+    // committed only up to this boundary; the remainder is the dirty tail.
+    function lastSafeBoundary(text) {
+        const len = text.length;
+        const fences = fenceMarkers(text);
+
+        // Odd marker count => inside an open code fence. Never use a blank
+        // line inside code as a boundary; commit only up to the fence's
+        // opening line so the whole fence stays in the tail until it closes.
+        if (fences.length % 2 === 1) {
+            const openAt = fences[fences.length - 1];
+            const lineStart = text.lastIndexOf('\n', openAt - 1);
+            return lineStart === -1 ? 0 : lineStart + 1;
+        }
+
+        // Even markers => every fence is closed. Commit up to the last blank
+        // line, extended to include a closed fence's closing line when it is
+        // the trailing content (so a complete fence renders without waiting
+        // for a following blank line).
+        let boundary = text.lastIndexOf('\n\n');
+        boundary = (boundary === -1) ? 0 : boundary + 2;
+
+        if (fences.length > 0) {
+            const lastFence = fences[fences.length - 1];
+            const lineEnd = text.indexOf('\n', lastFence);
+            const fenceEnd = (lineEnd === -1) ? len : lineEnd + 1;
+            if (fenceEnd > boundary) boundary = fenceEnd;
+        }
+        return boundary;
+    }
+
+    function postProcess(html) {
+        let out = cleanAssistantStreamText(html);
+        if (window.parseInlineFiles) {
+            out = window.parseInlineFiles(out);
+        }
+        return out;
+    }
+
+    function highlightNew(container) {
+        container.querySelectorAll('pre code').forEach((block) => {
+            if (!block.classList.contains('hljs')) {
+                hljs.highlightElement(block);
+            }
+        });
+    }
+
+    function scheduleRender(renderable) {
+        lastRenderable = renderable;
+        if (renderScheduled) return;
+        renderScheduled = true;
+        requestAnimationFrame(() => {
+            renderScheduled = false;
+            renderFrame();
+        });
+    }
+
+    function renderFrame() {
+        const renderable = lastRenderable;
+        const boundary = lastSafeBoundary(renderable);
+
+        if (boundary > renderRawLen) {
+            const delta = renderable.slice(renderRawLen, boundary);
+            committedEl.insertAdjacentHTML('beforeend', postProcess(marked.parse(delta)));
+            highlightNew(committedEl);
+            renderRawLen = boundary;
+        }
+
+        const tail = renderable.slice(renderRawLen);
+        if (tail === '') {
+            tailEl.textContent = '';
+        } else if (isInsideOpenFence(renderable)) {
+            // Escaped code (no markdown mangling) until the fence closes.
+            tailEl.innerHTML = '<code style="white-space:pre-wrap">' + escapeHtml(tail) + '</code>';
+        } else if (typeof marked.parseInline === 'function') {
+            tailEl.innerHTML = marked.parseInline(tail);
+        } else {
+            tailEl.textContent = tail;
+        }
+        tailEl.appendChild(cursorEl);
+    }
+
+    function flushFinalRender() {
+        const renderable = lastRenderable;
+        renderRawLen = renderable.length;
+        tailEl.textContent = '';
+        committedEl.innerHTML = postProcess(marked.parse(renderable));
+        highlightNew(committedEl);
+    }
 
     try {
         const response = await fetch('index.php', {
@@ -591,11 +720,13 @@ export async function streamResponse(formData, originalMessage) {
                                 search_web:      '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
                                 search_local:    '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
                                 search_calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+                                create_todoist_task: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
                             };
                             const spec = {
                                 search_web:      { bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/40', accent: 'bg-sky-400' },
                                 search_local:    { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/40', accent: 'bg-cyan-400' },
                                 search_calendar: { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/40', accent: 'bg-amber-400' },
+                                create_todoist_task: { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/40', accent: 'bg-indigo-400' },
                             };
                             const s = spec[data.tool] || { bg: 'bg-slate-500/10', text: 'text-slate-300', border: 'border-slate-500/30', accent: 'bg-slate-400' };
                             const icon = icons[data.tool] || '<circle cx="12" cy="12" r="10"/>';
@@ -610,6 +741,16 @@ export async function streamResponse(formData, originalMessage) {
                             const doneLabel = data.label || 'Done.';
                             completeActiveTask();
                             addTraceEntry(`Completed \u2014 ${doneLabel}`, 'emerald');
+                        }
+
+                        if (event === 'todoist_created') {
+                            const duePart = (data.due && data.due !== 'No due date') ? ' ' + data.due : '';
+                            addTraceEntry('Task created: "' + data.content + '"' + duePart, 'indigo');
+
+                            const tBadge = document.createElement('span');
+                            tBadge.className = 'text-[0.7rem] px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5 font-medium tracking-tight';
+                            tBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_currentColor]"></span><svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Task created';
+                            aiLabelContainer.appendChild(tBadge);
                         }
 
                         if (event === 'trace') {
@@ -681,6 +822,10 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'context_data_added') {
                             addContextItem(data);
+                        }
+
+                        if (event === 'context_data_atomized') {
+                            refreshContextItem(data.id);
                         }
 
                         if (event === 'status') {
@@ -849,26 +994,12 @@ export async function streamResponse(formData, originalMessage) {
                                 }
 
                                 parseBuffer = stripCitations(parseBuffer, sourceIds);
-                                let htmlContent = marked.parse(parseBuffer);
-                                htmlContent = cleanAssistantStreamText(htmlContent);
-
-                                if (window.parseInlineFiles) {
-                                    htmlContent = window.parseInlineFiles(htmlContent);
-                                }
-
-                                const cursorHtml = '<span class="streaming-cursor animate-pulse text-cyan-400 font-bold ml-0.5 select-none inline-block">\u258d</span>';
-                                
-                                textContainer.innerHTML = htmlContent + cursorHtml;
-                                textContainer.querySelectorAll('pre code').forEach((block) => {
-                                    hljs.highlightElement(block);
-                                });
+                                scheduleRender(parseBuffer);
                             }
  
                             aiBubble.setAttribute('data-raw', markdownBuffer);
  
-                            if (payload.done) {
-                                window.evaluateStreamCompletion(hasAppliedEdit, aiBubble, textContainer);
-                            }
+                            if (hasAppliedEdit) turnHadEdit = true;
 
                             if (!thinkingAccordion.classList.contains('open')) {
                                 scrollIfStuck(chatWindow);
@@ -878,38 +1009,9 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'done') {
                             const cursor = textContainer.querySelector('.streaming-cursor');
                             if (cursor) cursor.remove();
-
-                            // Tool-call detection: scan full text for tool syntax (including multi-line)
-                            // Strip code fences first, then scan remaining text
-                            const noFences = markdownBuffer.replace(/```[\s\S]*?```/g, '');
-                            const toolPattern = /search_(local|web|calendar)\s*\(\s*queries[:=]\s*(.+?)\)/gs;
-                            const detectedActions = [];
-                            let match;
-                            while ((match = toolPattern.exec(noFences)) !== null) {
-                                detectedActions.push({
-                                    tool: `search_${match[1]}`,
-                                    queries: match[2].split(',').map(s => s.trim()).filter(s => s.length > 0)
-                                });
-                            }
-
-                            if (detectedActions.length > 0) {
-                                state.isGenerating = false;
-                                if (loadingIndicator && loadingIndicator.parentNode) {
-                                    loadingIndicator.remove();
-                                }
-                                aiBubble.classList.add('parsed');
-                                traceAccordion.open = false;
-                                if (tracePulseDot) tracePulseDot.classList.add('hidden');
-
-                                const lockOverlay = document.getElementById('editor-lock-overlay');
-                                if (lockOverlay) {
-                                    lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
-                                    lockOverlay.classList.add('opacity-0', 'pointer-events-none');
-                                }
-
-                                renderToolApprovalCard(data.session_id, detectedActions, aiBubble, markdownBuffer, textContainer);
-                                scrollIfStuck(chatWindow);
-                                return;
+                            flushFinalRender();
+                            if (window.evaluateStreamCompletion && window.activeToggledBlocks) {
+                                window.evaluateStreamCompletion(turnHadEdit, aiBubble, textContainer);
                             }
 
                             if (window.activeEditFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {

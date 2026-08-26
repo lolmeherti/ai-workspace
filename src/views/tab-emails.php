@@ -71,7 +71,7 @@
         <h2 class="text-base font-bold text-slate-100 flex items-center gap-2 mb-4 border-b border-slate-850 pb-3">
             <uk-icon icon="mail" class="text-cyan-400"></uk-icon> Link New Email Account
         </h2>
-        <form method="POST" action="index.php" class="space-y-4 text-xs">
+        <form id="add-email-form" method="POST" action="index.php" onsubmit="return window.submitEmailAccount(event)" class="space-y-4 text-xs">
             <input type="hidden" name="action" value="add_email_account">
             
             <div>
@@ -113,9 +113,11 @@
                 </div>
             </div>
 
+            <div id="add-email-error" class="hidden text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2 leading-relaxed break-words"></div>
+
             <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-850">
                 <button type="button" class="uk-modal-close px-4 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg text-slate-300 font-bold transition-colors cursor-pointer">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 rounded-lg text-white font-bold transition-colors cursor-pointer">Connect Account</button>
+                <button type="submit" id="add-email-submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 rounded-lg text-white font-bold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Connect Account</button>
             </div>
         </form>
     </div>

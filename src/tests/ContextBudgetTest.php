@@ -50,8 +50,8 @@ class ContextBudgetTest
         $prompt = new PromptAssemblyService($this->db, '/tmp', fn(string $t) => strlen($t));
 
         $history = [
-            ['role' => 'system', 'message' => '12345678', 'message_type' => 'data_fetching', 'active_context' => 1],
-            ['role' => 'system', 'message' => 'ABCDEFGHIJ', 'message_type' => 'data_fetching', 'active_context' => 0],
+            ['role' => 'system', 'message' => '12345678', 'message_type' => 'data_fetching', 'raw_evicted' => 0],
+            ['role' => 'system', 'message' => 'ABCDEFGHIJ', 'message_type' => 'data_fetching', 'raw_evicted' => 1],
             ['role' => 'user', 'message' => 'ab', 'message_type' => 'text'],
         ];
         $b = $prompt->estimatePromptTokens('SYS', $history, 'XY');

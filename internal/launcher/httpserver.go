@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"localsy/internal/bridge"
@@ -40,6 +41,24 @@ type modelsHandler struct {
 	binDir   string
 	modelDir string
 	relay    *bridge.Relay
+
+	switchMu sync.Mutex
+	sw       switchStatus
+}
+
+// switchStatus is the observable state of an in-flight (or last completed)
+// model switch. It is written by the background switch goroutine and read by
+// /api/switch-status, so every access goes through the handler mutex.
+type switchStatus struct {
+	Active    bool      `json:"active"`
+	ModelID   string    `json:"model_id"`
+	Name      string    `json:"name"`
+	CtxSize   int       `json:"ctx_size"`
+	Stage     string    `json:"stage"`    // resolving | downloading | starting | loaded | error
+	Progress  float64   `json:"progress"` // 0-100 (per-artifact during download)
+	Detail    string    `json:"detail,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	StartedAt time.Time `json:"started_at"`
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +72,8 @@ func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.handleModelSwitch(w, r)
+	case "/api/switch-status":
+		h.handleSwitchStatus(w, r)
 	case "/bridge/status":
 		h.handleBridgeStatus(w, r)
 	case "/bridge/fetch":
@@ -160,26 +181,112 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	resolved, err := models.ResolveModel(req.ModelID, h.defs, h.hw, h.modelDir, nil)
-	if err != nil {
+	// Validate up-front so a bad request fails fast instead of surfacing as a
+	// background error after the client has already been told "switching".
+	if err := models.ValidateModel(req.ModelID, h.defs, h.hw); err != nil {
 		writeJSON(w, 404, map[string]string{"error": err.Error()})
 		return
 	}
 
-	if req.CtxSize > 0 {
-		resolved.CtxSize = req.CtxSize
+	name := h.defs[req.ModelID].Name
+
+	h.switchMu.Lock()
+	if h.sw.Active {
+		busy := h.sw
+		h.switchMu.Unlock()
+		writeJSON(w, 409, map[string]interface{}{
+			"status":   "busy",
+			"model_id": busy.ModelID,
+			"name":     busy.Name,
+			"stage":    busy.Stage,
+			"progress": busy.Progress,
+		})
+		return
+	}
+	h.sw = switchStatus{
+		Active:    true,
+		ModelID:   req.ModelID,
+		Name:      name,
+		Stage:     "resolving",
+		Progress:  0,
+		StartedAt: time.Now(),
+	}
+	h.switchMu.Unlock()
+
+	go h.runModelSwitch(req.ModelID, req.CtxSize)
+
+	writeJSON(w, 202, map[string]interface{}{
+		"status":   "switching",
+		"model_id": req.ModelID,
+		"name":     name,
+	})
+}
+
+// runModelSwitch performs the download + restart off the HTTP handler's
+// goroutine so the client request returns immediately. Progress and the final
+// outcome are published via h.sw for /api/switch-status to observe.
+func (h *modelsHandler) runModelSwitch(modelID string, ctxSize int) {
+	resolved, err := models.ResolveModel(modelID, h.defs, h.hw, h.modelDir, func(pct float64) {
+		h.switchMu.Lock()
+		h.sw.Stage = "downloading"
+		h.sw.Progress = pct
+		h.switchMu.Unlock()
+	})
+	if err != nil {
+		h.finishSwitchError("download/resolve failed: " + err.Error())
+		util.LogPrint("[-] model switch to %s failed: %v\n", modelID, err)
+		return
 	}
 
-	llama.KillIfRunning(&LlamaProcess)
+	if ctxSize > 0 {
+		resolved.CtxSize = ctxSize
+	}
 
+	h.switchMu.Lock()
+	h.sw.Stage = "starting"
+	h.sw.Progress = 100
+	h.sw.CtxSize = resolved.CtxSize
+	h.switchMu.Unlock()
+
+	llama.KillIfRunning(&LlamaProcess)
 	LlamaProcess = llama.StartServerWithFallback(h.binDir, resolved)
 
-	writeJSON(w, 200, map[string]interface{}{
-		"status":   "ok",
-		"name":     resolved.Name,
-		"ctx_size": resolved.CtxSize,
-	})
+	if !llama.Healthy() {
+		h.finishSwitchError("model failed to start — check VRAM or the logs")
+		util.LogPrint("[-] model switch to %s: llama-server did not become healthy\n", modelID)
+		return
+	}
 
+	h.writeEnvModel(modelID, resolved)
+
+	h.switchMu.Lock()
+	h.sw.Active = false
+	h.sw.Stage = "loaded"
+	h.sw.Progress = 100
+	h.sw.CtxSize = resolved.CtxSize
+	h.switchMu.Unlock()
+	util.LogPrint("[+] model switch complete: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
+}
+
+func (h *modelsHandler) finishSwitchError(errMsg string) {
+	h.switchMu.Lock()
+	h.sw.Active = false
+	h.sw.Stage = "error"
+	h.sw.Error = errMsg
+	h.switchMu.Unlock()
+}
+
+func (h *modelsHandler) handleSwitchStatus(w http.ResponseWriter, _ *http.Request) {
+	h.switchMu.Lock()
+	s := h.sw
+	h.switchMu.Unlock()
+	writeJSON(w, 200, s)
+}
+
+// writeEnvModel persists the resolved model identity into the launcher's own
+// .env (used for boot-time model selection). The PHP app has its own .env copy
+// that the web layer updates independently.
+func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedModel) {
 	workDir := filepath.Dir(h.modelDir)
 	envPath := filepath.Join(workDir, ".env")
 	if existing, err := os.ReadFile(envPath); err == nil {
@@ -189,7 +296,7 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "LLM_MODEL_ID=") {
-				updated = append(updated, "LLM_MODEL_ID="+req.ModelID)
+				updated = append(updated, "LLM_MODEL_ID="+modelID)
 				hasModelID = true
 				continue
 			}
@@ -206,7 +313,7 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 			updated = append(updated, line)
 		}
 		if !hasModelID {
-			updated = append(updated, "LLM_MODEL_ID="+req.ModelID)
+			updated = append(updated, "LLM_MODEL_ID="+modelID)
 		}
 		if !hasModelName {
 			updated = append(updated, "LLM_MODEL_NAME="+resolved.Name)

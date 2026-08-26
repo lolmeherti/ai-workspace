@@ -29,7 +29,7 @@ final class LS_TimingAgent extends AgentManager
     public int $condenserCalls = 0;
     public array $condenserMs = [];
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
     {
         $sys = $messages[0]['content'] ?? '';
         $isCond = is_string($sys) && str_contains($sys, CONDENSER_MARKER);

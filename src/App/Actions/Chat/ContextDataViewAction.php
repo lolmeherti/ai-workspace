@@ -19,7 +19,7 @@ class ContextDataViewAction extends BaseAction
         }
 
         $rows = $this->db->query(
-            "SELECT message, source_map, tool_name, search_query, active_context, token_estimate
+            "SELECT message, source_map, tool_name, search_query, raw_evicted, atomic_context, atomic_tokens, token_estimate
              FROM chat_history
              WHERE id = :id AND message_type = 'data_fetching'",
             [':id' => $historyId]
@@ -39,6 +39,14 @@ class ContextDataViewAction extends BaseAction
             }
         }
 
+        $atoms = null;
+        if (!empty($row['atomic_context'])) {
+            $decoded = json_decode($row['atomic_context'], true);
+            if (is_array($decoded)) {
+                $atoms = $decoded;
+            }
+        }
+
         $this->jsonResponse([
             'status' => 'success',
             'id' => $historyId,
@@ -46,7 +54,9 @@ class ContextDataViewAction extends BaseAction
             'sources' => $sources,
             'tool_name' => $row['tool_name'] ?? '',
             'search_query' => $row['search_query'] ?? '',
-            'active_context' => (bool)($row['active_context'] ?? 1),
+            'raw_evicted' => (bool)($row['raw_evicted'] ?? 0),
+            'atomic_context' => $atoms,
+            'atomic_tokens' => (int)($row['atomic_tokens'] ?? 0),
             'token_estimate' => (int)($row['token_estimate'] ?? 0),
             'parsed' => self::parseSources($row['message'] ?? ''),
         ]);

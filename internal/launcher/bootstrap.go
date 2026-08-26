@@ -49,7 +49,7 @@ func Bootstrap() {
 	vendor, vram := gpu.Detect()
 	util.LogPrint("[+] Detected GPU: %s with %.2f GB VRAM\n", vendor, vram)
 
-	defs := models.LoadConfig(embedded.Models, workDir)
+	defs := models.LoadConfig(embedded.Models)
 	hw := models.Hardware{VRAMGB: vram}
 
 	envPath := filepath.Join(workDir, ".env")

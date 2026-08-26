@@ -53,14 +53,15 @@ class ToolExecutionService
         $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
     }
 
-    public function executeToolByName(string $toolName, array $queries, int $sessionId, callable $emit, ?array $sourceIds = null): string
+    public function executeToolByName(string $toolName, array $args, int $sessionId, callable $emit): string
     {
-        $toolData = ['tool' => $toolName, 'queries' => $queries, 'query' => implode(', ', $queries)];
-        if ($sourceIds !== null) {
-            $toolData['source_ids'] = $sourceIds;
+        $toolData = array_merge(['tool' => $toolName], $args);
+        if (isset($toolData['queries']) && !isset($toolData['query'])) {
+            $toolData['query'] = implode(', ', $toolData['queries']);
         }
+        $label = $toolData['content'] ?? $toolData['query'] ?? '';
 
-        \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$toolName}: " . implode(', ', $queries), 'slate');
+        \App\ProgressWriter::write($sessionId, 'tool_start', "Executing {$toolName}: " . $label, 'slate');
 
         $result = $this->executeTool($toolName, $toolData, $sessionId, [], $emit);
 

@@ -47,4 +47,35 @@ class TodoistApiClient
 
         return json_decode($response, true) ?: [];
     }
+
+    /**
+     * Detect a conflicting existing task: exact-duplicate content, or a due time
+     * within 30 minutes of the proposed due. Shared by the native create tool and
+     * the create action so both agree on what counts as a conflict.
+     *
+     * @return array{task: array, is_duplicate: bool}|null
+     */
+    public static function detectConflict(array $tasks, string $content, ?string $dueString): ?array
+    {
+        $normalizedDue = preg_replace('/\s+at\s+/i', ' ', (string)$dueString);
+        $proposedTs = strtotime($normalizedDue);
+
+        foreach ($tasks as $t) {
+            if (strcasecmp(trim($t['content'] ?? ''), trim($content)) === 0) {
+                return ['task' => $t, 'is_duplicate' => true];
+            }
+
+            if ($proposedTs !== false && $proposedTs > 0) {
+                $tDue = $t['due']['datetime'] ?? $t['due']['date'] ?? '';
+                if (!empty($tDue)) {
+                    $tTs = strtotime($tDue);
+                    if ($tTs !== false && $tTs > 0 && abs($tTs - $proposedTs) < 1800) {
+                        return ['task' => $t, 'is_duplicate' => false];
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 }

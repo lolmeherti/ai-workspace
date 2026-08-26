@@ -74,8 +74,8 @@ class CitationValidatorTest
         $this->testEq('data_fetching without markers -> empty', [], $this->prompt->extractVisibleSourceIds($noSources));
 
         $evicted = [
-            ['role' => 'system', 'message' => '<source id="S1">a</source>', 'message_type' => 'data_fetching', 'active_context' => 0],
-            ['role' => 'system', 'message' => '<source id="S2">b</source>', 'message_type' => 'data_fetching', 'active_context' => 1],
+            ['role' => 'system', 'message' => '<source id="S1">a</source>', 'message_type' => 'data_fetching', 'raw_evicted' => 1],
+            ['role' => 'system', 'message' => '<source id="S2">b</source>', 'message_type' => 'data_fetching', 'raw_evicted' => 0],
         ];
         $this->testEq('evicted sources excluded from visible union', ['S2'], $this->prompt->extractVisibleSourceIds($evicted));
     }

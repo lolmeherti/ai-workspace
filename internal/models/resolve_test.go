@@ -435,22 +435,14 @@ func TestFlashAttnDefault(t *testing.T) {
 	}
 }
 
-func TestLoadConfigUserOverride(t *testing.T) {
+func TestLoadConfigUsesEmbeddedOnly(t *testing.T) {
 	embeddedData := []byte(`{"models":{"embedded-only":{"name":"Embedded","model":{"file":"e.gguf","url":"http://e"},"profiles":{"t1":{"ctx_size":1000}}}}}`)
 
-	userData := []byte(`{"models":{"user-model":{"name":"User","model":{"file":"u.gguf","url":"http://u"},"profiles":{"t1":{"ctx_size":2000}}}}}`)
-
-	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "models.json"), userData, 0644)
-
-	defs := LoadConfig(embeddedData, tmpDir)
+	defs := LoadConfig(embeddedData)
 	if defs == nil {
 		t.Fatal("LoadConfig returned nil")
 	}
-	if _, ok := defs["user-model"]; !ok {
-		t.Error("user override should take precedence over embedded")
-	}
-	if _, ok := defs["embedded-only"]; ok {
-		t.Error("embedded model should not appear when user override exists")
+	if _, ok := defs["embedded-only"]; !ok {
+		t.Error("embedded model must be loaded")
 	}
 }

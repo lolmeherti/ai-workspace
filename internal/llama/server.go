@@ -131,20 +131,29 @@ func WaitForReady() bool {
 	return waitForReady(180)
 }
 
-func waitForReady(maxSeconds int) bool {
+// Healthy reports whether llama-server is currently answering /health with
+// status "ok". Used after an async start to distinguish "loaded" from a model
+// that crashed on load (e.g. OOM).
+func Healthy() bool {
 	client := http.Client{Timeout: 1 * time.Second}
-	type health struct {
+	resp, err := client.Get("http://127.0.0.1:1234/health")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var h struct {
 		Status string `json:"status"`
 	}
+	if err := json.NewDecoder(resp.Body).Decode(&h); err != nil {
+		return false
+	}
+	return h.Status == "ok"
+}
+
+func waitForReady(maxSeconds int) bool {
 	for i := 0; i < maxSeconds; i++ {
-		resp, err := client.Get("http://127.0.0.1:1234/health")
-		if err == nil {
-			var h health
-			errDec := json.NewDecoder(resp.Body).Decode(&h)
-			_ = resp.Body.Close()
-			if errDec == nil && h.Status == "ok" {
-				return true
-			}
+		if Healthy() {
+			return true
 		}
 		time.Sleep(1 * time.Second)
 	}
