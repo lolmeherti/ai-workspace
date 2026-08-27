@@ -32,6 +32,9 @@ require_once __DIR__ . '/CondensationTest.php';
 require_once __DIR__ . '/PromptInjectionFilterTest.php';
 require_once __DIR__ . '/EvidenceConsolidationTest.php';
 require_once __DIR__ . '/AtomizationPolicyTest.php';
+require_once __DIR__ . '/ToolSchemaTest.php';
+require_once __DIR__ . '/TodoistConflictDetectionTest.php';
+require_once __DIR__ . '/TodoistCreateToolTest.php';
 
 use App\Config;
 use App\Database;
@@ -59,6 +62,9 @@ use App\Tests\CondensationTest;
 use App\Tests\PromptInjectionFilterTest;
 use App\Tests\EvidenceConsolidationTest;
 use App\Tests\AtomizationPolicyTest;
+use App\Tests\ToolSchemaTest;
+use App\Tests\TodoistConflictDetectionTest;
+use App\Tests\TodoistCreateToolTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -144,6 +150,15 @@ $allOk = (new EvidenceConsolidationTest($db))->run() && $allOk;
 
 echo "\n=== Phase 23: Atomization Policy Tests ===\n";
 $allOk = (new AtomizationPolicyTest())->run() && $allOk;
+
+echo "\n=== Phase 24: Tool Schema Tests ===\n";
+$allOk = (new ToolSchemaTest())->run() && $allOk;
+
+echo "\n=== Phase 25: Todoist Conflict Detection Tests ===\n";
+$allOk = (new TodoistConflictDetectionTest())->run() && $allOk;
+
+echo "\n=== Phase 26: Todoist Create Tool Tests ===\n";
+$allOk = (new TodoistCreateToolTest($db, __DIR__ . '/../uploads/'))->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

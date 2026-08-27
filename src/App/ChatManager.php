@@ -20,7 +20,6 @@ class ChatManager
 {
     private const OUTPUT_RESERVE_TOKENS = 4096;
     private const SAFETY_MARGIN_TOKENS = 256;
-    private const ROUTER_MAX_TOKENS = 1024;
 
     private Database $db;
     private AgentManager $agent;
@@ -119,7 +118,8 @@ class ChatManager
             $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
         }
 
-        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, !empty($activeEditFile));
+        $isEditorMode = !empty($activeEditFile);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, $isEditorMode);
         // Date + knowledge cutoff keeps tool selection accurate (Phase 2 finding),
         // folded into the integrated first pass so the model knows when to search.
         $systemPrompt .= $this->promptAssemblyService->dateContextLine();
@@ -137,6 +137,7 @@ class ChatManager
         $this->toolExecutionService->resetBackingChunks();
         $this->toolExecutionService->resetSelectedChunks();
         $this->toolExecutionService->resetRetrievedSourceIds();
+        $this->toolExecutionService->resetCreatedTasks();
 
         // Transient session-evidence retrieval is injected for this turn only.
         $transientEvidence = [];
@@ -147,7 +148,7 @@ class ChatManager
         // then released); on a tool turn it assembles tool_calls, we execute
         // them, then run a single second inference over the acquired evidence.
         $emit('status', ['text' => 'Analyzing request...']);
-        $first = $this->firstPass($currentMessages, $emit);
+        $first = $this->firstPass($currentMessages, $emit, $isEditorMode);
 
         $freshRowIds = [];
         if (!empty($first['tool_calls'])) {
@@ -162,9 +163,9 @@ class ChatManager
                 $queries = $args['queries'] ?? [];
 
                 if (empty($toolName)) continue;
-                if (empty($queries) && $toolName !== 'create_todoist_task') continue;
+                if (empty($queries) && $toolName !== 'create_calendar_task') continue;
 
-                $queryList = $toolName === 'create_todoist_task'
+                $queryList = $toolName === 'create_calendar_task'
                     ? ($args['content'] ?? '')
                     : implode(', ', $queries);
                 $emit('tool_start', ['tool' => $toolName, 'label' => "{$toolName}: {$queryList}"]);
@@ -223,6 +224,14 @@ class ChatManager
                     'source_count' => count($lastSourceMap),
                     'token_estimate' => ($this->countTokens)($result),
                     'active' => true,
+                ]);
+            }
+
+            $createdTasks = $this->toolExecutionService->getCreatedTasks();
+            if (!empty($createdTasks)) {
+                $emit('calendar_task_created', [
+                    'count' => count($createdTasks),
+                    'tasks' => $createdTasks,
                 ]);
             }
 
@@ -391,14 +400,37 @@ class ChatManager
         }
     }
 
-    private function buildToolSchemas(): array
+    private function buildToolSchemas(bool $isEditorMode = false): array
     {
+        if ($isEditorMode) {
+            return [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'search_memories',
+                        'description' => 'Search the user\'s long-term memories. Use when the user asks about saved facts, preferences, or anything remembered about them.',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'queries' => [
+                                    'type' => 'array',
+                                    'items' => ['type' => 'string'],
+                                    'description' => 'Memory search queries. Include synonyms and alternate phrasings.',
+                                ],
+                            ],
+                            'required' => ['queries'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
         return [
             [
                 'type' => 'function',
                 'function' => [
                     'name' => 'search_local',
-                    'description' => 'Search the user\'s local files and long-term memories for information. Use for anything in the user\'s personal data.',
+                    'description' => 'Search the user\'s own local files and long-term memories. Use when the user asks about their personal data, documents, or saved facts.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -416,7 +448,7 @@ class ChatManager
                 'type' => 'function',
                 'function' => [
                     'name' => 'search_web',
-                    'description' => 'Search the web for current information, facts, news, or anything beyond the user\'s personal data. Be focused — use only the most relevant query terms.',
+                    'description' => 'Search the web for current or factual information beyond the user\'s personal data. Use for recent events, news, prices, or anything you cannot answer confidently from knowledge. Include the current year in queries for time-sensitive topics.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -434,7 +466,7 @@ class ChatManager
                 'type' => 'function',
                 'function' => [
                     'name' => 'search_calendar',
-                    'description' => 'Search the user\'s calendar for tasks, events, and todo items.',
+                    'description' => 'Read the user\'s calendar — their tasks and events. Use when the user asks what is already scheduled or on their list.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -452,7 +484,7 @@ class ChatManager
                 'type' => 'function',
                 'function' => [
                     'name' => 'search_session_evidence',
-                    'description' => 'Search detailed evidence already retrieved from the web earlier in this conversation. Use when the detail you need was likely fetched before, instead of searching the web again.',
+                    'description' => 'Re-read the full text of web evidence from a search already done earlier in this conversation (its sources appear as [S#] in context). Prefer this over search_web when the user asks about a topic that was already searched and you need a detail missing from the summary.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -474,8 +506,8 @@ class ChatManager
             [
                 'type' => 'function',
                 'function' => [
-                    'name' => 'create_todoist_task',
-                    'description' => 'Create a task in the user\'s Todoist list.',
+                    'name' => 'create_calendar_task',
+                    'description' => 'Add a task or reminder to the user\'s calendar. Use when the user asks to add, schedule, note, or be reminded of something — not when they ask what already exists. The system automatically detects duplicate or overlapping tasks and reports them instead of creating twice, so create without checking first.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -493,115 +525,6 @@ class ChatManager
                 ],
             ],
         ];
-    }
-
-    private function noToolSchema(): array
-    {
-        return [
-            'type' => 'function',
-            'function' => [
-                'name' => 'no_tool',
-                'description' => 'Choose this when the request can be answered directly from your own knowledge or the conversation, with no search or tool needed.',
-                'parameters' => ['type' => 'object', 'properties' => new \stdClass()],
-            ],
-        ];
-    }
-
-    private function buildRouterSchemas(): array
-    {
-        return array_merge($this->buildToolSchemas(), [$this->noToolSchema()]);
-    }
-
-    private function routeRequest(array $history, array $assistantMessages): array
-    {
-        $routerMessages = $this->promptAssemblyService->buildMessagesArray(
-            $this->promptAssemblyService->buildRouterSystemPrompt(),
-            $history
-        );
-
-        $result = $this->agent->chatWithTools(
-            $routerMessages,
-            $this->buildRouterSchemas(),
-            'required',
-            0.0,
-            self::ROUTER_MAX_TOKENS
-        );
-
-        $leaked = $result['content'] ?? null;
-        $leakedChars = $leaked !== null ? mb_strlen($leaked) : 0;
-
-        $realCalls = [];
-        $sawNoTool = false;
-
-        foreach (($result['tool_calls'] ?? []) as $tc) {
-            $fn = $tc['function'] ?? [];
-            $name = $fn['name'] ?? '';
-            $args = json_decode($fn['arguments'] ?? '{}', true) ?: [];
-            $queries = $args['queries'] ?? [];
-
-            if ($name === 'no_tool') {
-                $sawNoTool = true;
-                continue;
-            }
-
-            if ($name !== '' && !empty($queries)) {
-                $realCalls[] = [
-                    'function' => [
-                        'name' => $name,
-                        'arguments' => $fn['arguments'] ?? '{}',
-                    ],
-                ];
-            }
-        }
-
-        if (!empty($realCalls)) {
-            if ($leakedChars > 0) {
-                \App\Logger::logEvent('router_leaked_content', 'Router emitted prose alongside a valid tool call; prose ignored', [
-                    'tools' => array_column(array_column($realCalls, 'function'), 'name'),
-                    'leaked_chars' => $leakedChars,
-                ], 'warn', 'ChatManager::routeRequest');
-            }
-            \App\Logger::logEvent('router_tools', 'Router selected tool(s)', [
-                'tools' => array_column(array_column($realCalls, 'function'), 'name'),
-                'fallback' => false,
-            ], 'info', 'ChatManager::routeRequest');
-            return ['tool_calls' => $realCalls, 'fallback' => false];
-        }
-
-        if ($sawNoTool) {
-            if ($leakedChars > 0) {
-                \App\Logger::logEvent('router_leaked_content', 'Router emitted prose alongside no_tool; prose ignored', [
-                    'leaked_chars' => $leakedChars,
-                ], 'warn', 'ChatManager::routeRequest');
-            }
-            \App\Logger::logEvent('router_no_tool', 'Router selected no_tool', [], 'info', 'ChatManager::routeRequest');
-            return ['tool_calls' => [], 'fallback' => false];
-        }
-
-        \App\Logger::logEvent('router_failure', 'Router produced no valid tool call; falling back to auto-tool path', [
-            'finish_reason' => $result['finish_reason'] ?? null,
-            'content_chars' => $leakedChars,
-            'tool_call_count' => count($result['tool_calls'] ?? []),
-        ], 'warn', 'ChatManager::routeRequest');
-
-        $fallback = $this->agent->chatWithTools($assistantMessages, $this->buildToolSchemas(), 'auto');
-        $fallbackCalls = [];
-        foreach (($fallback['tool_calls'] ?? []) as $tc) {
-            $fn = $tc['function'] ?? [];
-            $name = $fn['name'] ?? '';
-            $args = json_decode($fn['arguments'] ?? '{}', true) ?: [];
-            $queries = $args['queries'] ?? [];
-            if ($name !== '' && !empty($queries)) {
-                $fallbackCalls[] = [
-                    'function' => [
-                        'name' => $name,
-                        'arguments' => $fn['arguments'] ?? '{}',
-                    ],
-                ];
-            }
-        }
-
-        return ['tool_calls' => $fallbackCalls, 'fallback' => true];
     }
 
     private function autoGenerateTitle(int $sessionId, string $query, array $history, callable $emit): ?string
@@ -625,7 +548,7 @@ class ChatManager
      *
      * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
      */
-    private function firstPass(array $messages, callable $emit): array
+    private function firstPass(array $messages, callable $emit, bool $isEditorMode = false): array
     {
         $reasoningBuffer = '';
         $utf8Buffer = '';
@@ -634,7 +557,7 @@ class ChatManager
 
         $result = $this->agent->chatToolCapable(
             $messages,
-            $this->buildToolSchemas(),
+            $this->buildToolSchemas($isEditorMode),
             'auto',
             function ($chunk, $type) use ($emit, &$reasoningBuffer, &$utf8Buffer, &$contentEmitted, &$contentChars) {
                 if ($type === 'reasoning') {

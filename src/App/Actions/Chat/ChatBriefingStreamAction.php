@@ -155,7 +155,7 @@ class ChatBriefingStreamAction extends BaseAction
         }
 
         $emit('status', ['text' => "Retrieving calendar schedules..."]);
-        $emit('tool_start', ['tool' => 'get_todoist_tasks', 'label' => 'Checking calendar...']);
+        $emit('tool_start', ['tool' => 'get_calendar_tasks', 'label' => 'Checking calendar...']);
 
         $todoistSummary = "";
         $tasks = [];
@@ -217,7 +217,7 @@ class ChatBriefingStreamAction extends BaseAction
             $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
             $emit('trace', ['label' => 'Calendar fetch failed: ' . $e->getMessage(), 'color' => 'rose']);
         }
-        $emit('tool_done', ['tool' => 'get_todoist_tasks', 'label' => 'Calendar loaded.']);
+        $emit('tool_done', ['tool' => 'get_calendar_tasks', 'label' => 'Calendar loaded.']);
 
         $emit('status', ['text' => "Analyzing inbox and calendar data..."]);
         $emit('tool_start', ['tool' => 'scheduling_agent', 'label' => 'Cross-referencing emails and calendar...']);
@@ -229,7 +229,7 @@ class ChatBriefingStreamAction extends BaseAction
             if (is_array($suggestionsArray) && !empty($suggestionsArray)) {
                 foreach ($suggestionsArray as $s) {
                     if (isset($s['content']) && isset($s['due_string'])) {
-                        $suggestionsTags .= "[TodoistSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
+                        $suggestionsTags .= "[CalendarSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
                     }
                 }
             }
@@ -275,9 +275,9 @@ class ChatBriefingStreamAction extends BaseAction
                      . "Visual Card rule: You must preserve and append the exact, literal numeric reference tag (e.g. [Email: 3:26708]) from the source summaries when mentioning any email. Do not modify these numbers or replace them with account names.\n";
 
         if (!empty($suggestionsTags)) {
-            $finalSystem .= "Action Card rule: Append the pre-vetted suggested tags (e.g. `[TodoistSuggest: content | due_string]`) at the very end of your response.";
+            $finalSystem .= "Action Card rule: Append the pre-vetted suggested tags (e.g. `[CalendarSuggest: content | due_string]`) at the very end of your response.";
         } else {
-            $finalSystem .= "Do NOT invent or append any [TodoistSuggest] action cards. There are no pre-vetted suggestions in this briefing.";
+            $finalSystem .= "Do NOT invent or append any [CalendarSuggest] action cards. There are no pre-vetted suggestions in this briefing.";
         }
 
         $finalMessages = [

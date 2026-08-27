@@ -83,7 +83,7 @@ export function parseInlineFiles(content) {
         </div>`;
     });
 
-    const suggestRegex = /\[TodoistSuggest:\s*([^|\]]+)\s*\|\s*([^\]]+)\]/g;
+    const suggestRegex = /\[CalendarSuggest:\s*([^|\]]+)\s*\|\s*([^\]]+)\]/g;
     parsedContent = parsedContent.replace(suggestRegex, (match, taskContent, dueString) => {
         taskContent = taskContent.trim();
         dueString = dueString.trim();

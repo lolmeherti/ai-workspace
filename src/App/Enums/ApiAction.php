@@ -18,9 +18,9 @@ enum ApiAction: string
 
     case SYNC_FILES = 'sync_files';
     case UPLOAD_FILE = 'upload_file';
-    case CREATE_TODOIST_TASK = 'create_todoist_task';
+    case CREATE_CALENDAR_TASK = 'create_calendar_task';
 
-    case DELETE_TODOIST_TASK = 'delete_todoist_task';
+    case DELETE_CALENDAR_TASK = 'delete_calendar_task';
 
     case GET_EMAILS = 'get_emails';
     case GET_EMAIL_BODY = 'get_email_body';

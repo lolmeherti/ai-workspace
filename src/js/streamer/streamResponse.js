@@ -456,6 +456,46 @@ export async function streamResponse(formData, originalMessage) {
         }
     }
 
+    const TOOL_DISPLAY = {
+        search_web:              { present: 'Searching the web',               past: 'Searched the web',               query: true },
+        search_local:            { present: 'Searching files & memories',      past: 'Searched files & memories',      query: true },
+        search_memories:         { present: 'Searching memories',             past: 'Searched memories',              query: true },
+        search_calendar:         { present: 'Reading calendar entries',        past: 'Read calendar entries',          query: false },
+        search_session_evidence: { present: 'Re-reading earlier search results', past: 'Re-read earlier search results', query: true },
+        create_calendar_task:     { present: 'Creating calendar task',          past: 'Created calendar task',          query: false },
+    };
+
+    const TOOL_ICONS = {
+        search_web:      '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+        search_local:    '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+        search_memories: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+        search_calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+        search_session_evidence: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+        create_calendar_task: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    };
+
+    const TOOL_SPEC = {
+        search_web:              { bg: 'bg-sky-500/10',    text: 'text-sky-300',    border: 'border-sky-500/40',    accent: 'bg-sky-400' },
+        search_local:            { bg: 'bg-cyan-500/10',   text: 'text-cyan-300',   border: 'border-cyan-500/40',   accent: 'bg-cyan-400' },
+        search_memories:         { bg: 'bg-teal-500/10',   text: 'text-teal-300',   border: 'border-teal-500/40',   accent: 'bg-teal-400' },
+        search_calendar:         { bg: 'bg-amber-500/10',  text: 'text-amber-300',  border: 'border-amber-500/40',  accent: 'bg-amber-400' },
+        search_session_evidence: { bg: 'bg-violet-500/10', text: 'text-violet-300', border: 'border-violet-500/40', accent: 'bg-violet-400' },
+        create_calendar_task:     { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/40', accent: 'bg-indigo-400' },
+    };
+
+    function renderToolBadge(tool, text) {
+        const s = TOOL_SPEC[tool] || { bg: 'bg-slate-500/10', text: 'text-slate-300', border: 'border-slate-500/30', accent: 'bg-slate-400' };
+        const icon = TOOL_ICONS[tool] || '<circle cx="12" cy="12" r="10"/>';
+        const badge = document.createElement('span');
+        badge.className = `text-[0.7rem] px-2.5 py-0.5 rounded-md ${s.bg} ${s.text} border ${s.border} flex items-center gap-1.5 font-medium tracking-tight`;
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${s.accent} shadow-[0_0_6px_currentColor]"></span><svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>${text}`;
+        aiLabelContainer.appendChild(badge);
+    }
+
+    function truncateForBadge(s, max = 50) {
+        return s.length > max ? s.slice(0, max) + '…' : s;
+    }
+
     let markdownBuffer = "";
     let currentSources = [];
     let sourceIds = [];
@@ -463,6 +503,7 @@ export async function streamResponse(formData, originalMessage) {
     let reasoningSeen = false;
     let consolidatingBadge = null;
     let turnHadEdit = false;
+    let activeToolContext = null;
     let thinkingTypewriter = new TypewriterEffect(thinkingContent, thinkingPeek);
 
     // ── Incremental streaming render ─────────────────────────────────────
@@ -682,10 +723,10 @@ export async function streamResponse(formData, originalMessage) {
                             const intentLabels = {
                                 'none': 'general conversation',
                                 'search_files': 'file search',
-                                'todoist_create': 'task creation',
-                                'todoist_get': 'task retrieval',
-                                'todoist_update': 'task update',
-                                'todoist_delete': 'task deletion',
+                                'calendar_create': 'task creation',
+                                'calendar_get': 'task retrieval',
+                                'calendar_update': 'task update',
+                                'calendar_delete': 'task deletion',
                                 'email_briefing': 'email briefing'
                             };
 
@@ -713,44 +754,44 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'tool_start') {
-                            const toolLabel = data.label || data.tool;
-                            setActiveTask(`Executing \u2014 ${toolLabel}`, 'slate');
-
-                            const icons = {
-                                search_web:      '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
-                                search_local:    '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
-                                search_calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-                                create_todoist_task: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
-                            };
-                            const spec = {
-                                search_web:      { bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/40', accent: 'bg-sky-400' },
-                                search_local:    { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/40', accent: 'bg-cyan-400' },
-                                search_calendar: { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/40', accent: 'bg-amber-400' },
-                                create_todoist_task: { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/40', accent: 'bg-indigo-400' },
-                            };
-                            const s = spec[data.tool] || { bg: 'bg-slate-500/10', text: 'text-slate-300', border: 'border-slate-500/30', accent: 'bg-slate-400' };
-                            const icon = icons[data.tool] || '<circle cx="12" cy="12" r="10"/>';
-
-                            const badge = document.createElement('span');
-                            badge.className = `text-[0.7rem] px-2.5 py-0.5 rounded-md ${s.bg} ${s.text} border ${s.border} flex items-center gap-1.5 font-medium tracking-tight`;
-                            badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${s.accent} shadow-[0_0_6px_currentColor]"></span><svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>${data.tool}`;
-                            aiLabelContainer.appendChild(badge);
+                            const tool = data.tool;
+                            const t = TOOL_DISPLAY[tool];
+                            if (t) {
+                                const rawLabel = data.label || '';
+                                const colonIdx = rawLabel.indexOf(': ');
+                                const query = colonIdx >= 0 ? rawLabel.slice(colonIdx + 2) : '';
+                                const presentLabel = (t.query && query) ? `${t.present} for \u201c${truncateForBadge(query, 60)}\u201d` : t.present;
+                                setActiveTask(presentLabel, tool === 'create_calendar_task' ? 'indigo' : 'slate');
+                                activeToolContext = { tool, past: t.past, showQuery: t.query, queryText: query, shortQuery: truncateForBadge(query, 60) };
+                            } else {
+                                // Non-tool-turn tool (email briefing, scheduling, …):
+                                // the backend already sends a human label; show it as-is.
+                                setActiveTask(data.label || tool, 'slate');
+                                activeToolContext = null;
+                            }
                         }
 
                         if (event === 'tool_done') {
-                            const doneLabel = data.label || 'Done.';
                             completeActiveTask();
-                            addTraceEntry(`Completed \u2014 ${doneLabel}`, 'emerald');
+                            const ctx = activeToolContext;
+                            activeToolContext = null;
+                            if (!ctx) {
+                                addTraceEntry(`Completed \u2014 ${data.label || 'Done.'}`, 'emerald');
+                            } else if (ctx.tool !== 'create_calendar_task') {
+                                const pastLabel = (ctx.showQuery && ctx.queryText) ? `${ctx.past} for \u201c${ctx.shortQuery}\u201d` : ctx.past;
+                                addTraceEntry(`Completed \u2014 ${pastLabel}`, 'emerald');
+                                renderToolBadge(ctx.tool, pastLabel);
+                            }
+                            // create_calendar_task: the aggregated calendar_task_created event is the signal.
                         }
 
-                        if (event === 'todoist_created') {
-                            const duePart = (data.due && data.due !== 'No due date') ? ' ' + data.due : '';
-                            addTraceEntry('Task created: "' + data.content + '"' + duePart, 'indigo');
-
-                            const tBadge = document.createElement('span');
-                            tBadge.className = 'text-[0.7rem] px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5 font-medium tracking-tight';
-                            tBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_currentColor]"></span><svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Task created';
-                            aiLabelContainer.appendChild(tBadge);
+                        if (event === 'calendar_task_created') {
+                            const tasks = data.tasks || [];
+                            const n = data.count || tasks.length;
+                            const contents = tasks.map(t => t.content).filter(Boolean);
+                            const summary = n === 1 ? 'Created calendar task' : `Created ${n} calendar tasks`;
+                            addTraceEntry(contents.length ? `${summary}: ${contents.join(', ')}` : summary, 'indigo');
+                            renderToolBadge('create_calendar_task', summary);
                         }
 
                         if (event === 'trace') {

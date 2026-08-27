@@ -250,6 +250,16 @@ class AISettingsController extends BaseController
                 $envUpdates['LLM_CTX_SIZE'] = (string)$status['ctx_size'];
             }
             $this->envEditor->write($envUpdates);
+
+            // The health status is cached in Redis for 10s, and during the switch
+            // the poll requests above kept caching an "offline" snapshot while
+            // llama.cpp was restarting. Bust that cache so the imminent page reload
+            // re-checks against the now-ready server instead of showing stale
+            // "offline" until the TTL expires.
+            try {
+                \App\Cache::delete('system_health_status');
+            } catch (\Exception $e) {
+            }
         }
 
         $this->jsonResponse($status);

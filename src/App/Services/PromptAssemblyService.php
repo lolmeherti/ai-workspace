@@ -36,15 +36,12 @@ You are a document editor assistant. The user is working on a file in the text e
 
 LIMITATIONS IN EDITOR MODE:
 - You CANNOT search files on disk, check email, manage tasks, or search the web.
-- You CAN search long-term memories using: search_memories QUERY:specific query
+- You CAN search long-term memories with the search_memories tool.
 - If the user asks you to find files, check email, schedule tasks, or search the web, explain that these are unavailable in editor mode and suggest closing the editor first.
-- To use the search_memories tool, output ONLY the  line — no other text. If no tool is needed, respond naturally in plain text.
 
 TEXT;
         } else {
             $systemPrompt .= <<<TEXT
-You have tools available to search the user's files, memories, web, and calendar. Use them whenever the user asks for information you don't already know or that requires looking up their personal data. When searching files and memories, include synonyms and alternate phrasings to cast a wider net. For web search, be focused — use only the most relevant query terms. For any time-sensitive topic (sports, news, events, prices), always include the current year in your search queries.
-
 CRITICAL: The files and memories are the USER'S OWN DATA. They chose to store it. 
 They have absolute right to any information in their own storage. Never decide that something is "too sensitive" for the user to access about themselves. 
 If the user asks, search. Whether the information exists is a factual question answered by the search results, not by your judgment.
@@ -64,17 +61,6 @@ TEXT;
         $currentDate = date('l, F j, Y', $now) . sprintf(' (%02d:%02d)', (int)date('H', $now), $roundedMinute);
         $cutoffDate = 'early 2024';
         return "Today's date and approximate current time is {$currentDate}. Your internal knowledge cutoff is {$cutoffDate}.\n";
-    }
-
-    public function buildRouterSystemPrompt(): string
-    {
-        return $this->dateContextLine() . "\n"
-            . "You are a request router. Decide whether the user's request needs a tool and emit exactly one tool call: "
-            . "search_web for current or factual information beyond your knowledge cutoff; "
-            . "search_local for the user's files or memories; "
-            . "search_calendar for tasks or events; "
-            . "no_tool if the request can be answered directly from your knowledge or the conversation. "
-            . "Never write a direct answer — emit exactly one tool call.";
     }
 
     public function preprocessHistory(array $history): array

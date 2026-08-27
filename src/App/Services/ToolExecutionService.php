@@ -34,12 +34,12 @@ class ToolExecutionService
     private GetEmailBriefingTool $getEmailBriefingTool;
     private SearchMemoriesTool $searchMemoriesTool;
 
-    public function __construct(Database $db, AgentManager $agent, string $uploadDir)
+    public function __construct(Database $db, AgentManager $agent, string $uploadDir, ?TodoistApiClient $todoist = null)
     {
         $this->db = $db;
         $this->agent = $agent;
         $this->uploadDir = $uploadDir;
-        $this->todoist = new TodoistApiClient();
+        $this->todoist = $todoist ?? new TodoistApiClient();
 
         $this->searchFilesTool = new SearchFilesTool($db, $agent, $uploadDir, $this->todoist);
         $this->searchLocalTool = new SearchLocalTool($db, $agent, $uploadDir);
@@ -110,6 +110,17 @@ class ToolExecutionService
         $this->searchSessionEvidenceTool->resetRetrievedSourceIds();
     }
 
+    /** @return array<int, array{content:string, due:string, url:string}> */
+    public function getCreatedTasks(): array
+    {
+        return $this->createTodoistTaskTool->getCreatedTasks();
+    }
+
+    public function resetCreatedTasks(): void
+    {
+        $this->createTodoistTaskTool->resetCreatedTasks();
+    }
+
     private function executeTool(string $toolName, array $toolData, int $sessionId, array $messages, callable $emit): string
     {
         $resolvedTool = Tool::tryFrom($toolName);
@@ -125,10 +136,10 @@ class ToolExecutionService
                 Tool::SEARCH_LOCAL => $this->searchLocalTool->execute($toolData['queries'] ?? [$toolData['query'] ?? ''], $sessionId, $messages, $emit),
                 Tool::SEARCH_WEB => $this->searchWebTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_CALENDAR => $this->getTodoistTasksTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
-                Tool::CREATE_TODOIST_TASK => $this->createTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
-                Tool::GET_TODOIST_TASKS => $this->getTodoistTasksTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
-                Tool::DELETE_TODOIST_TASK => $this->deleteTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
-                Tool::UPDATE_TODOIST_TASK => $this->updateTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::CREATE_CALENDAR_TASK => $this->createTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::GET_CALENDAR_TASKS => $this->getTodoistTasksTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::DELETE_CALENDAR_TASK => $this->deleteTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::UPDATE_CALENDAR_TASK => $this->updateTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::GET_EMAIL_BRIEFING => $this->getEmailBriefingTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_SESSION_EVIDENCE => $this->searchSessionEvidenceTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),

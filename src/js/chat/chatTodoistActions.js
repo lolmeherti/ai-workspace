@@ -16,7 +16,7 @@ export function deleteTodoistTaskDirectly(taskId, button) {
         Deleting...
     `;
 
-    fetch(`index.php?api_action=delete_todoist_task&task_id=${encodeURIComponent(taskId)}`)
+    fetch(`index.php?api_action=delete_calendar_task&task_id=${encodeURIComponent(taskId)}`)
         .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
@@ -78,7 +78,7 @@ export function createTodoistTaskDirectly(content, dueString, button, bypass = f
 
     const bypassParam = bypass ? "&bypass=1" : "";
 
-    fetch(`index.php?api_action=create_todoist_task&content=${encodeURIComponent(content)}&due_string=${encodeURIComponent(dueString)}${bypassParam}`)
+    fetch(`index.php?api_action=create_calendar_task&content=${encodeURIComponent(content)}&due_string=${encodeURIComponent(dueString)}${bypassParam}`)
         .then(async res => {
             const text = await res.text();
             console.log("RAW PHP OUTPUT:", text);
