@@ -5,20 +5,20 @@ declare(strict_types=1);
 /*
  * Todoist create probe — live.
  *
- * Verifies the newly-exposed create_todoist_task native tool end to end
+ * Verifies the newly-exposed create_calendar_task native tool end to end
  * against the ACTUAL running llama.cpp + prompt template + Todoist API:
  *
  *   Section A (no side effects) — drives the real ChatManager::firstPass via
  *     reflection, using the real buildSystemPrompt() + buildToolSchemas(). For
  *     each prompt it reports the tool the model selected and the raw
- *     arguments. Confirms (a) the model sees create_todoist_task, (b) it
+ *     arguments. Confirms (a) the model sees create_calendar_task, (b) it
  *     chooses it for "add to todoist" prompts, (c) it passes content and
  *     due_string, and (d) read-only routing (search_calendar) is unbroken.
  *
  *   Section B (real Todoist writes) — drives the real ToolExecutionService.
  *     Creates a clearly-labelled test task, verifies it via GET /tasks,
  *     re-creates it to exercise the conflict path (must NOT create a
- *     duplicate; must return the [TodoistSuggest: ...] card), then deletes the
+ *     duplicate; must return the [CalendarSuggest: ...] card), then deletes the
  *     test task. Leaves Todoist clean.
  *
  * Run:
@@ -83,7 +83,7 @@ $toolNames = [];
 $createDesc = null;
 foreach ($schemas->invoke($cm) as $t) {
     $toolNames[] = $t['function']['name'] ?? '?';
-    if (($t['function']['name'] ?? '') === 'create_todoist_task') {
+    if (($t['function']['name'] ?? '') === 'create_calendar_task') {
         $createDesc = $t['function']['description'] ?? null;
     }
 }
@@ -91,17 +91,22 @@ foreach ($schemas->invoke($cm) as $t) {
 echo "=== TODOIST CREATE PROBE (live) ===\n";
 echo 'model: ' . (string) Config::get('LLM_MODEL_NAME', 'local-model') . "\n";
 echo 'exposed tools: ' . implode(', ', $toolNames) . "\n";
-echo 'create_todoist_task description: ' . var_export($createDesc, true) . "\n\n";
+echo 'create_calendar_task description: ' . var_export($createDesc, true) . "\n\n";
 
 echo "--- Section A: decision probe (real firstPass, no writes) ---\n\n";
 
 $cases = [
-    ['create-dentist',   'Add a task to my Todoist to call the dentist tomorrow at 10am', 'create_todoist_task'],
-    ['create-diabetes',  'Note this in my Todoist: diabetes discussion on September 29 at 10:00', 'create_todoist_task'],
-    ['create-milk',      'Create a todoist task: buy milk', 'create_todoist_task'],
-    ['create-bloodtest', 'Add to Todoist: blood test on September 22 between 8:30 and 10:00', 'create_todoist_task'],
-    ['create-multi',     'Add these to my Todoist: diabetes discussion Sept 29 10:00, and blood test Sept 22 8:30', 'create_todoist_task'],
+    ['create-dentist',   'Add a task to my Todoist to call the dentist tomorrow at 10am', 'create_calendar_task'],
+    ['create-diabetes',  'Note this in my Todoist: diabetes discussion on September 29 at 10:00', 'create_calendar_task'],
+    ['create-milk',      'Create a todoist task: buy milk', 'create_calendar_task'],
+    ['create-remind',    'Remind me to call my mom', 'create_calendar_task'],
+    ['create-add',       "Add 'renew passport' to my todo list", 'create_calendar_task'],
+    ['create-note',      'Note: pick up dry cleaning', 'create_calendar_task'],
+    ['create-schedule',  'Schedule lunch with Sarah tomorrow at noon', 'create_calendar_task'],
+    ['create-bloodtest', 'Add to Todoist: blood test on September 22 between 8:30 and 10:00', 'create_calendar_task'],
+    ['create-multi',     'Add these to my Todoist: diabetes discussion Sept 29 10:00, and blood test Sept 22 8:30', 'create_calendar_task'],
     ['ctrl-calendar',    "What's on my Todoist this week?", 'search_calendar'],
+    ['ctrl-files',       'Do I have a file about my car insurance?', 'search_local'],
     ['ctrl-hello',       'Hello!', null],
 ];
 
@@ -155,7 +160,7 @@ foreach ($cases as [$label, $query, $expect]) {
         $args = json_decode($fn['arguments'] ?? '{}', true) ?: [];
         echo '  tool_call name=' . $name . ' args=' . json_encode($args) . "\n";
         $selected[] = $name;
-        if ($name === 'create_todoist_task') {
+        if ($name === 'create_calendar_task') {
             $creates[] = $args;
         }
     }
@@ -163,9 +168,9 @@ foreach ($cases as [$label, $query, $expect]) {
         echo "  tool_call name=(none)\n";
     }
 
-    if ($expect === 'create_todoist_task') {
+    if ($expect === 'create_calendar_task') {
         $ok = !empty($creates);
-        check('selected create_todoist_task', $ok);
+        check('selected create_calendar_task', $ok);
         if ($ok) {
             foreach ($creates as $a) {
                 $content = (string) ($a['content'] ?? '');
@@ -175,10 +180,10 @@ foreach ($cases as [$label, $query, $expect]) {
             }
             info('create call count', (string) count($creates));
         }
-    } elseif ($expect === 'search_calendar') {
-        check('selected search_calendar (read path intact)', in_array('search_calendar', $selected, true));
-    } else {
+    } elseif ($expect === null) {
         check('no tool selected', empty($selected));
+    } else {
+        check("selected {$expect}", in_array($expect, $selected, true));
     }
 
     echo "\n";
@@ -200,7 +205,7 @@ if (empty(Config::get('TODOIST_API_KEY'))) {
 
     echo "B1 clear create: content=\"{$content}\" due=\"{$due}\"\n";
     try {
-        $r1 = $tes->executeToolByName('create_todoist_task', ['content' => $content, 'due_string' => $due], 0, $capture);
+        $r1 = $tes->executeToolByName('create_calendar_task', ['content' => $content, 'due_string' => $due], 0, $capture);
     } catch (\Throwable $e) {
         echo "  ERROR: " . $e->getMessage() . "\n";
         $fail++;
@@ -224,23 +229,23 @@ if (empty(Config::get('TODOIST_API_KEY'))) {
         info('created task id', (string) $created['id']);
     }
 
-    $createdEvents = array_values(array_filter($emitted, fn($e) => $e['event'] === 'todoist_created'));
-    if (!empty($createdEvents)) {
-        $d = $createdEvents[0]['data'];
-        echo '  emitted todoist_created: ' . json_encode($d) . "\n";
-        check('todoist_created content matches', ($d['content'] ?? '') === $content);
-        check('todoist_created has due', !empty($d['due'] ?? null));
-        check('todoist_created has url', !empty($d['url'] ?? null));
+    $createdTasks = $tes->getCreatedTasks();
+    if (!empty($createdTasks)) {
+        $d = $createdTasks[0];
+        echo '  recorded task: ' . json_encode($d) . "\n";
+        check('recorded content matches', ($d['content'] ?? '') === $content);
+        check('recorded has due', !empty($d['due'] ?? null));
+        check('recorded has url', !empty($d['url'] ?? null));
     } else {
-        check('todoist_created emitted', false);
+        check('task recorded by tool', false);
     }
-    $createdCount = count($createdEvents);
+    $createdCount = count($createdTasks);
 
     echo "\nB2 duplicate create (same content+due):\n";
-    $r2 = $tes->executeToolByName('create_todoist_task', ['content' => $content, 'due_string' => $due], 0, $capture);
+    $r2 = $tes->executeToolByName('create_calendar_task', ['content' => $content, 'due_string' => $due], 0, $capture);
     echo '  result: ' . str_replace("\n", "\n  ", $r2) . "\n";
     check('conflict detected (no second create)', stripos($r2, 'conflict') !== false);
-    check('[TodoistSuggest: card present', strpos($r2, '[TodoistSuggest:') !== false);
+    check('[CalendarSuggest: card present', strpos($r2, '[CalendarSuggest:') !== false);
 
     $resp2 = $tes->makeTodoistRequest('GET', '/tasks');
     $tasks2 = $resp2['results'] ?? (is_array($resp2) ? $resp2 : []);
@@ -252,8 +257,8 @@ if (empty(Config::get('TODOIST_API_KEY'))) {
     }
     check('exactly one task with that content (no duplicate)', $count === 1);
 
-    $postB2Created = count(array_filter($emitted, fn($e) => $e['event'] === 'todoist_created'));
-    check('no todoist_created emitted on conflict', $postB2Created === $createdCount);
+    $postB2Created = count($tes->getCreatedTasks());
+    check('no task recorded on conflict', $postB2Created === $createdCount);
 
     if ($created !== null && !$keep) {
         $del = $tes->makeTodoistRequest('DELETE', '/tasks/' . $created['id']);

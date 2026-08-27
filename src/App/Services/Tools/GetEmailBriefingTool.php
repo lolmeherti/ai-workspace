@@ -33,7 +33,7 @@ class GetEmailBriefingTool
                 if (is_array($suggestionsArray) && !empty($suggestionsArray)) {
                     foreach ($suggestionsArray as $s) {
                         if (isset($s['content']) && isset($s['due_string'])) {
-                            $suggestionsTags .= "[TodoistSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
+                            $suggestionsTags .= "[CalendarSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
                         }
                     }
                 }

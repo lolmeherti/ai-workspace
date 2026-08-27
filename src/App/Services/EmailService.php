@@ -48,7 +48,7 @@ class EmailService
                     ]
                 ]);
 
-                $client->connect();
+                $this->connectWithRetry($client);
                 
                 $inbox = $client->getFolder('INBOX');
                 
@@ -77,7 +77,25 @@ class EmailService
                         $queryBuilder->unseen();
                     }
 
-                    $messages = $queryBuilder->limit(10)->get();
+                    $queryBuilder->limit(10);
+
+                    // PHPIMAP reconnects transparently when the IMAP socket idles
+                    // out (getConnection()->checkConnection()), which resets the
+                    // client's active_folder to null. If that happens mid-fetch,
+                    // Message::make() assigns null to the typed $folder_path
+                    // property and throws a TypeError. Re-select the folder and
+                    // retry so one idle socket doesn't kill the whole account.
+                    $messages = null;
+                    for ($attempt = 0; $attempt < 3 && $messages === null; $attempt++) {
+                        try {
+                            $client->openFolder($inbox->path);
+                            $messages = $queryBuilder->get();
+                        } catch (\TypeError $e) {
+                            if ($attempt === 2) {
+                                throw $e;
+                            }
+                        }
+                    }
 
                     $messagesArray = [];
                     foreach ($messages as $msg) {
@@ -269,5 +287,49 @@ class EmailService
         }
 
         return $allEmails;
+    }
+
+    /**
+     * Connect with a short retry for transient IMAP server errors. Yahoo (and
+     * some other providers) return "NO [UNAVAILABLE] LOGIN ... try again later"
+     * when the mailbox is briefly overloaded or rate-limiting; a retry a moment
+     * later usually succeeds. Genuine auth failures are not retried.
+     */
+    private function connectWithRetry($client): void
+    {
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            try {
+                $client->connect();
+                return;
+            } catch (\Throwable $e) {
+                $isLast = ($attempt === 2);
+                if (!$isLast && $this->isTransientImapError($e->getMessage())) {
+                    usleep(500000 * ($attempt + 1)); // 0.5s, then 1s backoff
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    }
+
+    private function isTransientImapError(string $message): bool
+    {
+        $m = strtolower($message);
+        foreach ([
+            'try again later',
+            'unavailable',
+            'temporarily',
+            'timed out',
+            'timeout',
+            'connection reset',
+            'broken pipe',
+            'too many connections',
+            'rate limit',
+        ] as $needle) {
+            if (str_contains($m, $needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

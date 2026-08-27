@@ -195,9 +195,9 @@ class ThoughtExtractionTest
         $this->testEq('multiline thought: content correct', 'result', $r8['content']);
 
         // Tool call with no thought — ensure extract doesn't eat part of the tool call
-        $r9 = ThoughtExtractor::extract('get_todoist_tasks QUERY:flight');
+        $r9 = ThoughtExtractor::extract('get_calendar_tasks QUERY:flight');
         $this->testEq('tool call: thought empty', '', $r9['thought']);
-        $this->testEq('tool call: content preserved exactly', 'get_todoist_tasks QUERY:flight', $r9['content']);
+        $this->testEq('tool call: content preserved exactly', 'get_calendar_tasks QUERY:flight', $r9['content']);
 
         // Newlines around thought block
         $r10 = ThoughtExtractor::extract("\n<|channel|>thoughtx<channel|>\nresult");

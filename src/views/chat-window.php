@@ -8,7 +8,7 @@
         <div class="flex items-center gap-4">
             <div id="token-counter-container" class="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800/80 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide">
                 <uk-icon icon="cpu" class="w-3.5 h-3.5 text-cyan-400"></uk-icon>
-                <span class="text-slate-400">Context: <strong id="token-counter-text" class="text-slate-200">0 / 0</strong> tokens</span>
+                <span class="text-slate-400">Context: <strong id="token-counter-text" class="text-slate-200"><?php echo number_format((int)($totalSessionTokens ?? 0)); ?> / <?php echo number_format((int)\App\Config::get('LLM_CTX_SIZE', 32768)); ?></strong> tokens</span>
                 <div class="w-16 h-1.5 bg-slate-850 rounded-full overflow-hidden ml-1 border border-slate-800">
                     <div id="token-counter-bar" class="h-full bg-cyan-500 transition-all duration-300" style="width: 0%"></div>
                 </div>

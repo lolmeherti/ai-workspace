@@ -51,7 +51,14 @@
                 <div class="p-4 text-xs leading-relaxed space-y-2 border-t border-slate-800 bg-[#0b1120]">
                     <div class="flex justify-between items-center"><span>Database</span> <span class="<?php echo $status->database ? 'text-emerald-400 status-glow-online' : 'text-rose-400 status-glow-offline'; ?> font-bold"><?php echo $status->database ? 'Online' : 'Offline'; ?></span></div>
                     <div class="flex justify-between items-center"><span>Cache (Redis)</span> <span class="<?php echo $status->redis ? 'text-emerald-400 status-glow-online' : 'text-rose-400 status-glow-offline'; ?> font-bold"><?php echo $status->redis ? 'Online' : 'Offline'; ?></span></div>
-                    <div class="flex justify-between items-center"><span>AI Core</span> <span class="<?php echo $status->ai ? 'text-emerald-400 status-glow-online' : 'text-rose-400 status-glow-offline'; ?> font-bold"><?php echo $status->ai ? 'Online' : 'Offline'; ?></span></div>
+                    <?php
+                    $modelLabel = 'AI Core';
+                    $modelName = $status->model_name ?? '';
+                    if ($modelName !== '') {
+                        $modelLabel = mb_strlen($modelName) > 15 ? mb_substr($modelName, 0, 15) . '…' : $modelName;
+                    }
+                    ?>
+                    <div class="flex justify-between items-center"><span title="<?php echo htmlspecialchars($modelName, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($modelLabel, ENT_QUOTES, 'UTF-8'); ?></span> <span class="<?php echo $status->ai ? 'text-emerald-400 status-glow-online' : 'text-rose-400 status-glow-offline'; ?> font-bold"><?php echo $status->ai ? 'Online' : 'Offline'; ?></span></div>
                 </div>
             </div>
 

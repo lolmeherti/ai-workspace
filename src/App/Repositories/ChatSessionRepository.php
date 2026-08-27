@@ -38,6 +38,19 @@ class ChatSessionRepository
         return (int)$this->db->getConnection()->lastInsertId();
     }
 
+    public function findEmptySessionId(): ?int
+    {
+        $res = $this->db->query(
+            "SELECT s.id
+             FROM chat_sessions s
+             LEFT JOIN chat_history h ON h.session_id = s.id
+             WHERE h.id IS NULL
+             ORDER BY s.id DESC
+             LIMIT 1"
+        );
+        return !empty($res) ? (int)$res[0]['id'] : null;
+    }
+
     public function truncateAll(): void
     {
         $this->db->query("SET FOREIGN_KEY_CHECKS = 0");

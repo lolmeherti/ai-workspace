@@ -9,7 +9,9 @@ class HealthCheck
         $status = new \stdClass();
         $status->database = $this->checkDatabase();
         $status->redis = $this->checkRedis();
-        $status->ai = $this->checkAi();
+        $ai = $this->checkAi();
+        $status->ai = $ai['online'];
+        $status->model_name = $ai['model'];
         
         $status->all_operational = $status->database
             && $status->redis
@@ -39,7 +41,7 @@ class HealthCheck
         }
     }
 
-    private function checkAi(): bool
+    private function checkAi(): array
     {
         $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
 
@@ -52,7 +54,8 @@ class HealthCheck
         curl_close($ch);
 
         if ($code === 200 && !empty($response)) {
-            return true;
+            $data = json_decode($response, true);
+            return ['online' => true, 'model' => $data['model_alias'] ?? null];
         }
 
         $modelsUrl = "{$host}/models";
@@ -64,7 +67,13 @@ class HealthCheck
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        return ($code === 200 && !empty($response));
+        if ($code === 200 && !empty($response)) {
+            $data = json_decode($response, true);
+            $model = $data['data'][0]['id'] ?? ($data['models'][0]['name'] ?? null);
+            return ['online' => true, 'model' => $model];
+        }
+
+        return ['online' => false, 'model' => null];
     }
 
     private function testUrl(string $url): bool

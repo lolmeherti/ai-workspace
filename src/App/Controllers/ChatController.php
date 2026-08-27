@@ -69,12 +69,12 @@ class ChatController extends BaseController
         $apiActionVal = $_GET['api_action'] ?? '';
         $apiAction = ApiAction::tryFrom($apiActionVal);
 
-        if ($apiAction === ApiAction::DELETE_TODOIST_TASK) {
+        if ($apiAction === ApiAction::DELETE_CALENDAR_TASK) {
             (new ChatTodoistDeleteAction($this->db, $this->agentManager))->execute();
             return;
         }
 
-        if ($apiActionVal === ApiAction::CREATE_TODOIST_TASK->value) {
+        if ($apiActionVal === ApiAction::CREATE_CALENDAR_TASK->value) {
             (new ChatTodoistCreateAction($this->db, $this->agentManager))->execute();
             return;
         }
@@ -91,7 +91,8 @@ class ChatController extends BaseController
         }
 
         if ($this->db && $newChat === '1') {
-            $newId = $this->chatSessionRepository->create('New Conversation');
+            $newId = $this->chatSessionRepository->findEmptySessionId()
+                ?? $this->chatSessionRepository->create('New Conversation');
             $this->redirect($this->buildUrl($newId, $activeTab));
             return;
         }
