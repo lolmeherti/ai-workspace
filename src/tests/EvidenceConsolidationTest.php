@@ -412,11 +412,25 @@ class EvidenceConsolidationTest
 
     private function invokeConsolidate(ChatManager $cm, array $pending, SourceCondenser $condenser, array &$events): void
     {
-        $m = new \ReflectionMethod(ChatManager::class, 'consolidateFreshEvidence');
+        // Drive the single-row atomizer directly: the live entry point is the
+        // deferred backlog pass; this exercises the shared core one row at a time
+        // and reproduces the event envelope the caller (backlog pass) owns.
+        $m = new \ReflectionMethod(ChatManager::class, 'atomizeRow');
         $m->setAccessible(true);
-        $m->invoke($cm, $pending, function (string $event, array $data) use (&$events): void {
-            $events[] = ['event' => $event, 'data' => $data];
-        }, $condenser);
+        $events[] = ['event' => 'consolidation_start', 'data' => ['rows' => count($pending)]];
+        $persisted = 0;
+        $failed = 0;
+        foreach ($pending as $rowId => $item) {
+            $result = $m->invoke($cm, (int) $rowId, $item['chunks'], $item['query'], $condenser);
+            if ($result > 0) {
+                $persisted++;
+            } elseif ($result === -1) {
+                $failed++;
+            }
+        }
+        $events[] = $failed > 0
+            ? ['event' => 'consolidation_error', 'data' => ['failed' => $failed, 'persisted' => $persisted]]
+            : ['event' => 'consolidation_done', 'data' => ['persisted' => $persisted]];
     }
 
     private function invokeBacklogAtomization(int $sessionId, int $ctxSize, SourceCondenser $condenser, array &$events): void

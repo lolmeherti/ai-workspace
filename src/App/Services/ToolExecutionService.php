@@ -14,7 +14,6 @@ use App\Services\Tools\CreateTodoistTaskTool;
 use App\Services\Tools\GetTodoistTasksTool;
 use App\Services\Tools\DeleteTodoistTaskTool;
 use App\Services\Tools\UpdateTodoistTaskTool;
-use App\Services\Tools\GetEmailBriefingTool;
 use App\Services\Tools\SearchMemoriesTool;
 
 class ToolExecutionService
@@ -31,7 +30,6 @@ class ToolExecutionService
     private GetTodoistTasksTool $getTodoistTasksTool;
     private DeleteTodoistTaskTool $deleteTodoistTaskTool;
     private UpdateTodoistTaskTool $updateTodoistTaskTool;
-    private GetEmailBriefingTool $getEmailBriefingTool;
     private SearchMemoriesTool $searchMemoriesTool;
 
     public function __construct(Database $db, AgentManager $agent, string $uploadDir, ?TodoistApiClient $todoist = null)
@@ -49,7 +47,6 @@ class ToolExecutionService
         $this->getTodoistTasksTool = new GetTodoistTasksTool($db, $agent, $uploadDir, $this->todoist);
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->updateTodoistTaskTool = new UpdateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
-        $this->getEmailBriefingTool = new GetEmailBriefingTool($db, $agent, $uploadDir, $this->todoist);
         $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
     }
 
@@ -140,7 +137,6 @@ class ToolExecutionService
                 Tool::GET_CALENDAR_TASKS => $this->getTodoistTasksTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::DELETE_CALENDAR_TASK => $this->deleteTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::UPDATE_CALENDAR_TASK => $this->updateTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
-                Tool::GET_EMAIL_BRIEFING => $this->getEmailBriefingTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_SESSION_EVIDENCE => $this->searchSessionEvidenceTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
             };

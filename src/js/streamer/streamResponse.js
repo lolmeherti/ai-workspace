@@ -9,6 +9,7 @@ import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking } from '../markdown.js';
 import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
+import { renderBriefingActions } from '../chat/chatBriefingCards.js';
 
 function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -330,6 +331,7 @@ export async function streamResponse(formData, originalMessage) {
                     <span class="trace-active-check mr-1.5 text-emerald-400 hidden">\u2713</span>
                     <span class="trace-active-label text-emerald-300/90"></span>
                     <span class="trace-cursor text-emerald-400 ml-0.5">\u2588</span>
+                    <span class="trace-timer ml-auto pl-3 text-slate-400 shrink-0"></span>
                 </div>
                 <div class="space-y-0 trace-content flex flex-col items-stretch w-full font-mono">
                     <div class="scraping-container flex flex-col gap-1 mt-1 hidden w-full"></div>
@@ -403,6 +405,9 @@ export async function streamResponse(formData, originalMessage) {
     const traceActiveCheck = aiWrapper.querySelector('.trace-active-check');
     const traceCursor = aiWrapper.querySelector('.trace-cursor');
     const traceScanOverlay = aiWrapper.querySelector('.trace-scan-overlay');
+    const traceTimer = aiWrapper.querySelector('.trace-timer');
+    let activeTaskStartTs = null;
+    let activeTaskTimerId = null;
 
     const TRACE_COLORS = {
         cyan:    { text: 'text-cyan-400',    accent: 'bg-cyan-500/50' },
@@ -413,6 +418,35 @@ export async function streamResponse(formData, originalMessage) {
         rose:    { text: 'text-rose-400',    accent: 'bg-rose-500/50' },
         slate:   { text: 'text-slate-300',   accent: 'bg-slate-500/40' },
     };
+
+    function formatTaskElapsed(ms) {
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return `${s}s`;
+        const m = Math.floor(s / 60);
+        return `${m}m ${s % 60}s`;
+    }
+
+    function startTaskTimer() {
+        stopTaskTimer();
+        activeTaskStartTs = Date.now();
+        if (traceTimer) traceTimer.textContent = '0s';
+        activeTaskTimerId = setInterval(() => {
+            if (traceTimer && activeTaskStartTs !== null) {
+                traceTimer.textContent = formatTaskElapsed(Date.now() - activeTaskStartTs);
+            }
+        }, 250);
+    }
+
+    function stopTaskTimer() {
+        if (activeTaskTimerId !== null) {
+            clearInterval(activeTaskTimerId);
+            activeTaskTimerId = null;
+        }
+        if (traceTimer && activeTaskStartTs !== null) {
+            traceTimer.textContent = formatTaskElapsed(Date.now() - activeTaskStartTs);
+        }
+        activeTaskStartTs = null;
+    }
 
     function setActiveTask(label, color = 'slate') {
         const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
@@ -428,6 +462,7 @@ export async function streamResponse(formData, originalMessage) {
         traceActiveTask.style.animation = 'none';
         traceActiveTask.offsetHeight;
         traceActiveTask.style.animation = '';
+        startTaskTimer();
     }
 
     function completeActiveTask() {
@@ -437,6 +472,7 @@ export async function streamResponse(formData, originalMessage) {
         if (traceCursor) traceCursor.classList.add('hidden');
         if (traceScanOverlay) traceScanOverlay.style.display = 'none';
         traceActiveLabel.className = 'trace-active-label text-emerald-300/90';
+        stopTaskTimer();
     }
 
     function addTraceEntry(label, color = 'slate') {
@@ -497,6 +533,8 @@ export async function streamResponse(formData, originalMessage) {
     }
 
     let markdownBuffer = "";
+    window.briefingEmailCards = null;
+    window.briefingActionCards = [];
     let currentSources = [];
     let sourceIds = [];
     let isFirstToken = true;
@@ -726,8 +764,7 @@ export async function streamResponse(formData, originalMessage) {
                                 'calendar_create': 'task creation',
                                 'calendar_get': 'task retrieval',
                                 'calendar_update': 'task update',
-                                'calendar_delete': 'task deletion',
-                                'email_briefing': 'email briefing'
+                                'calendar_delete': 'task deletion'
                             };
 
                             const intentList = data.intents === 'none' ? [] : data.intents.split(',');
@@ -943,6 +980,11 @@ export async function streamResponse(formData, originalMessage) {
                             };
                         }
 
+                        if (event === 'briefing_cards') {
+                            window.briefingEmailCards = data.emails || {};
+                            window.briefingActionCards = data.actions || [];
+                        }
+
                         if (event === 'token') {
                             if (isFirstToken) {
                                 isFirstToken = false;
@@ -1134,6 +1176,9 @@ export async function streamResponse(formData, originalMessage) {
                             }
                             if (currentSources.length) {
                                 renderSourcesList(aiBubble, currentSources);
+                            }
+                            if (window.briefingActionCards && window.briefingActionCards.length) {
+                                renderBriefingActions(aiBubble, window.briefingActionCards);
                             }
                             if (data.perf_metrics) {
                                 renderMetricsBubble(aiBubble, data.perf_metrics);

@@ -26,7 +26,12 @@ class EmailService
 
         foreach ($accounts as $account) {
             if ($onAccountFetch !== null) {
-                $onAccountFetch($account['email_address'], $account['label']);
+                $onAccountFetch([
+                    'phase'    => 'start',
+                    'email'    => $account['email_address'],
+                    'label'    => $account['label'],
+                    'provider' => $account['provider'] ?? 'Email',
+                ]);
             }
 
             $client = null;
@@ -42,14 +47,26 @@ class EmailService
                     'username'      => $account['email_address'],
                     'password' => $account['app_password'],
                     'protocol'      => 'imap',
-                    'timeout'       => 5,
+                    'timeout'       => 30,
                     'options'       => [
-                        'timeout' => 5
+                        'timeout' => 30
                     ]
                 ]);
 
-                $this->connectWithRetry($client);
-                
+                $authStart = microtime(true);
+                self::connectWithRetry($client);
+                $authMs = (int) round((microtime(true) - $authStart) * 1000);
+
+                if ($onAccountFetch !== null) {
+                    $onAccountFetch([
+                        'phase'    => 'authed',
+                        'email'    => $account['email_address'],
+                        'label'    => $account['label'],
+                        'provider' => $account['provider'] ?? 'Email',
+                        'auth_ms'  => $authMs,
+                    ]);
+                }
+
                 $inbox = $client->getFolder('INBOX');
                 
                 if (!$inbox) {
@@ -252,6 +269,16 @@ class EmailService
                             }
                         }
                     }
+
+                if ($onAccountFetch !== null) {
+                    $onAccountFetch([
+                        'phase'    => 'fetched',
+                        'email'    => $account['email_address'],
+                        'label'    => $account['label'],
+                        'provider' => $account['provider'] ?? 'Email',
+                        'count'    => count($messagesArray),
+                    ]);
+                }
                 }
 
                 try {
@@ -267,21 +294,14 @@ class EmailService
                     }
                 } catch (\Throwable $_) {}
 
-                $message = $e->getMessage();
-                if (stripos($message, 'auth') !== false || stripos($message, 'login') !== false || stripos($message, 'password') !== false || stripos($message, 'authenticate') !== false) {
-                    $errorType = 'AUTH_FAILED';
-                } elseif (stripos($message, 'timeout') !== false || stripos($message, 'timed out') !== false) {
-                    $errorType = 'CONNECTION_TIMEOUT';
-                } else {
-                    $errorType = 'IMAP_ERROR';
-                }
+                $classified = self::classifyImapError($e);
 
                 $allEmails[] = [
                     'account_id'    => $account['id'],
                     'account_label' => $account['label'],
                     'account_email' => $account['email_address'],
-                    'error_type'    => $errorType,
-                    'error'         => $message
+                    'error_type'    => $classified['type'],
+                    'error'         => $classified['detail'],
                 ];
             }
         }
@@ -290,12 +310,13 @@ class EmailService
     }
 
     /**
-     * Connect with a short retry for transient IMAP server errors. Yahoo (and
-     * some other providers) return "NO [UNAVAILABLE] LOGIN ... try again later"
-     * when the mailbox is briefly overloaded or rate-limiting; a retry a moment
-     * later usually succeeds. Genuine auth failures are not retried.
+     * Connect with a short retry for transient IMAP failures. The retry gate
+     * uses classifyImapError(), which walks the full previous-exception chain,
+     * so a socket read timeout ("empty response") or a dropped connection is
+     * retried while a genuine credential rejection ("Invalid credentials") is
+     * not (retrying those can trigger Gmail's lockout).
      */
-    private function connectWithRetry($client): void
+    public static function connectWithRetry($client): void
     {
         for ($attempt = 0; $attempt < 3; $attempt++) {
             try {
@@ -303,7 +324,7 @@ class EmailService
                 return;
             } catch (\Throwable $e) {
                 $isLast = ($attempt === 2);
-                if (!$isLast && $this->isTransientImapError($e->getMessage())) {
+                if (!$isLast && self::classifyImapError($e)['transient']) {
                     usleep(500000 * ($attempt + 1)); // 0.5s, then 1s backoff
                     continue;
                 }
@@ -312,24 +333,84 @@ class EmailService
         }
     }
 
-    private function isTransientImapError(string $message): bool
+    /**
+     * Classify an IMAP exception by walking the full previous-exception chain.
+     *
+     * webklex/php-imap hides the real cause behind generic wrapper messages:
+     * a socket read timeout surfaces as RuntimeException("empty response"),
+     * which login() relabels AuthFailedException("failed to authenticate"), and
+     * a connect failure becomes ConnectionFailedException("connection setup
+     * failed"). Checking only getMessage() therefore mislabels a transient
+     * timeout as AUTH_FAILED. We walk getPrevious() to the root cause.
+     *
+     * @return array{type:string, detail:string, transient:bool}
+     */
+    public static function classifyImapError(\Throwable $e): array
     {
-        $m = strtolower($message);
+        $messages = self::exceptionChainMessages($e); // most-recent first
+        $full = strtolower(implode(' | ', $messages));
+        $rootCause = $messages === [] ? $e->getMessage() : $messages[count($messages) - 1];
+        $rootLower = strtolower($rootCause);
+
+        $transient = false;
         foreach ([
-            'try again later',
-            'unavailable',
-            'temporarily',
-            'timed out',
-            'timeout',
-            'connection reset',
-            'broken pipe',
-            'too many connections',
-            'rate limit',
+            'try again later', 'unavailable', 'temporarily', 'timed out', 'timeout',
+            'connection reset', 'broken pipe', 'too many connections', 'rate limit',
+            'empty response', 'connection closed', 'failed to write', 'eof',
         ] as $needle) {
-            if (str_contains($m, $needle)) {
-                return true;
+            if (str_contains($full, $needle)) {
+                $transient = true;
+                break;
             }
         }
-        return false;
+
+        $auth = false;
+        foreach ([
+            'authenticationfailed', 'invalid credentials', 'bad credentials',
+            'incorrect password', 'wrong password', 'auth failed',
+            'authenticate failed', 'login failed', 'login incorrect', 'bad login',
+        ] as $needle) {
+            if (str_contains($full, $needle)) {
+                $auth = true;
+                break;
+            }
+        }
+
+        // A genuine credential rejection is never transient, even if a
+        // connection-level needle also appears elsewhere in the chain.
+        $transient = $transient && !$auth;
+
+        if ($auth) {
+            $type = 'AUTH_FAILED';
+        } elseif (str_contains($full, 'timeout') || str_contains($full, 'timed out')) {
+            $type = 'CONNECTION_TIMEOUT';
+        } else {
+            $type = 'IMAP_ERROR';
+        }
+
+        $friendly = [
+            'empty response'                    => 'mail server dropped the connection during login',
+            'failed to write - connection closed?' => 'connection closed during login',
+            'failed to send literal string'     => 'connection interrupted during login',
+        ];
+        $detail = $friendly[$rootLower] ?? $rootCause;
+
+        return ['type' => $type, 'detail' => $detail, 'transient' => $transient];
+    }
+
+    private static function exceptionChainMessages(\Throwable $e): array
+    {
+        $messages = [];
+        $cur = $e;
+        $depth = 0;
+        while ($cur !== null && $depth < 10) {
+            $m = $cur->getMessage();
+            if ($m !== '') {
+                $messages[] = $m;
+            }
+            $cur = $cur->getPrevious();
+            $depth++;
+        }
+        return $messages;
     }
 }

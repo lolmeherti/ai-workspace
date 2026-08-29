@@ -57,6 +57,7 @@ class Schema
                 atomic_context JSON NULL,
                 atomic_tokens INT NULL,
                 perf_metrics JSON NULL,
+                briefing_cards JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
                     FOREIGN KEY (session_id)
@@ -222,6 +223,14 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'perf_metrics'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN perf_metrics JSON NULL AFTER selected_chunks");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'briefing_cards'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN briefing_cards JSON NULL AFTER perf_metrics");
             }
         } catch (PDOException $e) {
         }

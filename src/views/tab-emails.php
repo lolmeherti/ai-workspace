@@ -20,8 +20,8 @@
             <div class="flex items-center gap-2 text-slate-500 peer-checked:text-cyan-400 transition-colors duration-200">
                 <uk-icon icon="history" class="w-3.5 h-3.5"></uk-icon>
                 <div class="flex flex-col">
-                    <span class="text-[10px] font-bold tracking-wider uppercase">Include Read Mail</span>
-                    <span class="text-[8px] text-slate-500/85 font-medium uppercase tracking-tight peer-checked:text-cyan-600/70 transition-colors duration-200">Scan historical inbox</span>
+                    <span class="text-[10px] font-bold tracking-wider uppercase">Include Already-Read Mail</span>
+                    <span class="text-[8px] text-slate-500/85 font-medium uppercase tracking-tight peer-checked:text-cyan-600/70 transition-colors duration-200">Within the last 24 hours</span>
                 </div>
             </div>
 
