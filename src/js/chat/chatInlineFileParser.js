@@ -6,6 +6,16 @@
 export function parseInlineFiles(content) {
     if (!content) return '';
 
+    // Briefing [E#] anchors -> [Email: account_id:uid]. PHP owns the id->card map
+    // (window.briefingEmailCards); unknown/malformed ids are stripped.
+    if (window.briefingEmailCards) {
+        content = content.replace(/\[E(\d+)\]/g, (match, id) => {
+            const card = window.briefingEmailCards[id];
+            if (!card || !card.account_id || !card.uid) return '';
+            return `[Email:${card.account_id}:${card.uid}]`;
+        });
+    }
+
     content = content.replace(/<code>\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*<\/code>/gi, '[Email:$1:$2]');
     content = content.replace(/`\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*`/gi, '[Email:$1:$2]');
     content = content.replace(/\(\s*\[?\[?Email:\s*([0-9]+):([a-zA-Z0-9._\-]+)\]\]?\]?\s*\)/gi, '[Email:$1:$2]');

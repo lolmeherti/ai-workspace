@@ -57,7 +57,7 @@ class ToolSchemaTest
         }
         $this->test('every exposed tool is a valid Tool enum case', $allValidEnum);
 
-        foreach (['update_calendar_task', 'delete_calendar_task', 'get_email_briefing'] as $wt) {
+        foreach (['update_calendar_task', 'delete_calendar_task'] as $wt) {
             $this->test("write/exec tool {$wt} is NOT exposed to the model", !in_array($wt, $names, true));
         }
 

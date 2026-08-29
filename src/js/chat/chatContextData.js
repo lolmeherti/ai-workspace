@@ -421,7 +421,7 @@ function fillModalBody(overlay, data) {
     body.appendChild(rawHeading);
 
     const rawBox = document.createElement('div');
-    rawBox.className = 'space-y-2 border border-slate-800 rounded-lg p-3 bg-slate-900/50 max-h-48 overflow-y-auto';
+    rawBox.className = 'space-y-2 border border-slate-800 rounded-lg p-4 bg-slate-900/50 max-h-96 overflow-y-auto';
     if (data.parsed && Array.isArray(data.parsed) && data.parsed.length) {
         for (const src of data.parsed) {
             const srcWrap = document.createElement('div');
@@ -443,10 +443,18 @@ function fillModalBody(overlay, data) {
             rawBox.appendChild(srcWrap);
         }
     } else {
-        const pre = document.createElement('pre');
-        pre.className = 'whitespace-pre-wrap break-words text-xs text-slate-300 font-mono';
-        pre.textContent = data.message || '(empty)';
-        rawBox.appendChild(pre);
+        const md = document.createElement('div');
+        md.className = 'markdown-content text-slate-300';
+        const rawMessage = data.message || '';
+        if (typeof marked !== 'undefined' && rawMessage.trim() !== '') {
+            md.innerHTML = marked.parse(rawMessage);
+            if (typeof hljs !== 'undefined') {
+                md.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+            }
+        } else {
+            md.textContent = rawMessage || '(empty)';
+        }
+        rawBox.appendChild(md);
     }
     body.appendChild(rawBox);
 

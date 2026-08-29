@@ -35,6 +35,10 @@ require_once __DIR__ . '/AtomizationPolicyTest.php';
 require_once __DIR__ . '/ToolSchemaTest.php';
 require_once __DIR__ . '/TodoistConflictDetectionTest.php';
 require_once __DIR__ . '/TodoistCreateToolTest.php';
+require_once __DIR__ . '/BriefingDataServiceTest.php';
+require_once __DIR__ . '/BriefingTriageTest.php';
+require_once __DIR__ . '/BriefingExtractorTest.php';
+require_once __DIR__ . '/EmailServiceTest.php';
 
 use App\Config;
 use App\Database;
@@ -65,6 +69,10 @@ use App\Tests\AtomizationPolicyTest;
 use App\Tests\ToolSchemaTest;
 use App\Tests\TodoistConflictDetectionTest;
 use App\Tests\TodoistCreateToolTest;
+use App\Tests\BriefingDataServiceTest;
+use App\Tests\BriefingTriageTest;
+use App\Tests\BriefingExtractorTest;
+use App\Tests\EmailServiceTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -159,6 +167,18 @@ $allOk = (new TodoistConflictDetectionTest())->run() && $allOk;
 
 echo "\n=== Phase 26: Todoist Create Tool Tests ===\n";
 $allOk = (new TodoistCreateToolTest($db, __DIR__ . '/../uploads/'))->run() && $allOk;
+
+echo "\n=== Phase 27: Briefing Data Service Tests ===\n";
+$allOk = (new BriefingDataServiceTest())->run() && $allOk;
+
+echo "\n=== Phase 28: Briefing Triage Tests ===\n";
+$allOk = (new BriefingTriageTest())->run() && $allOk;
+
+echo "\n=== Phase 29: Briefing Extractor Tests ===\n";
+$allOk = (new BriefingExtractorTest())->run() && $allOk;
+
+echo "\n=== Phase 30: Email Service Error Classification Tests ===\n";
+$allOk = (new EmailServiceTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

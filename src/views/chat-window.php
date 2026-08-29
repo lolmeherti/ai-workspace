@@ -208,7 +208,8 @@
                                 <?php endif; ?>
                                 
                                 <?php if ($msg['role'] === 'assistant'): ?>
-                                    <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"></div>
+                                    <?php $briefingCards = !empty($msg['briefing_cards']) ? $msg['briefing_cards'] : null; ?>
+                                    <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"<?php if ($briefingCards !== null): ?> data-briefing-cards="<?php echo htmlspecialchars($briefingCards, ENT_QUOTES, 'UTF-8'); ?>"<?php endif; ?>></div>
                                     <?php $sources = !empty($msg['source_map']) ? json_decode($msg['source_map'], true) : null; ?>
                                     <?php if (!empty($sources)): ?>
                                         <div class="sources-panel relative w-full mt-4 overflow-hidden rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(6,182,212,0.08),inset_0_1px_0_rgba(6,182,212,0.06)]">

@@ -1022,41 +1022,5 @@ class ChatManager
         return ($this->countTokens)($lines);
     }
 
-    /**
-     * Evidence consolidation over a pre-built pending map. Runs SourceCondenser
-     * over the exact selected chunks of each row and writes atomic_context on
-     * that same row (no new row). On failure or empty extraction the row's
-     * atomic_context stays null so the raw message remains active. Emits
-     * consolidation_start, then consolidation_done (or consolidation_error) so
-     * the frontend can show a "Consolidating evidence..." state.
-     *
-     * @param array<int, array{chunks: \App\Search\WebChunk[], query: string}> $pending
-     */
-    private function consolidateFreshEvidence(array $pending, callable $emit, ?SourceCondenser $condenser = null): void
-    {
-        if (empty($pending)) {
-            return;
-        }
-
-        $emit('consolidation_start', ['rows' => count($pending)]);
-        $condenser = $condenser ?? new SourceCondenser($this->agent);
-        $persisted = 0;
-        $failed = 0;
-
-        foreach ($pending as $rowId => $item) {
-            $atomTokens = $this->atomizeRow((int)$rowId, $item['chunks'], $item['query'], $condenser);
-            if ($atomTokens > 0) {
-                $persisted++;
-            } elseif ($atomTokens === -1) {
-                $failed++;
-            }
-        }
-
-        if ($failed > 0) {
-            $emit('consolidation_error', ['failed' => $failed, 'persisted' => $persisted]);
-        } else {
-            $emit('consolidation_done', ['persisted' => $persisted]);
-        }
-    }
 
 }

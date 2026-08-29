@@ -245,9 +245,9 @@ final class SearchPipeline
         ], 'info', 'SearchPipeline::runBridgeMode');
 
         // Atomic extraction has MOVED OUT of SearchPipeline: it now runs as a
-        // post-answer consolidation inference in ChatManager over the selected
-        // chunks returned here. This keeps a web turn at 2 blocking inferences
-        // to the visible answer (plus 1 consolidation after it).
+        // deferred consolidation in ChatManager (start of a later turn, gated by
+        // backlog/headroom policy) over the selected chunks returned here. This
+        // keeps a web turn at 2 blocking inferences to the visible answer.
         return [
             'evidence'  => $fit['evidence'],
             'sourceIds' => $sourceIds,

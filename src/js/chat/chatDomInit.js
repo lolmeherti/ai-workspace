@@ -4,6 +4,7 @@
  */
 
 import { parseInlineFiles } from './chatInlineFileParser.js';
+import { hydrateBriefingCards } from './chatBriefingCards.js';
 import { openEditorDrawer, closeEditorDrawer, saveEditorDraft } from './chatEditorOpenClose.js';
 import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
@@ -12,6 +13,7 @@ import { extractThinking, createThinkingAccordion } from '../markdown.js';
 export function initChatDom() {
     document.addEventListener('DOMContentLoaded', () => {
         const parseAllCurrentMessages = () => {
+            hydrateBriefingCards();
             document.querySelectorAll('.markdown-rendered').forEach(el => {
                 const rawMarkdown = el.getAttribute('data-markdown') || el.textContent;
                 const { thinking, response } = extractThinking(rawMarkdown);

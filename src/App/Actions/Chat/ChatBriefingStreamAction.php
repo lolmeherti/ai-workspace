@@ -3,10 +3,15 @@
 namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
-use App\Agents\SchedulingAgent;
+use App\Agents\BriefingExtractor;
+use App\Agents\BriefingTriage;
+use App\Services\BriefingDataService;
+use App\Services\EmailService;
 
 class ChatBriefingStreamAction extends BaseAction
 {
+    private const MAX_SYNTH_BODY = 4000;
+
     public function __construct(
         private $db,
         private $agentManager
@@ -37,288 +42,341 @@ class ChatBriefingStreamAction extends BaseAction
             @flush();
         };
 
-        $emit('status', ['text' => "Connecting to inbox services..."]);
-        $emit('tool_start', ['tool' => 'email_fetch', 'label' => 'Checking connected inboxes...']);
-
         $tokenCounter = new \App\Search\TokenCounter();
 
-        $emailService = new \App\Services\EmailService($this->db);
-        $emails = $emailService->fetchRecentEmails($includeUnseen, function ($emailAddress, $label) use ($emit) {
-            $emit('status', ['text' => "Gathering emails from {$emailAddress}..."]);
-        });
+        // ── 1. Deterministic fetch + preprocess ─────────────────────────────
+        $emit('status', ['text' => "Authenticating with your email accounts..."]);
+        $emit('tool_start', ['tool' => 'email_fetch', 'label' => 'Signing in to your inboxes...']);
 
-        $accountCounts = [];
-        $accountErrors = [];
-        $sampleSubjects = [];
-        foreach ($emails as $email) {
-            if (isset($email['error'])) {
-                $addr = $email['account_email'] ?? 'Unknown';
-                $accountErrors[$addr] = $email['error'];
-            } else {
-                $addr = $email['account_email'] ?? 'Unknown';
-                $accountCounts[$addr] = ($accountCounts[$addr] ?? 0) + 1;
-                if (count($sampleSubjects) < 5 && !empty($email['subject'])) {
-                    $sampleSubjects[] = '[' . $addr . '] ' . $email['subject'];
+        $onAccount = function (array $a) use ($emit) {
+            $provider = $a['provider'];
+            $label = $a['label'];
+            if ($a['phase'] === 'start') {
+                $emit('status', ['text' => "Authenticating with {$provider} ({$label})..."]);
+            } elseif ($a['phase'] === 'authed') {
+                $emit('status', ['text' => "Fetching messages from {$provider} ({$label})..."]);
+                if ($a['auth_ms'] > 3000) {
+                    $secs = number_format($a['auth_ms'] / 1000, 1);
+                    $emit('trace', ['label' => "{$provider} ({$label}) took {$secs}s to authenticate — {$provider} was slow to respond", 'color' => 'amber']);
                 }
+            } elseif ($a['phase'] === 'fetched') {
+                $n = (int) $a['count'];
+                $txt = $n === 0 ? 'no new email' : ($n === 1 ? '1 new email' : "{$n} new emails");
+                $emit('trace', ['label' => "{$provider} ({$label}): {$txt}", 'color' => $n > 0 ? 'emerald' : 'slate']);
             }
-        }
-        $statsParts = [];
-        foreach ($accountCounts as $label => $count) {
-            $statsParts[] = "{$label}: {$count}";
-        }
-        foreach ($accountErrors as $label => $err) {
-            $statsParts[] = "{$label}: ERROR";
-        }
-        $statsLine = !empty($statsParts) ? implode(' | ', $statsParts) : 'no accounts configured';
-        $fetchSummary = 'Fetched ' . count($emails) . ' emails — ' . $statsLine;
+        };
 
-        foreach ($accountCounts as $addr => $count) {
-            $emit('trace', ['label' => "Fetched {$count} email" . ($count !== 1 ? 's' : '') . " from {$addr}", 'color' => 'emerald']);
+        $dataService = new BriefingDataService($this->db, new EmailService($this->db));
+        $input = $dataService->buildInput($includeUnseen, $onAccount);
+        $emails = $input['emails'];
+        $errors = $input['errors'];
+        $omitted = $input['omitted'];
+        $budgetChars = $input['budgetChars'];
+
+        foreach ($errors as $err) {
+            $addr = $err['account_email'] ?? 'Unknown';
+            $emit('trace', ['label' => "Failed to fetch from {$addr}: " . ($err['error'] ?? 'unknown'), 'color' => 'rose']);
         }
-        foreach ($accountErrors as $addr => $err) {
-            $emit('trace', ['label' => "Failed to fetch from {$addr}: {$err}", 'color' => 'rose']);
-        }
-        if (empty($accountCounts) && empty($accountErrors)) {
+        if (empty($emails) && empty($errors)) {
             $emit('trace', ['label' => 'No email accounts configured', 'color' => 'amber']);
         }
-
+        $label = 'Fetched ' . count($emails) . ' email' . (count($emails) !== 1 ? 's' : '') . ($omitted ? " (dropped {$omitted} oldest)" : '');
+        $emit('trace', ['label' => $label, 'color' => 'emerald']);
         $emit('tool_done', ['tool' => 'email_fetch', 'label' => 'Inboxes checked.']);
-        
-        $emit('data_fetching', ['tool' => 'email_fetch', 'status' => 'success', 'label' => 'Email fetch complete', 'payload' => $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects)]);
+
+        $fetchSummary = $this->buildFetchSummary($emails, $errors, $omitted);
+        $emit('data_fetching', ['tool' => 'email_fetch', 'status' => 'success', 'label' => 'Email fetch complete', 'payload' => $fetchSummary]);
         \App\Logger::info('Briefing email fetch: ' . $fetchSummary);
+        $this->persistSystemMessage($sessionId, $fetchSummary, 'email_fetch', $tokenCounter, $emit);
 
-        if ($this->db) {
-            $fetchMessage = $fetchSummary . "\n\nAccounts: " . $statsLine . "\n\nSample subjects:\n" . implode("\n", $sampleSubjects);
-            $this->db->insert('chat_history', [
-                'session_id'    => $sessionId,
-                'role'          => 'system',
-                'message'       => $fetchMessage,
-                'message_type'  => 'data_fetching',
-                'tool_name'     => 'email_fetch',
-                'token_estimate' => $tokenCounter->count($fetchMessage)
-            ]);
-        }
-
-        $emailSummaries = [];
-        if (empty($emails)) {
-            $emailSummaries[] = "No emails found in the last 24 hours across connected accounts.";
-        } else {
-            $chunks = array_chunk($emails, 5);
-            $totalChunks = count($chunks);
-            $emit('tool_start', ['tool' => 'email_summarize', 'label' => 'Summarizing fetched emails...']);
-            foreach ($chunks as $idx => $chunk) {
-                $chunkNum = $idx + 1;
-                $emit('status', ['text' => "Summarizing email chunk {$chunkNum} of {$totalChunks}..."]);
-
-                $chunkSubjects = [];
-                $emailsTxt = "";
-                foreach ($chunk as $email) {
-                    if (isset($email['error'])) {
-                        $emailsTxt .= "Connection Error: " . $email['error'] . "\n";
-                    } else {
-                        $chunkSubjects[] = $email['subject'] ?: '[no subject]';
-                        $emailsTxt .= "Email Reference tag: [Email: {$email['account_id']}:{$email['uid']}]\nFrom: " . $email['from'] . "\nSubject: " . $email['subject'] . "\nDate: " . $email['date'] . "\nSnippet: " . $email['snippet'] . "\n\n";
-                    }
-                }
-
-                $subjectList = implode(', ', $chunkSubjects);
-                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: parsing " . count($chunkSubjects) . " email" . (count($chunkSubjects) !== 1 ? 's' : '') . ($subjectList ? " ({$subjectList})" : ''), 'color' => 'slate']);
-
-                $prompt = "Summarize the following emails briefly, listing sender, subject, and key points. You must keep the exact \"Email Reference tag\" (e.g., [Email: X:Y]) intact for each email summary:\n\n" . $emailsTxt;
-                $messages = [
-                    ['role' => 'system', 'content' => 'You are an AI assistant.'],
-                    ['role' => 'user', 'content' => $prompt]
-                ];
-
-                // Use non-streaming return value — AgentManager strips thinking centrally
-                $summary = $this->agentManager->chat($messages, false);
-
-                $emit('data_fetching', ['tool' => 'email_summarize', 'status' => 'success', 'label' => "Chunk {$chunkNum}/{$totalChunks} summary", 'payload' => $summary]);
-                $emit('trace', ['label' => "Chunk {$chunkNum}/{$totalChunks}: summarized (" . mb_strlen($summary) . " chars)", 'color' => 'emerald']);
-
-                \App\Logger::info("Briefing chunk {$chunkNum}/{$totalChunks}: " . mb_strlen($summary) . ' chars');
-
-                if ($this->db) {
-                    $this->db->insert('chat_history', [
-                        'session_id'    => $sessionId,
-                        'role'          => 'system',
-                        'message'       => $summary,
-                        'message_type'  => 'data_fetching',
-                        'tool_name'     => 'email_summarize',
-                        'token_estimate' => $tokenCounter->count($summary)
-                    ]);
-                }
-
-                $emailSummaries[] = $summary;
-            }
-            $emit('tool_done', ['tool' => 'email_summarize', 'label' => 'Email summaries complete.']);
-        }
-
+        // ── 2. Calendar (deterministic partition) ───────────────────────────
         $emit('status', ['text' => "Retrieving calendar schedules..."]);
         $emit('tool_start', ['tool' => 'get_calendar_tasks', 'label' => 'Checking calendar...']);
 
-        $todoistSummary = "";
-        $tasks = [];
-        $pastTasksToday = [];
+        $tasks = $this->fetchTasks();
+        $calendar = BriefingDataService::partitionCalendar($tasks);
+
+        $emit('trace', ['label' => 'Calendar: ' . count($calendar['upcoming']) . ' upcoming, ' . count($calendar['pastToday']) . ' earlier today', 'color' => 'slate']);
+        $emit('tool_done', ['tool' => 'get_calendar_tasks', 'label' => 'Calendar loaded.']);
+
+        $calendarSummary = $this->buildCalendarSummary($calendar);
+        $this->persistSystemMessage($sessionId, $calendarSummary, 'get_calendar_tasks', $tokenCounter, $emit);
+
+        // ── 3. Triage (conditional) ─────────────────────────────────────────
+        $selectedEmails = [];
+        if (!empty($emails)) {
+            $bodies = array_column($emails, 'body');
+            if (BriefingDataService::bodiesFitWithHeadroom($bodies, $budgetChars)) {
+                $selectedEmails = $emails;
+            } else {
+                $emit('status', ['text' => "Scanning inbox for relevance..."]);
+                $emit('tool_start', ['tool' => 'triage', 'label' => 'Scanning inbox for relevance...']);
+                $triage = new BriefingTriage($this->agentManager);
+                $ids = $triage->select($emails);
+                $idSet = array_flip($ids);
+                $selectedEmails = array_values(array_filter($emails, fn ($e) => isset($idSet[$e['id']])));
+                $emit('trace', ['label' => 'Triage selected ' . count($selectedEmails) . ' of ' . count($emails), 'color' => 'slate']);
+                $emit('tool_done', ['tool' => 'triage', 'label' => 'Triage complete.']);
+            }
+        }
+
+        // ── 4. Extraction (structured commitments → action cards) ───────────
+        $actionCards = [];
+        if (!empty($selectedEmails)) {
+            $emit('status', ['text' => "Extracting commitments..."]);
+            $emit('tool_start', ['tool' => 'extract', 'label' => 'Extracting commitments...']);
+            $extractor = new BriefingExtractor($this->agentManager);
+            $actionCards = $extractor->extract($selectedEmails, $tasks, $budgetChars);
+            $actionCount = count($actionCards);
+            $extractTrace = $actionCount === 0
+                ? 'No calendar/task suggestions found'
+                : 'Extracted ' . $actionCount . ' commitment' . ($actionCount !== 1 ? 's' : '');
+            $emit('trace', ['label' => $extractTrace, 'color' => 'slate']);
+            $emit('tool_done', ['tool' => 'extract', 'label' => 'Extraction complete.']);
+        }
+
+        // ── 5. Card map + synthesis (streamed prose with [E#] anchors) ──────
+        $emailCardMap = [];
+        foreach ($selectedEmails as $e) {
+            $emailCardMap[(string) $e['id']] = [
+                'account_id' => $e['account_id'],
+                'uid'        => $e['uid'],
+                'subject'    => $e['subject'],
+                'from'       => $e['from'],
+                'date'       => $e['date'],
+                'snippet'    => $e['snippet'],
+            ];
+        }
+
+        $emit('status', ['text' => "Generating executive briefing..."]);
+        $emit('briefing_cards', ['emails' => $emailCardMap, 'actions' => $actionCards]);
+
+        $finalSystem = $this->buildSystemPrompt($selectedEmails);
+        $finalInput = $this->buildSynthesisInput($selectedEmails, $calendar, $actionCards, $emails, $omitted);
+        $finalMessages = [
+            ['role' => 'system', 'content' => $finalSystem],
+            ['role' => 'user', 'content' => $finalInput],
+        ];
+
+        \App\Logger::info('Briefing final prompt: ' . mb_strlen($finalInput) . ' chars, ' . count($selectedEmails) . ' emails, ' . count($actionCards) . ' action cards');
+        $emit('generating', []);
+
+        $finalBriefingText = '';
+        $this->agentManager->chat(
+            $finalMessages,
+            true,
+            function ($chunk, $type) use ($emit, &$finalBriefingText) {
+                if ($type === 'content') {
+                    $finalBriefingText .= $chunk;
+                    $emit('token', ['chunk' => $chunk]);
+                }
+            },
+            null,
+            'briefing_synthesis'
+        );
+
+        $briefingTitle = 'Daily Briefing - ' . date('l d/m/Y');
+        $totalSessionTokens = 0;
+        if ($this->db) {
+            $this->db->update('chat_sessions', ['title' => $briefingTitle], ['id' => $sessionId]);
+            $this->db->insert('chat_history', [
+                'session_id'     => $sessionId,
+                'role'           => 'assistant',
+                'message'        => $finalBriefingText,
+                'token_estimate' => $tokenCounter->count($finalBriefingText),
+                'briefing_cards' => (!empty($emailCardMap) || !empty($actionCards))
+                    ? json_encode(['emails' => $emailCardMap, 'actions' => $actionCards], JSON_UNESCAPED_UNICODE)
+                    : null,
+            ]);
+
+            // The briefing writes its rows outside ChatManager's accounting path,
+            // so recompute + persist the session token total here. Keeps the
+            // context counter honest for follow-up questions.
+            $totalSessionTokens = 0;
+            foreach ($this->db->query("SELECT token_estimate FROM chat_history WHERE session_id = :sid", [':sid' => $sessionId]) as $row) {
+                $totalSessionTokens += (int)($row['token_estimate'] ?? 0);
+            }
+            $this->db->update('chat_sessions', ['context_tokens' => $totalSessionTokens], ['id' => $sessionId]);
+        }
+
+        $emit('done', [
+            'session_id'           => $sessionId,
+            'message'              => $finalBriefingText,
+            'total_session_tokens' => $totalSessionTokens,
+        ]);
+        $emit('title_updated', ['title' => $briefingTitle]);
+    }
+
+    private function fetchTasks(): array
+    {
         try {
             $uploadDir = \App\Config::getProjectRoot() . '/uploads/';
             $toolService = new \App\Services\ToolExecutionService($this->db, $this->agentManager, $uploadDir);
             $response = $toolService->makeTodoistRequest('GET', '/tasks');
-            $tasks = isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
-
-            $emit('trace', ['label' => 'Calendar returned ' . count($tasks) . ' task' . (count($tasks) !== 1 ? 's' : ''), 'color' => 'slate']);
-
-            if (empty($tasks)) {
-                $todoistSummary = "No active tasks found in the calendar.";
-            } else {
-                $twoWeeksSeconds = 14 * 24 * 60 * 60;
-                $now = time();
-                $todayStart = strtotime('today 00:00:00');
-                $todayEnd = strtotime('today 23:59:59');
-                $upcomingTasks = [];
-
-                foreach ($tasks as $task) {
-                    $dueTime = null;
-                    if (isset($task['due']['datetime'])) {
-                        $dueTime = strtotime($task['due']['datetime']);
-                    } elseif (isset($task['due']['date'])) {
-                        $dueTime = strtotime($task['due']['date']);
-                    }
-                    if ($dueTime !== null) {
-                        if ($dueTime >= $now && ($dueTime - $now) <= $twoWeeksSeconds) {
-                            $upcomingTasks[] = $task;
-                        } elseif ($dueTime < $now && $dueTime >= $todayStart && $dueTime <= $todayEnd) {
-                            $pastTasksToday[] = $task;
-                        }
-                    }
-                }
-
-                if (empty($upcomingTasks)) {
-                    $todoistSummary = "No tasks are scheduled for the next two weeks.";
-                } else {
-                    $tasksTxt = "";
-                    foreach ($upcomingTasks as $task) {
-                        $due = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : 'No due date');
-                        $tasksTxt .= "- Task: \"" . $task['content'] . "\" (Due: " . $due . ")\n";
-                    }
-
-                    $prompt = "Summarize the following calendar tasks/reminders for the next two weeks, highlighting deadlines and key priorities:\n\n" . $tasksTxt;
-                    $messages = [
-                        ['role' => 'system', 'content' => 'You are an AI assistant.'],
-                        ['role' => 'user', 'content' => $prompt]
-                    ];
-
-                    $this->agentManager->chat($messages, true, function ($token) use (&$todoistSummary) {
-                        $todoistSummary .= $token;
-                    });
-                }
-            }
+            return isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
         } catch (\Throwable $e) {
-            $todoistSummary = "Could not retrieve calendar tasks: " . $e->getMessage();
-            $emit('trace', ['label' => 'Calendar fetch failed: ' . $e->getMessage(), 'color' => 'rose']);
+            \App\Logger::warning('Briefing calendar fetch failed: ' . $e->getMessage());
+            return [];
         }
-        $emit('tool_done', ['tool' => 'get_calendar_tasks', 'label' => 'Calendar loaded.']);
+    }
 
-        $emit('status', ['text' => "Analyzing inbox and calendar data..."]);
-        $emit('tool_start', ['tool' => 'scheduling_agent', 'label' => 'Cross-referencing emails and calendar...']);
-
-        $suggestionsTags = "";
+    private function persistSystemMessage(int $sessionId, string $message, string $toolName, \App\Search\TokenCounter $tokenCounter, callable $emit): void
+    {
+        if (!$this->db || $message === '') {
+            return;
+        }
         try {
-            $schedulingAgent = new SchedulingAgent($this->agentManager);
-            $suggestionsArray = $schedulingAgent->extractBriefingSuggestions($emails, $tasks);
-            if (is_array($suggestionsArray) && !empty($suggestionsArray)) {
-                foreach ($suggestionsArray as $s) {
-                    if (isset($s['content']) && isset($s['due_string'])) {
-                        $suggestionsTags .= "[CalendarSuggest: " . $s['content'] . " | " . $s['due_string'] . "]\n";
-                    }
-                }
-            }
-            $emit('trace', ['label' => 'Cross-reference found ' . count($suggestionsArray) . ' suggested action' . (count($suggestionsArray) !== 1 ? 's' : ''), 'color' => 'slate']);
-        } catch (\Throwable $e) {
-            $emit('trace', ['label' => 'Cross-reference failed: ' . $e->getMessage(), 'color' => 'rose']);
-        }
-        $emit('tool_done', ['tool' => 'scheduling_agent', 'label' => 'Cross-reference complete.']);
-
-        $emit('status', ['text' => "Generating executive briefing..."]);
-
-        $finalInput = "DAILY BRIEFING DATA — you MUST cover BOTH sections below.\n\n"
-                    . "SECTION 1 — CALENDAR (upcoming tasks for the next two weeks):\n\n" . $todoistSummary
-                    . "\n\nSECTION 2 — EMAILS (summaries of recent inbox activity):\n\n" . implode("\n\n", $emailSummaries);
-
-        if (!empty($pastTasksToday)) {
-            $pastTasksTxt = "";
-            foreach ($pastTasksToday as $task) {
-                $due = isset($task['due']['datetime']) ? $task['due']['datetime'] : (isset($task['due']['date']) ? $task['due']['date'] : '');
-                $timeStr = !empty($due) ? date('g:i A', strtotime($due)) : '';
-                $pastTasksTxt .= "- \"" . $task['content'] . "\" (Scheduled earlier today at " . $timeStr . ")\n";
-            }
-            $finalInput .= "\n\n[PAST EVENTS FROM TODAY (ALREADY COMPLETED)]:\n" . $pastTasksTxt;
-            $finalInput .= "CRITICAL: The past events from today listed above have ALREADY occurred. Do NOT list them as upcoming under schedule highlights or this week. Instead, address them conversationally and ask how they went (e.g. 'You had a doctor appointment earlier today at 13:30—hope that went well!').\n";
-        }
-
-        if (!empty($suggestionsTags)) {
-            $finalInput .= "\n\n[RECOMMENDED ACTION CARDS]:\n";
-            $finalInput .= "The following suggested calendar events were extracted and cross-referenced by your background sub-agent. You MUST append these exact tags to the very end of your final response so the user can review and click them:\n";
-            $finalInput .= $suggestionsTags;
-        }
-
-        $finalSystem = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the summaries provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n"
-                     . "TEMPORAL AWARENESS FOR DAILY BRIEFINGS:\n"
-                     . "Today's exact system date and current time is " . date('l, F j, Y (H:i)') . ".\n"
-                     . "When summarizing emails, calendar tasks, or updates during your daily briefing:\n"
-                     . "1. Always compare any mentioned appointment or event times against the current clock.\n"
-                     . "2. If an event or appointment was scheduled for today but its slot has already passed, do not present it as an upcoming task under 'Upcoming Schedule' or 'This Week'.\n"
-                     . "3. Instead, address it as a historical event from earlier today and conversationally check in on it.\n"
-                     . "4. Only suggest reminder cards or upcoming scheduling options for genuine future events.\n\n"
-                     . "DAILY BRIEFING SUMMARY INSTRUCTIONS:\n"
-                     . "When summarizing emails, make sure to highlight any explicit dates, times, invitations, obligations, pickups, or task-like requests mentioned by the senders so the user is fully aware of their commitments. Do not write vague or lazy summaries.\n\n"
-                     . "Visual Card rule: You must preserve and append the exact, literal numeric reference tag (e.g. [Email: 3:26708]) from the source summaries when mentioning any email. Do not modify these numbers or replace them with account names.\n";
-
-        if (!empty($suggestionsTags)) {
-            $finalSystem .= "Action Card rule: Append the pre-vetted suggested tags (e.g. `[CalendarSuggest: content | due_string]`) at the very end of your response.";
-        } else {
-            $finalSystem .= "Do NOT invent or append any [CalendarSuggest] action cards. There are no pre-vetted suggestions in this briefing.";
-        }
-
-        $finalMessages = [
-            ['role' => 'system', 'content' => $finalSystem],
-            ['role' => 'user', 'content' => $finalInput]
-        ];
-
-        \App\Logger::info('Briefing final prompt: ' . mb_strlen($finalInput) . ' chars, ' . count($emailSummaries) . ' email summaries, todoist: ' . mb_strlen($todoistSummary) . ' chars');
-        $emit('generating', []);
-
-        $finalBriefingText = $this->agentManager->chat($finalMessages, false);
-
-        $extracted = \App\ThoughtExtractor::extract($finalBriefingText);
-        $thought = $extracted['thought'];
-        $content = $extracted['content'];
-
-        if (!empty($thought)) {
-            $emit('reasoning', ['chunk' => $thought]);
-        }
-
-        $payload = json_encode([
-            'event' => 'token',
-            'data' => ['chunk' => $content],
-            'done' => true
-        ]);
-        echo "data: {$payload}\n\n";
-        @ob_flush();
-        @flush();
-
-        $emit('done', ['session_id' => $sessionId]);
-
-        $briefingTitle = 'Daily Briefing - ' . date('l d/m/Y');
-        if ($this->db) {
-            $this->db->update('chat_sessions', ['title' => $briefingTitle], ['id' => $sessionId]);
+            $tokens = $tokenCounter->count($message);
             $this->db->insert('chat_history', [
-                'session_id' => $sessionId,
-                'role'       => 'assistant',
-                'message'    => $finalBriefingText
+                'session_id'     => $sessionId,
+                'role'           => 'system',
+                'message'        => $message,
+                'message_type'   => 'data_fetching',
+                'tool_name'      => $toolName,
+                'token_estimate' => $tokens,
             ]);
+            $historyId = (int) $this->db->getConnection()->lastInsertId();
+            // Mirror ChatManager's context_data_added so the Context Data panel
+            // gains the row live instead of only after a page refresh.
+            $emit('context_data_added', [
+                'id'             => $historyId,
+                'tool_name'      => $toolName,
+                'query'          => '',
+                'source_count'   => 0,
+                'token_estimate' => $tokens,
+                'active'         => true,
+            ]);
+        } catch (\Throwable $e) {
+            \App\Logger::warning('Briefing persist failed: ' . $e->getMessage());
+        }
+    }
+
+    private function buildFetchSummary(array $emails, array $errors, int $omitted): string
+    {
+        $counts = [];
+        foreach ($emails as $e) {
+            $addr = $e['account_email'] ?? 'Unknown';
+            $counts[$addr] = ($counts[$addr] ?? 0) + 1;
+        }
+        $parts = [];
+        foreach ($counts as $addr => $n) {
+            $parts[] = "{$addr}: {$n}";
+        }
+        foreach ($errors as $err) {
+            $parts[] = ($err['account_email'] ?? 'Unknown') . ': ERROR';
+        }
+        $stats = !empty($parts) ? implode(' | ', $parts) : 'no accounts configured';
+
+        $subjects = [];
+        foreach ($emails as $e) {
+            if (count($subjects) < 5 && !empty($e['subject'])) {
+                $subjects[] = '[' . ($e['account_email'] ?? '') . '] ' . $e['subject'];
+            }
         }
 
-        $emit('title_updated', ['title' => $briefingTitle]);
+        return 'Fetched ' . count($emails) . ' emails — ' . $stats
+            . ($omitted ? " ({$omitted} older omitted)" : '')
+            . (!empty($subjects) ? "\n\nSample subjects:\n" . implode("\n", $subjects) : '');
+    }
+
+    private function buildCalendarSummary(array $calendar): string
+    {
+        $lines = [];
+        if (empty($calendar['upcoming'])) {
+            $lines[] = 'No tasks scheduled for the next two weeks.';
+        } else {
+            foreach ($calendar['upcoming'] as $t) {
+                $lines[] = '- "' . $t['content'] . '" (Due: ' . $this->dueString($t) . ')';
+            }
+        }
+        if (!empty($calendar['pastToday'])) {
+            $lines[] = '[PAST EVENTS FROM TODAY]';
+            foreach ($calendar['pastToday'] as $t) {
+                $lines[] = '- "' . $t['content'] . '" (earlier today)';
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    private function buildSystemPrompt(array $selectedEmails): string
+    {
+        $refs = '';
+        foreach ($selectedEmails as $e) {
+            $refs .= "[{$e['id']}] {$e['from']} — \"{$e['subject']}\"\n";
+        }
+
+        $sys = "You are a personal executive assistant. Deliver a beautifully structured daily briefing based on the data provided. Focus on priority action items, schedule highlights, and status overview. Keep the tone elegant and action-oriented.\n\n";
+
+        if ($refs !== '') {
+            $sys .= "EMAIL REFERENCES (use these ids as markers):\n" . $refs . "\n"
+                . "When you discuss an email, end that item with its marker [E<id>] (e.g. [E1]). Emit ONLY the integer marker — never card HTML and never a full email tag. If you do not discuss an email, do not emit its marker.\n\n";
+        }
+
+        $sys .= "TEMPORAL AWARENESS:\n"
+            . "Today's exact date and time is " . date('l, F j, Y (H:i)') . ".\n"
+            . "If an event was scheduled for today but its slot has already passed, do not list it as upcoming; address it as a past event and check in on it conversationally.\n"
+            . "Only treat genuine future events as upcoming.\n";
+
+        return $sys;
+    }
+
+    private function buildSynthesisInput(array $selectedEmails, array $calendar, array $actionCards, array $allEmails, int $omitted): string
+    {
+        $in = "DAILY BRIEFING DATA — cover both sections.\n\n";
+
+        $in .= "SECTION 1 — CALENDAR (next two weeks):\n";
+        if (empty($calendar['upcoming'])) {
+            $in .= "No tasks scheduled for the next two weeks.\n";
+        } else {
+            foreach ($calendar['upcoming'] as $t) {
+                $in .= '- "' . $t['content'] . '" (Due: ' . $this->dueString($t) . ")\n";
+            }
+        }
+        if (!empty($calendar['pastToday'])) {
+            $in .= "\n[PAST EVENTS FROM TODAY (ALREADY OCCURRED)]:\n";
+            foreach ($calendar['pastToday'] as $t) {
+                $in .= '- "' . $t['content'] . "\" (scheduled earlier today)\n";
+            }
+            $in .= "Do not list these as upcoming; check in on them conversationally.\n";
+        }
+
+        $in .= "\nSECTION 2 — EMAILS (reference by id):\n";
+        if (empty($selectedEmails)) {
+            $in .= empty($allEmails)
+                ? "No emails found in the last 24 hours across connected accounts.\n"
+                : "No emails were selected for full review in this briefing.\n";
+        } else {
+            foreach ($selectedEmails as $e) {
+                $body = (string) $e['body'];
+                if (mb_strlen($body) > self::MAX_SYNTH_BODY) {
+                    $body = mb_substr($body, 0, self::MAX_SYNTH_BODY) . '…';
+                }
+                $in .= "[{$e['id']}] From: {$e['from']} | Subject: {$e['subject']} | Date: {$e['date']}\n{$body}\n\n";
+            }
+        }
+
+        if (!empty($actionCards)) {
+            $in .= "COMMITMENTS ALREADY EXTRACTED (mention these conversationally if relevant; do NOT emit card markup — the UI shows them separately):\n";
+            foreach ($actionCards as $c) {
+                $in .= '- "' . $c['content'] . '" (due: ' . $c['due_string'] . ")\n";
+            }
+        }
+
+        if ($omitted > 0) {
+            $in .= "\n({$omitted} older emails were omitted from this briefing window.)\n";
+        }
+
+        return $in;
+    }
+
+    private function dueString(array $task): string
+    {
+        if (isset($task['due']['datetime'])) {
+            return (string) $task['due']['datetime'];
+        }
+        if (isset($task['due']['date'])) {
+            return (string) $task['due']['date'];
+        }
+        return 'No due date';
     }
 }

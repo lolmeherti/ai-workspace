@@ -4,6 +4,7 @@ namespace App\Actions\Email;
 
 use App\Actions\BaseAction;
 use App\Database;
+use App\Services\EmailService;
 use Webklex\PHPIMAP\ClientManager;
 use DateTime;
 
@@ -87,14 +88,14 @@ class EmailListAction extends BaseAction
                 'username'      => $account['email_address'],
                 'password'      => $account['app_password'],
                 'protocol'      => 'imap',
-                'timeout'       => 5,
+                'timeout'       => 15,
                 'options'       => [
-                    'timeout'     => 5,
+                    'timeout'     => 15,
                     'fetch_order' => 'desc'
                 ]
             ]);
 
-            $client->connect();
+            EmailService::connectWithRetry($client);
             
             // Official Multi-tier Inbox Folder Lookup
             $inbox = $client->getFolder('INBOX');
@@ -295,19 +296,12 @@ class EmailListAction extends BaseAction
                 }
             } catch (\Throwable $_) {}
 
-            $message = $e->getMessage();
-            if (stripos($message, 'auth') !== false || stripos($message, 'login') !== false || stripos($message, 'password') !== false || stripos($message, 'authenticate') !== false) {
-                $errorType = 'AUTH_FAILED';
-            } elseif (stripos($message, 'timeout') !== false || stripos($message, 'timed out') !== false) {
-                $errorType = 'CONNECTION_TIMEOUT';
-            } else {
-                $errorType = 'IMAP_ERROR';
-            }
+            $classified = EmailService::classifyImapError($e);
 
             $this->jsonResponse([
                 'status' => 'error',
-                'type'   => $errorType,
-                'message' => $e->getMessage(),
+                'type'   => $classified['type'],
+                'message' => $classified['detail'],
                 'account_id' => (string)$accountId,
                 'account_email' => $account['email_address'] ?? ''
             ], 500);
