@@ -34,7 +34,7 @@ final class BridgeFetcher
                 'url' => $url,
                 'curl_error' => $err,
                 'http_code' => $code,
-            ], 'warn', 'BridgeFetcher::isConnected');
+            ], 'error', 'BridgeFetcher::isConnected');
             return false;
         }
 
@@ -44,7 +44,7 @@ final class BridgeFetcher
             \App\Logger::logEvent('bridge_check_failed', 'Bridge status endpoint returned connected=false', [
                 'url' => $url,
                 'response' => mb_substr($body, 0, 500),
-            ], 'warn', 'BridgeFetcher::isConnected');
+            ], 'error', 'BridgeFetcher::isConnected');
         }
         return $connected;
     }
@@ -184,7 +184,7 @@ final class BridgeFetcher
             \App\Logger::logEvent('bridge_serp_fail', 'Bridge SERP returned invalid JSON', [
                 'query' => $query,
                 'raw_body' => mb_substr($body, 0, 500),
-            ], 'warn', 'BridgeFetcher::searchSERP');
+            ], 'error', 'BridgeFetcher::searchSERP');
             return [];
         }
         $status = $data['status'] ?? 'unknown';
@@ -195,7 +195,7 @@ final class BridgeFetcher
                 'status' => $status,
                 'error' => $errorMsg,
                 'candidate_count' => count($data['results'] ?? []),
-            ], 'warn', 'BridgeFetcher::searchSERP');
+            ], 'error', 'BridgeFetcher::searchSERP');
             return [];
         }
 

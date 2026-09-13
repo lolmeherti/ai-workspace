@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"localsy/internal/bridge"
+	"localsy/internal/env"
 	"localsy/internal/llama"
 	"localsy/internal/models"
 	"localsy/internal/util"
@@ -44,6 +45,10 @@ type modelsHandler struct {
 
 	switchMu sync.Mutex
 	sw       switchStatus
+
+	// switchCancel aborts the in-flight switch's download when /api/model-switch/cancel
+	// is called. Nil when no switch is in flight.
+	switchCancel context.CancelFunc
 }
 
 // switchStatus is the observable state of an in-flight (or last completed)
@@ -59,6 +64,13 @@ type switchStatus struct {
 	Detail    string    `json:"detail,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	StartedAt time.Time `json:"started_at"`
+
+	// Resolved per-model config the web layer persists alongside the model
+	// identity (AISettingsController::handleSwitchStatus). Populated once the
+	// switch reaches "starting".
+	Sampling        string `json:"sampling"`
+	RuntimePolicy   string `json:"runtime_policy"`
+	ReasoningBudget int    `json:"reasoning_budget"`
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +86,8 @@ func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleModelSwitch(w, r)
 	case "/api/switch-status":
 		h.handleSwitchStatus(w, r)
+	case "/api/model-switch/cancel":
+		h.handleCancelSwitch(w, r)
 	case "/bridge/status":
 		h.handleBridgeStatus(w, r)
 	case "/bridge/fetch":
@@ -211,9 +225,11 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 		Progress:  0,
 		StartedAt: time.Now(),
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	h.switchCancel = cancel
 	h.switchMu.Unlock()
 
-	go h.runModelSwitch(req.ModelID, req.CtxSize)
+	go h.runModelSwitch(ctx, req.ModelID, req.CtxSize)
 
 	writeJSON(w, 202, map[string]interface{}{
 		"status":   "switching",
@@ -225,16 +241,21 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 // runModelSwitch performs the download + restart off the HTTP handler's
 // goroutine so the client request returns immediately. Progress and the final
 // outcome are published via h.sw for /api/switch-status to observe.
-func (h *modelsHandler) runModelSwitch(modelID string, ctxSize int) {
-	resolved, err := models.ResolveModel(modelID, h.defs, h.hw, h.modelDir, func(pct float64) {
+func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxSize int) {
+	resolved, err := models.ResolveModelContext(ctx, modelID, h.defs, h.hw, h.modelDir, func(pct float64) {
 		h.switchMu.Lock()
 		h.sw.Stage = "downloading"
 		h.sw.Progress = pct
 		h.switchMu.Unlock()
 	})
 	if err != nil {
-		h.finishSwitchError("download/resolve failed: " + err.Error())
-		util.LogPrint("[-] model switch to %s failed: %v\n", modelID, err)
+		if ctx.Err() != nil {
+			h.finishSwitchError("Model switch cancelled.")
+			util.LogPrint("[!] model switch to %s cancelled\n", modelID)
+		} else {
+			h.finishSwitchError("download/resolve failed: " + err.Error())
+			util.LogPrint("[-] model switch to %s failed: %v\n", modelID, err)
+		}
 		return
 	}
 
@@ -246,7 +267,12 @@ func (h *modelsHandler) runModelSwitch(modelID string, ctxSize int) {
 	h.sw.Stage = "starting"
 	h.sw.Progress = 100
 	h.sw.CtxSize = resolved.CtxSize
+	h.sw.Sampling = resolved.SamplingJSON()
+	h.sw.RuntimePolicy = resolved.Runtime.RuntimePolicyJSON()
+	h.sw.ReasoningBudget = resolved.ReasoningBudget
 	h.switchMu.Unlock()
+
+	writeChatTemplate(filepath.Dir(h.modelDir), resolved)
 
 	llama.KillIfRunning(&LlamaProcess)
 	LlamaProcess = llama.StartServerWithFallback(h.binDir, resolved)
@@ -264,6 +290,7 @@ func (h *modelsHandler) runModelSwitch(modelID string, ctxSize int) {
 	h.sw.Stage = "loaded"
 	h.sw.Progress = 100
 	h.sw.CtxSize = resolved.CtxSize
+	h.switchCancel = nil
 	h.switchMu.Unlock()
 	util.LogPrint("[+] model switch complete: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
 }
@@ -273,7 +300,21 @@ func (h *modelsHandler) finishSwitchError(errMsg string) {
 	h.sw.Active = false
 	h.sw.Stage = "error"
 	h.sw.Error = errMsg
+	h.switchCancel = nil
 	h.switchMu.Unlock()
+}
+
+func (h *modelsHandler) handleCancelSwitch(w http.ResponseWriter, _ *http.Request) {
+	h.switchMu.Lock()
+	cancel := h.switchCancel
+	active := h.sw.Active
+	h.switchMu.Unlock()
+
+	if cancel != nil && active {
+		cancel()
+		util.LogPrint("[!] model switch cancellation requested\n")
+	}
+	writeJSON(w, 200, map[string]string{"status": "cancelling"})
 }
 
 func (h *modelsHandler) handleSwitchStatus(w http.ResponseWriter, _ *http.Request) {
@@ -293,6 +334,7 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 		lines := strings.Split(string(existing), "\n")
 		updated := make([]string, 0, len(lines))
 		hasModelID, hasModelName, hasCtxSize := false, false, false
+		hasSampling, hasPolicy, hasReasoningBudget := false, false, false
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "LLM_MODEL_ID=") {
@@ -301,7 +343,7 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 				continue
 			}
 			if strings.HasPrefix(trimmed, "LLM_MODEL_NAME=") {
-				updated = append(updated, "LLM_MODEL_NAME="+resolved.Name)
+				updated = append(updated, "LLM_MODEL_NAME="+env.QuoteEnvValue(resolved.Name))
 				hasModelName = true
 				continue
 			}
@@ -310,16 +352,42 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 				hasCtxSize = true
 				continue
 			}
+			if strings.HasPrefix(trimmed, "LLM_SAMPLING=") {
+				updated = append(updated, "LLM_SAMPLING="+env.QuoteEnvValue(resolved.SamplingJSON()))
+				hasSampling = true
+				continue
+			}
+			if strings.HasPrefix(trimmed, "LLM_RUNTIME_POLICY=") {
+				updated = append(updated, "LLM_RUNTIME_POLICY="+env.QuoteEnvValue(resolved.Runtime.RuntimePolicyJSON()))
+				hasPolicy = true
+				continue
+			}
+			if strings.HasPrefix(trimmed, "LLM_REASONING_BUDGET=") {
+				if resolved.ReasoningBudget > 0 {
+					updated = append(updated, "LLM_REASONING_BUDGET="+strconv.Itoa(resolved.ReasoningBudget))
+				}
+				hasReasoningBudget = true
+				continue
+			}
 			updated = append(updated, line)
 		}
 		if !hasModelID {
 			updated = append(updated, "LLM_MODEL_ID="+modelID)
 		}
 		if !hasModelName {
-			updated = append(updated, "LLM_MODEL_NAME="+resolved.Name)
+			updated = append(updated, "LLM_MODEL_NAME="+env.QuoteEnvValue(resolved.Name))
 		}
 		if !hasCtxSize && resolved.CtxSize > 0 {
 			updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(resolved.CtxSize))
+		}
+		if !hasSampling {
+			updated = append(updated, "LLM_SAMPLING="+env.QuoteEnvValue(resolved.SamplingJSON()))
+		}
+		if !hasPolicy {
+			updated = append(updated, "LLM_RUNTIME_POLICY="+env.QuoteEnvValue(resolved.Runtime.RuntimePolicyJSON()))
+		}
+		if !hasReasoningBudget && resolved.ReasoningBudget > 0 {
+			updated = append(updated, "LLM_REASONING_BUDGET="+strconv.Itoa(resolved.ReasoningBudget))
 		}
 		_ = os.WriteFile(envPath, []byte(strings.Join(updated, "\n")), 0644)
 	}

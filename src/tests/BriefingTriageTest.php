@@ -75,9 +75,9 @@ class BriefingTriageTest
             public string $response = '[2, 4]';
             public array $lastArgs = [];
 
-            public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
+            public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
             {
-                $this->lastArgs = compact('purpose', 'reasoningEffort');
+                $this->lastArgs = compact('purpose', 'mode');
                 return $this->response;
             }
         };
@@ -92,7 +92,7 @@ class BriefingTriageTest
         $triage = new BriefingTriage($stub);
         $this->testEq('select returns parsed ids', [2, 4], $triage->select($emails));
         $this->testEq('triage purpose set', 'briefing_triage', $stub->lastArgs['purpose'] ?? null);
-        $this->testEq('triage reasoning disabled', 'none', $stub->lastArgs['reasoningEffort'] ?? null);
+        $this->testEq('triage reasoning disabled', 'instruct', $stub->lastArgs['mode'] ?? null);
 
         $this->testEq('empty emails -> empty selection', [], $triage->select([]));
     }

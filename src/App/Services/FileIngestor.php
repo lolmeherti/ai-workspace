@@ -123,7 +123,7 @@ TEXT;
         ];
 
         try {
-            $raw = $this->agent->chat($messages, false, null, 0.3);
+            $raw = $this->agent->chat($messages, false, null, 0.3, mode: 'instruct');
         } catch (\Throwable $e) {
             Logger::logEvent('file_ingest_failed', 'Image classification LLM call failed: ' . $e->getMessage(), ['name' => $originalName], 'warn', 'FileIngestor');
             return $this->imageFailure($fallbackTitle);
@@ -186,7 +186,7 @@ TEXT;
         ];
 
         try {
-            $title = trim($this->agent->chat($messages, false, null, 0.3));
+            $title = trim($this->agent->chat($messages, false, null, 0.3, mode: 'instruct'));
             if ($title !== '') {
                 return $title;
             }
@@ -205,7 +205,7 @@ TEXT;
         ];
 
         try {
-            $translated = trim($this->agent->chat($messages, false, null, 0.2));
+            $translated = trim($this->agent->chat($messages, false, null, 0.2, mode: 'instruct'));
             if ($translated !== '') {
                 return $translated;
             }

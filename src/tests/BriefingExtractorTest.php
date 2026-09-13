@@ -104,9 +104,9 @@ class BriefingExtractorTest
             public array $responses = [];
             public array $lastArgs = [];
 
-            public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
+            public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
             {
-                $this->lastArgs = compact('purpose', 'reasoningEffort');
+                $this->lastArgs = compact('purpose', 'mode');
                 return array_shift($this->responses) ?? '[]';
             }
         };
@@ -119,7 +119,7 @@ class BriefingExtractorTest
 
         $this->testEq('extracts structured cards', [['content' => 'Call dentist', 'due_string' => 'tomorrow 10am', 'source_email_ref' => 1]], $cards);
         $this->testEq('extract purpose set', 'briefing_extract', $stub->lastArgs['purpose'] ?? null);
-        $this->testEq('extract reasoning disabled', 'none', $stub->lastArgs['reasoningEffort'] ?? null);
+        $this->testEq('extract reasoning disabled', 'instruct', $stub->lastArgs['mode'] ?? null);
 
         $this->testEq('empty emails -> no cards', [], $extractor->extract([], [], 10000));
     }

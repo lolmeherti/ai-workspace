@@ -11,6 +11,7 @@ use App\Controllers\FileController;
 use App\Controllers\EmailController;
 use App\Enums\Action;
 use App\Enums\ApiAction;
+use App\Actions\LogFrontendEventAction;
 use App\Controllers\JobController;
 
 class ActionRouter
@@ -45,6 +46,11 @@ class ActionRouter
 
         $apiActionVal = $_GET['api_action'] ?? '';
         $apiAction = ApiAction::tryFrom($apiActionVal);
+
+        if ($apiAction === ApiAction::LOG_FRONTEND_EVENT) {
+            (new LogFrontendEventAction())->execute();
+            return;
+        }
 
         $isFileAction = (
             $apiAction === ApiAction::SHOW_IN_EXPLORER ||

@@ -142,7 +142,7 @@ Input:
 ==================================================
 
 TEXT;
-        file_put_contents($logFile, $logEntry, FILE_APPEND);
+        @file_put_contents($logFile, $logEntry, FILE_APPEND);
     }
 
     private static function fallbackDecode(string $text): ?array

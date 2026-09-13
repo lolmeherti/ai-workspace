@@ -2,6 +2,11 @@
   "models": {
     "gemma-4-dense-12b-q5": {
       "name": "Gemma 4 Dense 12B Q5",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "model": { "file": "", "url": "" },
       "mmproj": { "file": "", "url": "" },
       "profiles": {
@@ -11,6 +16,11 @@
 
     "gemma-4-26b-qat": {
       "name": "Gemma 4 26B QAT",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
@@ -29,6 +39,11 @@
 
     "gemma-4-26b-iq4nl": {
       "name": "Gemma 4 26B IQ4_NL (unsloth)",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
@@ -48,6 +63,11 @@
 
     "gemma-4-26b-q8": {
       "name": "Gemma 4 26B Q8_0 (unsloth)",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-Q8_0.gguf",
@@ -65,6 +85,11 @@
 
     "gemma-4-E4B-Q8": {
       "name": "Gemma 4 E4B Q8",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-Q8_0.gguf",
@@ -85,6 +110,11 @@
 
     "gemma-4-E4B-iq4nl": {
       "name": "Gemma 4 E4B IQ4_NL (unsloth)",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-IQ4_NL.gguf",
@@ -105,6 +135,11 @@
 
     "gemma-4-E4B-Q4": {
       "name": "Gemma 4 E4B Q4",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-Q4_K_M.gguf",
@@ -125,6 +160,11 @@
 
     "gemma-4-E2B-Q4": {
       "name": "Gemma 4 E2B Q4",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E2B-it-Q4_K_M.gguf",
@@ -143,6 +183,11 @@
 
     "gemma-4-E2B-iq4nl": {
       "name": "Gemma 4 E2B IQ4_NL (unsloth)",
+      "runtime": "gemma4",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
+        "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E2B-it-IQ4_NL.gguf",
@@ -159,8 +204,13 @@
       }
     },
 
-      "qwen3-5-9b-iq4nl": {
+    "qwen3-5-9b-iq4nl": {
       "name": "Qwen3.5 9B IQ4_NL (unsloth)",
+      "runtime": "qwen35",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 },
+        "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "Qwen3.5-9B-IQ4_NL.gguf",
@@ -177,8 +227,14 @@
         "t4": { "ctx_size": 32768,  "requirements": { "vram_min": 10 } }
       }
     },
-      "qwen3-8-27b-udq5kxl": {
+
+    "qwen3-8-27b-udq5kxl": {
       "name": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+      "runtime": "qwen38",
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0 },
+        "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "Qwen3.8-27B-UD-Q5_K_XL.gguf",
@@ -188,13 +244,23 @@
         "file": "mmproj-Qwen3.8-27b-unsloth-q5-k-xl-BF16.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/mmproj-BF16.gguf"
       },
+      "speculative": {
+        "strategy": "draft-mtp",
+        "n_max": 3
+      },
       "profiles": {
-        "t1": { "ctx_size": 128000, "requirements": { "vram_min": 30 } },
-        "t2": { "ctx_size": 65536,  "requirements": { "vram_min": 22 } }
+        "t1": { "ctx_size": 128000, "kv_cache_type": "f16", "requirements": { "vram_min": 30 } },
+        "t2": { "ctx_size": 65536,  "kv_cache_type": "f16", "requirements": { "vram_min": 22 } }
       }
     },
-      "bonsai-27b-q1": {
+
+    "bonsai-27b-q1": {
       "name": "Bonsai 27B Q1_0",
+      "runtime": "bonsai",
+      "sampling": {
+        "thinking": { "temperature": 0.7, "top_p": 0.95, "top_k": 20 },
+        "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20 }
+      },
       "reasoning_budget": 4096,
       "model": {
         "file": "Bonsai-27B-Q1_0.gguf",

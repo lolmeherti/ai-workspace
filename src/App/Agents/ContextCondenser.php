@@ -50,7 +50,7 @@ class ContextCondenser
         ];
 
         $temperature = (float) Config::get('AGENT_CONDENSER_TEMP', 0.4);
-        $response = trim($this->agent->chat($messages, false, null, $temperature));
+        $response = trim($this->agent->chat($messages, false, null, $temperature, mode: 'instruct'));
         $data = \App\JsonParser::extractAndDecode($response);
 
         if (!$data || !isset($data['summary'])) {

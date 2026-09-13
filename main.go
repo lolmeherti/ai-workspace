@@ -19,15 +19,19 @@ var embeddedModels []byte
 //go:embed icon.ico
 var iconData []byte
 
+//go:embed chat_template.jinja
+var embeddedTemplate []byte
+
 func main() {
 	debugMode := flag.Bool("debug", false, "Enable verbose logging and spawn a live log terminal")
 	flag.Parse()
 
 	launcher.DebugMode = *debugMode
 	launcher.SetAssets(launcher.Assets{
-		Compose: embeddedCompose,
-		Models:  embeddedModels,
-		Icon:    iconData,
+		Compose:  embeddedCompose,
+		Models:   embeddedModels,
+		Icon:     iconData,
+		Template: embeddedTemplate,
 	})
 
 	process.KillDuplicateLauncherInstances()

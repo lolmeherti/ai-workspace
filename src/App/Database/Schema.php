@@ -266,15 +266,36 @@ class Schema
             CREATE TABLE IF NOT EXISTS app_events (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 event_type VARCHAR(50) NOT NULL,
+                session_id INT NULL,
                 message TEXT NOT NULL,
                 context JSON NULL,
-                level ENUM('debug', 'info', 'warn', 'error') NOT NULL DEFAULT 'info',
+                level ENUM('debug', 'info', 'warn', 'error', 'critical') NOT NULL DEFAULT 'info',
                 source VARCHAR(100) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_event_type (event_type),
+                INDEX idx_session_id (session_id),
                 INDEX idx_created_at (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
+
+        // Migration: add session_id (nullable) so events can be scoped to a chat session.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM app_events LIKE 'session_id'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE app_events ADD COLUMN session_id INT NULL AFTER event_type, ADD INDEX idx_session_id (session_id)");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // Migration: widen the level enum to include 'critical' so Logger::critical()
+        // events persist to the DB instead of being silently dropped (enum mismatch).
+        try {
+            $levelCol = $this->db->query("SHOW COLUMNS FROM app_events WHERE Field = 'level'");
+            if (!empty($levelCol) && !str_contains((string)($levelCol[0]['Type'] ?? ''), 'critical')) {
+                $this->db->executeStatement("ALTER TABLE app_events MODIFY level ENUM('debug', 'info', 'warn', 'error', 'critical') NOT NULL DEFAULT 'info'");
+            }
+        } catch (PDOException $e) {
+        }
 
         $this->db->executeStatement("
             CREATE TABLE IF NOT EXISTS atomization_stats (

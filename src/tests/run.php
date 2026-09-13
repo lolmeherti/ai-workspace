@@ -39,6 +39,7 @@ require_once __DIR__ . '/BriefingDataServiceTest.php';
 require_once __DIR__ . '/BriefingTriageTest.php';
 require_once __DIR__ . '/BriefingExtractorTest.php';
 require_once __DIR__ . '/EmailServiceTest.php';
+require_once __DIR__ . '/RuntimeSamplingTest.php';
 
 use App\Config;
 use App\Database;
@@ -73,6 +74,7 @@ use App\Tests\BriefingDataServiceTest;
 use App\Tests\BriefingTriageTest;
 use App\Tests\BriefingExtractorTest;
 use App\Tests\EmailServiceTest;
+use App\Tests\RuntimeSamplingTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -179,6 +181,9 @@ $allOk = (new BriefingExtractorTest())->run() && $allOk;
 
 echo "\n=== Phase 30: Email Service Error Classification Tests ===\n";
 $allOk = (new EmailServiceTest())->run() && $allOk;
+
+echo "\n=== Phase 31: Runtime Sampling / Reasoning Policy Tests ===\n";
+$allOk = (new RuntimeSamplingTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

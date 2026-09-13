@@ -56,7 +56,7 @@ final class SearchPipeline
             $this->emitProgress('search_unavailable', 'Web search unavailable — browser bridge not connected', $emit);
             \App\Logger::logEvent('bridge_unavailable', 'Bridge disconnected — returning explicit unavailable result', [
                 'query' => $query,
-            ], 'warn', 'SearchPipeline::run');
+            ], 'error', 'SearchPipeline::run');
             return self::emptyResult('Web search is unavailable: the browser bridge is not connected (Edge extension or relay is offline).');
         }
 
@@ -236,12 +236,23 @@ final class SearchPipeline
             ];
         }
 
+        // Which sites actually contributed to the final evidence vs. were
+        // fetched but not selected (surfaced so the log shows per-site value,
+        // not just "we scraped N pages").
+        $usedSourceIds = [];
+        foreach ($selected as $chunk) {
+            $usedSourceIds[] = $chunk->sourceId;
+        }
+        $usedSourceIds = array_values(array_unique($usedSourceIds));
+
         \App\Logger::logEvent('bridge_evidence', 'Bridge evidence fitting complete', [
             'query' => $query,
             'total_chunks' => count($allChunks),
             'selected_chunks' => count($selected),
             'evidence_len' => strlen($fit['evidence']),
             'source_count' => count($sourceIds),
+            'used_source_ids' => $usedSourceIds,
+            'unused_source_ids' => array_values(array_diff($sourceIds, $usedSourceIds)),
         ], 'info', 'SearchPipeline::runBridgeMode');
 
         // Atomic extraction has MOVED OUT of SearchPipeline: it now runs as a

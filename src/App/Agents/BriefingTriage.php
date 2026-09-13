@@ -50,7 +50,7 @@ class BriefingTriage
             null,
             null,
             'briefing_triage',
-            'none'
+            mode: 'instruct'
         );
 
         $decoded = JsonParser::extractAndDecode($raw) ?: [];

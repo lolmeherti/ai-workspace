@@ -42,7 +42,7 @@ final class CountingAgent extends AgentManager
     /** @var array<int, array<string,mixed>> */
     public array $probeLog = [];
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
     {
         $this->calls++;
 
@@ -53,12 +53,12 @@ final class CountingAgent extends AgentManager
         }
 
         $t0 = microtime(true);
-        $out = parent::chat($messages, $stream, $streamCallback, $temperature, $purpose, $reasoningEffort);
+        $out = parent::chat($messages, $stream, $streamCallback, $temperature, $purpose, $mode, $effort, $maxTokens);
         $elapsedMs = (int) round((microtime(true) - $t0) * 1000);
 
         $this->probeLog[] = [
             'purpose'           => $purpose,
-            'reasoning_effort'  => $reasoningEffort,
+            'mode'              => $mode,
             'in_tokens_est'     => $inTokens,
             'prompt_tokens'     => $this->lastUsage['prompt_tokens'] ?? null,
             'completion_tokens' => $this->lastUsage['completion_tokens'] ?? null,

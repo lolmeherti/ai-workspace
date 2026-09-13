@@ -55,7 +55,7 @@ TEXT;
         ];
 
         $temperature = (float) Config::get('AGENT_DECIDER_TEMP', 0.1);
-        $response = trim($this->agent->chat($messages, false, null, $temperature));
+        $response = trim($this->agent->chat($messages, false, null, $temperature, mode: 'instruct'));
 
         $data = \App\JsonParser::extractAndDecode($response);
 

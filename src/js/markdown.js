@@ -59,6 +59,7 @@ export function createThinkingAccordion(thinkingText) {
     if (typeof hljs !== 'undefined') {
         content.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
     }
+    addCodeCopyButtons(content);
 
     return details;
 }
@@ -90,6 +91,37 @@ export function parseMarkdownElements() {
                 hljs.highlightElement(block);
             });
         }
+        addCodeCopyButtons(el);
+    });
+}
+
+export function addCodeCopyButtons(container) {
+    if (!container) return;
+    const COPY_SVG = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+    const CHECK_SVG = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+    container.querySelectorAll('pre').forEach((pre) => {
+        if (pre.dataset.codeCopy) return;
+        pre.dataset.codeCopy = '1';
+        pre.style.position = 'relative';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'code-copy-btn';
+        btn.title = 'Copy code';
+        btn.innerHTML = COPY_SVG;
+        btn.addEventListener('click', () => {
+            const code = pre.querySelector('code') ? pre.querySelector('code').textContent : pre.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.innerHTML = CHECK_SVG;
+                btn.classList.add('code-copy-btn--ok');
+                setTimeout(() => {
+                    btn.innerHTML = COPY_SVG;
+                    btn.classList.remove('code-copy-btn--ok');
+                }, 1500);
+            }).catch(() => {});
+        });
+        pre.appendChild(btn);
     });
 }
 

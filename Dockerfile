@@ -24,7 +24,7 @@ RUN echo "log_errors = On" > /usr/local/etc/php/conf.d/docker-php-logging.ini \
 
 COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 
-RUN a2enmod rewrite
+RUN a2enmod rewrite headers
 
 RUN echo "TimeOut 3600" > /etc/apache2/conf-available/timeout.conf \
     && a2enconf timeout
@@ -39,4 +39,4 @@ COPY ./src /var/www/html
 
 RUN composer dump-autoload --optimize
 
-RUN mkdir -p /var/www/html/uploads && chown -R www-data:www-data /var/www/html/uploads
+RUN mkdir -p /var/www/html/uploads /var/www/html/logs && chown -R www-data:www-data /var/www/html

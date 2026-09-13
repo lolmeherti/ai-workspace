@@ -37,7 +37,7 @@ final class CountingAgent extends AgentManager
     /** @var array<int, array<string,mixed>> */
     public array $callLog = [];
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
     {
         $this->calls++;
 

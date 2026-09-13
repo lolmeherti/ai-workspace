@@ -14,10 +14,23 @@ class Logger
 
     private static ?string $logFile = null;
     private static ?Database $db = null;
+    /** Ambient chat session id: attached to every event logged in the current request. */
+    private static ?int $sessionId = null;
 
     public static function setDatabase(Database $db): void
     {
         self::$db = $db;
+    }
+
+    /** Set the ambient session id for the current request (chat turns, file uploads). */
+    public static function setSessionId(?int $sessionId): void
+    {
+        self::$sessionId = $sessionId;
+    }
+
+    public static function clearSessionId(): void
+    {
+        self::$sessionId = null;
     }
 
     private static function getLogFile(): string
@@ -42,6 +55,7 @@ class Logger
             try {
                 self::$db->insert('app_events', [
                     'event_type' => $eventType,
+                    'session_id' => self::$sessionId,
                     'message' => mb_substr($fullMessage, 0, 65535),
                     'context' => !empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                     'level' => $level,
@@ -59,9 +73,13 @@ class Logger
 
     private static function writeFile(string $level, string $message): void
     {
-        $timestamp = date('Y-m-d H:i:s');
-        $logEntry = "[{$timestamp}] [{$level}] {$message}\n" . str_repeat('-', 80) . "\n";
-        file_put_contents(self::getLogFile(), $logEntry, FILE_APPEND);
+        try {
+            $timestamp = date('Y-m-d H:i:s');
+            $logEntry = "[{$timestamp}] [{$level}] {$message}\n" . str_repeat('-', 80) . "\n";
+            file_put_contents(self::getLogFile(), $logEntry, FILE_APPEND);
+        } catch (\Throwable $e) {
+            // Best-effort file log: never let a logging failure crash the app.
+        }
     }
 
     public static function log(string $level, string $message, array $context = [], ?Throwable $exception = null): void
@@ -95,7 +113,7 @@ class Logger
         // File log (existing behavior preserved)
         $timestamp = date('Y-m-d H:i:s');
         $fileEntry = "[{$timestamp}] {$logEntry}\n" . str_repeat('-', 80) . "\n";
-        file_put_contents(self::getLogFile(), $fileEntry, FILE_APPEND);
+        @file_put_contents(self::getLogFile(), $fileEntry, FILE_APPEND);
     }
 
     public static function info(string $message, array $context = []): void
