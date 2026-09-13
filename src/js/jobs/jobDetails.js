@@ -5,6 +5,7 @@
 
 import { esc, getJson, postJson, flash, spinner, STATE_LABELS, fmtDate, toLocalInput } from './jobUtil.js';
 import { switchJobView } from './jobViews.js';
+import { addCodeCopyButtons } from '../markdown.js';
 
 let currentJobUuid = null;
 
@@ -209,6 +210,7 @@ function renderJobMarkdown(container) {
         }
         if (typeof marked !== 'undefined') {
             el.innerHTML = marked.parse(raw, { breaks: true });
+            addCodeCopyButtons(el);
         } else {
             el.textContent = raw;
         }

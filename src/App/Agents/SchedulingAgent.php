@@ -34,7 +34,7 @@ class SchedulingAgent
             ['role' => 'system', 'content' => $analysisPrompt]
         ];
 
-        $rawResponse = $this->agent->chat($messages, false);
+        $rawResponse = $this->agent->chat($messages, false, mode: 'instruct');
         return JsonParser::extractAndDecode($rawResponse) ?: [];
     }
 }

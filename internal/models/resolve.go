@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,9 +12,22 @@ import (
 	"localsy/internal/download"
 )
 
-var reservedArgPattern = regexp.MustCompile(`^-?-?(m|alias|ctx-size|mmproj|spec-type|spec-draft-model|spec-draft-n-max|spec-draft-ngl|cache-type-k|cache-type-v|flash-attn|host|port|jinja|reasoning-budget|ngl|parallel)(=.*)?$`)
+var reservedArgPattern = regexp.MustCompile(`^-?-?(m|alias|ctx-size|mmproj|spec-type|spec-draft-model|spec-draft-n-max|spec-draft-ngl|cache-type-k|cache-type-v|flash-attn|host|port|jinja|reasoning-budget|reasoning-format|reasoning-preserve|chat-template-file|ngl|parallel)(=.*)?$`)
 
 func ResolveModel(
+	modelID string,
+	defs map[string]ModelDefinition,
+	hw Hardware,
+	modelDir string,
+	onProgress func(float64),
+) (*ResolvedModel, error) {
+	return ResolveModelContext(context.Background(), modelID, defs, hw, modelDir, onProgress)
+}
+
+// ResolveModelContext is ResolveModel with a cancellation context. When ctx is
+// cancelled mid-download, the download aborts and the returned error is ctx.Err().
+func ResolveModelContext(
+	ctx context.Context,
 	modelID string,
 	defs map[string]ModelDefinition,
 	hw Hardware,
@@ -31,6 +45,18 @@ func ResolveModel(
 		return nil, fmt.Errorf("model %q profile %q: %w", modelID, profileID, err)
 	}
 
+	// Resolve the runtime adapter up-front (fail fast on an unknown ID, before
+	// any artifact download). Empty runtime means "use the embedded GGUF template
+	// with no reasoning override" — a valid, if untuned, default.
+	var runtimeSpec RuntimeSpec
+	if def.Runtime != "" {
+		var err error
+		runtimeSpec, err = ResolveRuntime(def.Runtime)
+		if err != nil {
+			return nil, fmt.Errorf("model %q: %w", modelID, err)
+		}
+	}
+
 	resolved := &ResolvedModel{
 		Name:            def.Name,
 		ModelPath:       filepath.Join(modelDir, def.Model.File),
@@ -41,6 +67,8 @@ func ResolveModel(
 		ReasoningBudget: def.ReasoningBudget,
 		ExtraArgs:       profile.ExtraArgs,
 		Speculative:     nil,
+		Runtime:         runtimeSpec,
+		Sampling:        def.Sampling,
 	}
 
 	if profile.KVCacheType == "" {
@@ -50,13 +78,13 @@ func ResolveModel(
 		resolved.FlashAttn = *profile.FlashAttn
 	}
 
-	if err := downloadArtifact(modelDir, def.Model, onProgress); err != nil {
+	if err := downloadArtifact(ctx, modelDir, def.Model, onProgress); err != nil {
 		return nil, fmt.Errorf("model download failed: %w", err)
 	}
 
 	if def.MMProj != nil && def.MMProj.File != "" && def.MMProj.URL != "" {
 		resolved.MMProjPath = filepath.Join(modelDir, def.MMProj.File)
-		if err := downloadArtifact(modelDir, *def.MMProj, onProgress); err != nil {
+		if err := downloadArtifact(ctx, modelDir, *def.MMProj, onProgress); err != nil {
 			return nil, fmt.Errorf("model %q requires mmproj (vision-capable) but download failed: %w", modelID, err)
 		}
 	}
@@ -71,26 +99,30 @@ func ResolveModel(
 	} else if profile.Speculative != nil {
 		spec = profile.Speculative
 	}
-	if spec != nil && spec.Artifact.File != "" && spec.Artifact.URL != "" {
-		specPath := filepath.Join(modelDir, spec.Artifact.File)
-		downloadErr := downloadArtifact(modelDir, spec.Artifact, onProgress)
-		if downloadErr != nil {
-			fmt.Fprintf(os.Stderr, "[models] speculative artifact %s unavailable: %v — disabling speculative decoding\n", spec.Artifact.File, downloadErr)
-			spec = nil
+	if spec != nil {
+		resolved.Speculative = &ResolvedSpeculative{
+			Strategy: spec.Strategy,
+			NMax:     spec.NMax,
+			NGL:      spec.NGL,
 		}
-		if spec != nil {
-			if _, statErr := os.Stat(specPath); statErr != nil {
+
+		// draft-mtp is self-speculative (drafts via the main model's embedded
+		// MTP head), so no separate draft artifact is required. Only download
+		// a draft model when the config names one.
+		if spec.Artifact.File != "" && spec.Artifact.URL != "" {
+			specPath := filepath.Join(modelDir, spec.Artifact.File)
+			if err := downloadArtifact(ctx, modelDir, spec.Artifact, onProgress); err != nil {
+				fmt.Fprintf(os.Stderr, "[models] speculative artifact %s unavailable: %v — disabling speculative decoding\n", spec.Artifact.File, err)
+				resolved.Speculative = nil
+			} else if _, statErr := os.Stat(specPath); statErr != nil {
 				fmt.Fprintf(os.Stderr, "[models] speculative artifact %s missing on disk — disabling speculative decoding\n", spec.Artifact.File)
-				spec = nil
+				resolved.Speculative = nil
+			} else {
+				resolved.Speculative.Path = specPath
 			}
 		}
-		if spec != nil {
-			resolved.Speculative = &ResolvedSpeculative{
-				Path:     specPath,
-				Strategy: spec.Strategy,
-				NMax:     spec.NMax,
-				NGL:      spec.NGL,
-			}
+
+		if resolved.Speculative != nil {
 			if resolved.Speculative.Strategy == "" {
 				resolved.Speculative.Strategy = "draft-mtp"
 			}
@@ -152,13 +184,13 @@ func validateExtraArgs(args []string) error {
 	return nil
 }
 
-func downloadArtifact(dir string, a Artifact, onProgress func(float64)) error {
+func downloadArtifact(ctx context.Context, dir string, a Artifact, onProgress func(float64)) error {
 	path := filepath.Join(dir, a.File)
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	}
 	tmpPath := path + ".tmp"
-	if err := download.File(tmpPath, a.URL, onProgress); err != nil {
+	if err := download.FileContext(ctx, tmpPath, a.URL, onProgress); err != nil {
 		_ = os.Remove(tmpPath)
 		return err
 	}

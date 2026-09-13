@@ -50,6 +50,53 @@ body {
     text-shadow: none;
 }
 
+/* Send/Stop chat button — futuristic circular icon button with spinner ring */
+.send-btn-futuristic {
+    position: relative;
+    border: 1px solid transparent;
+    background:
+        linear-gradient(#0d1321, #0d1321) padding-box,
+        linear-gradient(135deg, rgba(6, 182, 212, 0.55), rgba(59, 130, 246, 0.55)) border-box;
+    color: #a5f3fc;
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.15), 0 4px 14px rgba(0, 0, 0, 0.4);
+    transition: box-shadow 0.25s ease, color 0.25s ease, transform 0.15s ease;
+}
+.send-btn-futuristic:hover {
+    color: #ecfeff;
+    box-shadow:
+        0 0 22px rgba(6, 182, 212, 0.45),
+        0 0 48px rgba(6, 182, 212, 0.16),
+        inset 0 0 12px rgba(6, 182, 212, 0.12),
+        0 4px 14px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+}
+.send-btn-futuristic:active {
+    transform: translateY(0);
+}
+
+/* Icon swap: paper-plane by default, filled stop square while generating */
+.send-btn-futuristic .stop-icon { display: none; }
+.send-btn-futuristic.stop .send-icon { display: none; }
+.send-btn-futuristic.stop .stop-icon { display: block; }
+
+/* Rotating ring around the button while generating */
+.send-btn-futuristic .send-spinner {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #22d3ee;
+    border-right-color: rgba(34, 211, 238, 0.25);
+    animation: send-spin 0.8s linear infinite;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+.send-btn-futuristic.stop .send-spinner { opacity: 1; }
+@keyframes send-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Spinner shown while a model switch is in flight */
 .switch-spinner {
     width: 16px;
@@ -176,6 +223,16 @@ select.input-futuristic option {
     background-color: transparent; padding: 0; border: none; 
     color: #e2e8f0; font-size: 0.85em; 
 }
+.code-copy-btn {
+    position: absolute; top: 0.5em; right: 0.5em;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0.3em; border-radius: 0.375rem;
+    color: #64748b; background-color: rgba(15, 23, 42, 0.85);
+    border: 1px solid #334155;
+    cursor: pointer; transition: color 0.2s, border-color 0.2s;
+}
+.code-copy-btn:hover { color: #22d3ee; border-color: #22d3ee; }
+.code-copy-btn--ok { color: #34d399; border-color: #34d399; }
 .markdown-content blockquote { 
     border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.05); 
     padding: 0.75em 1em; margin: 1em 0; 

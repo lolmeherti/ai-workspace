@@ -51,6 +51,8 @@ class AISettingsController extends BaseController
             $this->handleTokenLimit();
         } elseif ($apiAction === ApiAction::GET_SWITCH_STATUS) {
             $this->handleSwitchStatus();
+        } elseif ($apiAction === ApiAction::CANCEL_SWITCH) {
+            $this->handleCancelSwitch();
         }
     }
 
@@ -249,6 +251,14 @@ class AISettingsController extends BaseController
             if (!empty($status['ctx_size'])) {
                 $envUpdates['LLM_CTX_SIZE'] = (string)$status['ctx_size'];
             }
+            // Per-model sampling + reasoning policy are resolved by the launcher;
+            // persist them too so PHP applies the right values after a switch.
+            // Otherwise the previous model's values are silently carried forward.
+            $envUpdates['LLM_SAMPLING']       = (string)($status['sampling'] ?? '');
+            $envUpdates['LLM_RUNTIME_POLICY'] = (string)($status['runtime_policy'] ?? '{}');
+            if (!empty($status['reasoning_budget'])) {
+                $envUpdates['LLM_REASONING_BUDGET'] = (string)$status['reasoning_budget'];
+            }
             $this->envEditor->write($envUpdates);
 
             // The health status is cached in Redis for 10s, and during the switch
@@ -263,6 +273,19 @@ class AISettingsController extends BaseController
         }
 
         $this->jsonResponse($status);
+    }
+
+    private function handleCancelSwitch(): void
+    {
+        $ch = curl_init($this->goApiBase('api/model-switch/cancel'));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_TIMEOUT        => 5,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+        $this->jsonResponse(['status' => 'cancelling']);
     }
 
     private function handleTokenLimit(): void

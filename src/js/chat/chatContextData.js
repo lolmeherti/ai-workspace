@@ -5,6 +5,8 @@
  * and restore. Drives the raw -> atomized arrow in the viewer modal.
  */
 
+import { addCodeCopyButtons } from '../markdown.js';
+
 const BADGES = {
     raw:       { text: 'Raw',        cls: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' },
     raw_atoms: { text: 'Raw + atoms', cls: 'bg-sky-500/10 border-sky-500/20 text-sky-400' },
@@ -451,6 +453,7 @@ function fillModalBody(overlay, data) {
             if (typeof hljs !== 'undefined') {
                 md.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
             }
+            addCodeCopyButtons(md);
         } else {
             md.textContent = rawMessage || '(empty)';
         }

@@ -1,7 +1,7 @@
 const BRIDGE_URL = "ws://127.0.0.1:8765/";
 const RECONNECT_ALARM = "localsy-search-bridge-reconnect";
 const SEARCH_TIMEOUT_MS = 12_000;
-const FETCH_NAV_TIMEOUT_MS = 12_000;
+const FETCH_NAV_TIMEOUT_MS = 45_000;
 const FETCH_HUMAN_TIMEOUT_MS = 75_000;
 const CAPTCHA_POLL_MS = 1_000;
 
@@ -9,6 +9,9 @@ let socket = null;
 let reconnectTimer = null;
 let heartbeatTimer = null;
 let activeJob = null;
+
+// tabId -> cf-mitigated header value from the latest main_frame navigation.
+const cfMitigatedByTab = new Map();
 
 function send(message) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return false;
@@ -250,7 +253,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // --- Fetch probe ---
   if (message?.type === "localsy_fetch_probe") {
     const allowed = Boolean(activeJob && sender.tab?.id === activeJob.tabId && activeJob.jobType === "fetch");
-    sendResponse({ allowed });
+    const cf = cfMitigatedByTab.get(sender.tab?.id);
+    sendResponse({ allowed, cf_mitigated: cf ?? null });
     return;
   }
 
@@ -289,9 +293,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Cloudflare-native challenge detection
+// ════════════════════════════════════════════════════════════
+
+// Capture the cf-mitigated response header from each tab's top-level navigation
+// so the content script can use it as the authoritative challenge signal (status
+// codes like 403/429 are too ambiguous).
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (details.tabId < 0) return;
+    const h = (details.responseHeaders || []).find(x => x.name.toLowerCase() === "cf-mitigated");
+    cfMitigatedByTab.set(details.tabId, h ? h.value : null);
+  },
+  { urls: ["<all_urls>"], types: ["main_frame"] },
+  ["responseHeaders"]
+);
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  cfMitigatedByTab.delete(tabId);
+});
+
+// ════════════════════════════════════════════════════════════
 // Lifecycle
-// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
 
 chrome.runtime.onInstalled.addListener(() => connect());
 chrome.runtime.onStartup.addListener(() => connect());

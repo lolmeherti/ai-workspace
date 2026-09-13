@@ -8,6 +8,7 @@ enum ApiAction: string
     case GET_FILE_CONTENT = 'get_file_content';
     case SYNC_LMSTUDIO_LIMIT = 'sync_lmstudio_limit';
     case GET_SWITCH_STATUS = 'get_switch_status';
+    case CANCEL_SWITCH = 'cancel_switch';
     case SEARCH_FILES = 'search_files';
 
     case OPEN_DRAFT = 'open_draft';
@@ -52,4 +53,6 @@ enum ApiAction: string
     case GET_RUN_STATUS = 'get_run_status';
     case LIST_RUN_LOGS = 'list_run_logs';
     case PRUNE_JOBS = 'prune_jobs';
+
+    case LOG_FRONTEND_EVENT = 'log_frontend_event';
 }

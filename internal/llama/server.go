@@ -28,14 +28,32 @@ func StartServer(binDir string, m *models.ResolvedModel) *exec.Cmd {
 		"--alias", m.Name,
 		"--ctx-size", strconv.Itoa(m.CtxSize),
 		"-ngl", "999",
-		"--parallel", "1",
+		"--parallel", "4",
 		"--host", "0.0.0.0",
 		"--port", "1234",
 		"--jinja",
+		"--kv-unified",
+		"--load-mode", "mmap+mlock",
 	}
 
 	if m.ReasoningBudget > 0 {
 		args = append(args, "--reasoning-budget", strconv.Itoa(m.ReasoningBudget))
+	}
+
+	// Runtime-owned server flags. Emitted only when the runtime spec requests
+	// them: qwen38 sets TemplateFile (fixed community template), ReasoningFmt
+	// (deepseek), and PreserveReasoning; the other runtimes leave them empty,
+	// so these emit nothing and the GGUF-embedded template applies.
+	if m.Runtime.TemplateFile != "" {
+		if _, err := os.Stat(m.Runtime.TemplateFile); err == nil {
+			args = append(args, "--chat-template-file", m.Runtime.TemplateFile)
+		}
+	}
+	if m.Runtime.ReasoningFmt != "" {
+		args = append(args, "--reasoning-format", m.Runtime.ReasoningFmt)
+	}
+	if m.Runtime.PreserveReasoning {
+		args = append(args, "--reasoning-preserve")
 	}
 
 	if m.FlashAttn {
@@ -53,18 +71,25 @@ func StartServer(binDir string, m *models.ResolvedModel) *exec.Cmd {
 	}
 
 	if m.Speculative != nil {
-		if _, err := os.Stat(m.Speculative.Path); err == nil {
-			strategy := m.Speculative.Strategy
-			if strategy == "" {
-				strategy = "draft-mtp"
-			}
-			args = append(args,
-				"--spec-type", strategy,
-				"--spec-draft-model", m.Speculative.Path,
-				"--spec-draft-n-max", strconv.Itoa(m.Speculative.NMax),
-				"--spec-draft-ngl", strconv.Itoa(m.Speculative.NGL),
-			)
+		strategy := m.Speculative.Strategy
+		if strategy == "" {
+			strategy = "draft-mtp"
 		}
+		args = append(args, "--spec-type", strategy)
+
+		// draft-mtp is self-speculative: the model's own MTP head drafts tokens,
+		// so there is no separate draft model to load. Only external-draft
+		// strategies (e.g. draft-eagle3) take a draft model path + ngl.
+		if strategy != "draft-mtp" && m.Speculative.Path != "" {
+			if _, err := os.Stat(m.Speculative.Path); err == nil {
+				args = append(args,
+					"--spec-draft-model", m.Speculative.Path,
+					"--spec-draft-ngl", strconv.Itoa(m.Speculative.NGL),
+				)
+			}
+		}
+
+		args = append(args, "--spec-draft-n-max", strconv.Itoa(m.Speculative.NMax))
 	}
 
 	args = append(args, m.ExtraArgs...)

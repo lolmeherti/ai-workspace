@@ -8,7 +8,7 @@ import { hydrateBriefingCards } from './chatBriefingCards.js';
 import { openEditorDrawer, closeEditorDrawer, saveEditorDraft } from './chatEditorOpenClose.js';
 import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
-import { extractThinking, createThinkingAccordion } from '../markdown.js';
+import { extractThinking, createThinkingAccordion, addCodeCopyButtons } from '../markdown.js';
 
 export function initChatDom() {
     document.addEventListener('DOMContentLoaded', () => {
@@ -35,6 +35,7 @@ export function initChatDom() {
                         hljs.highlightElement(block);
                     });
                 }
+                addCodeCopyButtons(el);
 
                 el.classList.add('parsed', 'markdown-content');
 

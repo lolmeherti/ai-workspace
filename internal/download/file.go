@@ -2,6 +2,7 @@ package download
 
 import (
 	"archive/zip"
+	"context"
 	"io"
 	"net/http"
 	"os"
@@ -16,9 +17,15 @@ type ProgressWriter struct {
 	Length     int64
 	LastPct    float64
 	OnProgress func(float64)
+	Ctx        context.Context
 }
 
 func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	if pw.Ctx != nil {
+		if err := pw.Ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
 	n, err := pw.Writer.Write(p)
 	pw.Total += int64(n)
 
@@ -33,6 +40,10 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 }
 
 func File(filepath string, url string, onProgress func(float64)) error {
+	return FileContext(context.Background(), filepath, url, onProgress)
+}
+
+func FileContext(ctx context.Context, filepath string, url string, onProgress func(float64)) error {
 	out, err := os.Create(filepath)
 	if err != nil {
 		return err
@@ -50,6 +61,7 @@ func File(filepath string, url string, onProgress func(float64)) error {
 		Writer:     out,
 		Length:     contentLength,
 		OnProgress: onProgress,
+		Ctx:        ctx,
 	}
 
 	_, err = io.Copy(pw, resp.Body)

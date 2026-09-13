@@ -39,6 +39,11 @@ class ChatController extends BaseController
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+        // Scope every event logged in this request to the ambient chat session
+        // (chat turns, condense, briefing, star/toggle actions all read session_id).
+        $ambientSessionId = (int)($_POST['session_id'] ?? $_GET['session_id'] ?? 0);
+        \App\Logger::setSessionId($ambientSessionId > 0 ? $ambientSessionId : null);
+
         if ($method === 'POST') {
             $this->handlePost();
         } else {

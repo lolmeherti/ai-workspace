@@ -7,7 +7,7 @@ import { state } from '../state.js';
 import { showCondensationModal, updateTokenCounter, lockChatContext } from '../ui.js';
 import { cleanAssistantStreamText } from './streamTextCleaner.js';
 import { renderFileChoices } from './streamFileChoices.js';
-import { extractThinking } from '../markdown.js';
+import { extractThinking, addCodeCopyButtons } from '../markdown.js';
 import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
 import { renderBriefingActions } from '../chat/chatBriefingCards.js';
 
@@ -149,7 +149,12 @@ function renderMetricsBubble(bubble, metrics) {
                 <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 metrics
             </span>
-            <span class="text-[11px] font-mono text-slate-400 truncate">${summary}</span>
+            <span class="flex items-center gap-2 min-w-0">
+                <button type="button" class="metrics-copy shrink-0 text-slate-500 hover:text-cyan-400 transition-colors" title="Copy metrics">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <span class="text-[11px] font-mono text-slate-400 truncate">${summary}</span>
+            </span>
         </summary>
         <div class="px-3 pb-3 border-t border-slate-800/60">
             <div class="text-[10px] text-slate-500 font-mono py-1.5">${chain}</div>
@@ -180,6 +185,71 @@ function renderMetricsBubble(bubble, metrics) {
         </div>
     `;
     bubble.appendChild(details);
+
+    const copyBtn = details.querySelector('.metrics-copy');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            copyMetricsToClipboard(formatMetricsText(metrics), copyBtn);
+        });
+    }
+}
+
+function formatMetricsText(metrics) {
+    const calls = metrics.calls || [];
+    const ac = pickAnswerCall(calls);
+    const lines = [];
+
+    const parts = [calls.length + ' call' + (calls.length === 1 ? '' : 's')];
+    if (metrics.total_ms != null) parts.push(fmtS(metrics.total_ms));
+    if (metrics.ttft_ms != null) parts.push('TTFT ' + fmtS(metrics.ttft_ms));
+    if (ac && ac.reasoning_ms > 0) parts.push('think ' + fmtS(ac.reasoning_ms));
+    if (ac) {
+        let tps = 0;
+        if (ac.content_ms > 0 && ac.content_tok > 0) tps = ac.content_tok / (ac.content_ms / 1000);
+        else if (ac.pred_tps) tps = ac.pred_tps;
+        if (tps > 0) parts.push(Math.round(tps) + ' tok/s');
+        if (ac.prompt_tokens > 0) parts.push(Math.round(ac.cache_n / ac.prompt_tokens * 100) + '% cached');
+    }
+    lines.push(parts.join(' · '));
+    lines.push('');
+
+    lines.push('call\ttime\tprefill\tthink\ttext');
+    for (const c of calls) {
+        const label = PURPOSE_LABELS[c.purpose] || c.purpose;
+        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} · ${c.prompt_n} tok${c.cache_n > 0 ? ' · ' + c.cache_n + ' cached' : ''}` : '—';
+        const think = c.reasoning_ms > 0 ? `${fmtMs(c.reasoning_ms)} · ${c.reasoning_tok} tok` : '—';
+        const text = c.content_ms > 0 ? `${fmtMs(c.content_ms)} · ${c.content_tok} tok` : '—';
+        lines.push(`${label}\t${fmtMs(c.elapsed_ms)}\t${prefill}\t${think}\t${text}`);
+        lines.push(`[${label}] prompt_tokens=${c.prompt_tokens} completion_tokens=${c.completion_tokens} pred_n=${c.pred_n} pred_tps=${Math.round(c.pred_tps || 0)} prompt_tps=${Math.round(c.prompt_tps || 0)} cache_n=${c.cache_n}`);
+    }
+
+    return lines.join('\n');
+}
+
+function copyMetricsToClipboard(text, btn) {
+    const original = btn.innerHTML;
+    const markDone = () => {
+        btn.innerHTML = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+        btn.classList.add('text-emerald-400');
+        setTimeout(() => { btn.classList.remove('text-emerald-400'); btn.innerHTML = original; }, 1200);
+    };
+    const write = () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text);
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        return Promise.resolve();
+    };
+    write().then(markDone).catch(markDone);
 }
 
 class TypewriterEffect {
@@ -251,7 +321,7 @@ class TypewriterEffect {
         this.buffer = '';
         this.displayed = '';
         this.running = false;
-        this.textEl.textContent = '';
+        this._setup();
     }
 
     get displayedText() { return this.displayed; }
@@ -274,8 +344,121 @@ function scrollIfStuck(chatWindow) {
     }
 }
 
+function stopGeneration() {
+    if (window.__activeChatAbort) {
+        window.__activeChatAbort.abort();
+    }
+}
+
+window.stopGeneration = stopGeneration;
+
+function setSendStopMode(generating) {
+    const btn = document.getElementById('send-btn');
+    if (!btn) return;
+
+    if (!btn.dataset.bound) {
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', (e) => {
+            if (btn.dataset.mode === 'stop') {
+                e.preventDefault();
+                e.stopPropagation();
+                stopGeneration();
+            }
+        });
+    }
+
+    if (generating) {
+        btn.dataset.mode = 'stop';
+        btn.classList.add('stop');
+        btn.title = 'Stop generating';
+    } else {
+        btn.dataset.mode = 'send';
+        btn.classList.remove('stop');
+        btn.title = 'Send';
+    }
+}
+
+function currentSessionId() {
+    const m = new URLSearchParams(window.location.search).get('session_id');
+    if (m) { const v = parseInt(m, 10); if (!isNaN(v) && v > 0) return v; }
+    const input = document.querySelector('#chatForm input[name="session_id"]');
+    if (input && input.value) { const v = parseInt(input.value, 10); if (!isNaN(v) && v > 0) return v; }
+    return null;
+}
+
+function reportFrontendEvent(type, message, context = {}, level = 'warn') {
+    const sessionId = (context.session_id != null) ? context.session_id : currentSessionId();
+    try {
+        fetch('index.php?api_action=log_frontend_event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, message, level, session_id: sessionId, context }),
+        }).catch(() => {});
+    } catch (e) {}
+}
+
+function bytesUtf8(s) {
+    return new TextEncoder().encode(s).length;
+}
+
+function hexDigest(buf) {
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Compares the raw assembled token stream (markdownBuffer — never mutated, only
+// appended) against the hash + byte length the backend computed over the exact
+// 'token' chunks it emitted. This is the pre-stripping stream, so it matches
+// byte-for-byte regardless of any frontend citation/thinking/update-tag cleanup.
+async function verifyStreamIntegrity(data, markdownBuffer) {
+    const sid = data.session_id;
+
+    // Byte-length check (cheap, synchronous, catches truncation).
+    if (data.content_length != null && typeof data.content_length === 'number') {
+        const received = bytesUtf8(markdownBuffer);
+        if (received !== data.content_length) {
+            reportFrontendEvent('stream_truncated',
+                `Received ${received} of ${data.content_length} bytes of the answer stream`,
+                { session_id: sid, expected_bytes: data.content_length, received_bytes: received },
+                'error');
+            return;
+        }
+    }
+
+    // SHA-256 over the raw token stream (catches corruption). On success we log a
+    // POSITIVE confirmation — silence must never be the only evidence of a match.
+    if (data.content_hash && window.crypto && window.crypto.subtle) {
+        try {
+            const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(markdownBuffer));
+            const receivedHash = hexDigest(digest);
+            if (receivedHash !== data.content_hash) {
+                reportFrontendEvent('content_hash_mismatch',
+                    'Assembled answer stream hash differs from the backend',
+                    { session_id: sid }, 'error');
+                return;
+            }
+            reportFrontendEvent('frontend_stream_verified',
+                'Frontend-assembled stream matches backend (hash + length)',
+                { session_id: sid, method: 'sha256+length', bytes: data.content_length ?? bytesUtf8(markdownBuffer) },
+                'info');
+        } catch (e) {
+            reportFrontendEvent('frontend_verify_skipped',
+                'SHA-256 verification unavailable (crypto.subtle failed)',
+                { session_id: sid }, 'warn');
+        }
+    } else {
+        // crypto.subtle unavailable — the length check above already passed.
+        reportFrontendEvent('frontend_stream_verified',
+            'Frontend length matches backend (hash check unavailable)',
+            { session_id: sid, method: 'length-only', bytes: data.content_length ?? null },
+            'info');
+    }
+}
+
 export async function streamResponse(formData, originalMessage) {
     state.isGenerating = true;
+    setSendStopMode(true);
+    const controller = new AbortController();
+    window.__activeChatAbort = controller;
     
     const lockOverlay = document.getElementById('editor-lock-overlay');
     if (lockOverlay) {
@@ -564,6 +747,7 @@ export async function streamResponse(formData, originalMessage) {
     let renderRawLen = 0;      // index into the renderable text already committed
     let lastRenderable = '';   // last fully-stripped display text (for the done flush)
     let renderScheduled = false;
+    let renderRafId = null;    // pending animation frame, cancelled on final flush
 
     function escapeHtml(s) {
         return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -627,14 +811,16 @@ export async function streamResponse(formData, originalMessage) {
                 hljs.highlightElement(block);
             }
         });
+        addCodeCopyButtons(container);
     }
 
     function scheduleRender(renderable) {
         lastRenderable = renderable;
         if (renderScheduled) return;
         renderScheduled = true;
-        requestAnimationFrame(() => {
+        renderRafId = requestAnimationFrame(() => {
             renderScheduled = false;
+            renderRafId = null;
             renderFrame();
         });
     }
@@ -645,8 +831,12 @@ export async function streamResponse(formData, originalMessage) {
 
         if (boundary > renderRawLen) {
             const delta = renderable.slice(renderRawLen, boundary);
-            committedEl.insertAdjacentHTML('beforeend', postProcess(marked.parse(delta)));
-            highlightNew(committedEl);
+            try {
+                committedEl.insertAdjacentHTML('beforeend', postProcess(marked.parse(delta)));
+                highlightNew(committedEl);
+            } catch (e) {
+                reportFrontendEvent('render_exception', 'Streaming render threw: ' + (e && e.message ? e.message : e));
+            }
             renderRawLen = boundary;
         }
 
@@ -665,18 +855,30 @@ export async function streamResponse(formData, originalMessage) {
     }
 
     function flushFinalRender() {
+        // Cancel any pending frame — a queued renderFrame() would re-append the
+        // streaming cursor after this final authoritative render removes it.
+        if (renderRafId !== null) {
+            cancelAnimationFrame(renderRafId);
+            renderRafId = null;
+        }
+        renderScheduled = false;
         const renderable = lastRenderable;
         renderRawLen = renderable.length;
         tailEl.textContent = '';
-        committedEl.innerHTML = postProcess(marked.parse(renderable));
-        highlightNew(committedEl);
+        try {
+            committedEl.innerHTML = postProcess(marked.parse(renderable));
+            highlightNew(committedEl);
+        } catch (e) {
+            reportFrontendEvent('render_exception', 'Final render threw: ' + (e && e.message ? e.message : e));
+        }
     }
 
     try {
         const response = await fetch('index.php', {
             method: 'POST',
             headers: { 'Accept': 'text/event-stream' },
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
 
         if (!response.ok) {
@@ -791,6 +993,15 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'tool_start') {
+                            // First-pass planning reasoning is superseded by tool
+                            // execution — reset so the second-pass answer reasoning
+                            // starts fresh (avoids stale typewriter textEl + double
+                            // reasoning concatenation).
+                            if (reasoningSeen) {
+                                reasoningSeen = false;
+                                thinkingTypewriter.reset();
+                                thinkingAccordion.classList.add('hidden');
+                            }
                             const tool = data.tool;
                             const t = TOOL_DISPLAY[tool];
                             if (t) {
@@ -1090,6 +1301,7 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'done') {
+                            verifyStreamIntegrity(data, markdownBuffer);
                             const cursor = textContainer.querySelector('.streaming-cursor');
                             if (cursor) cursor.remove();
                             flushFinalRender();
@@ -1195,13 +1407,19 @@ export async function streamResponse(formData, originalMessage) {
         aiBubble.classList.add('parsed');
 
     } catch (error) {
-        console.error("Stream Error:", error);
-        if (loadingText) loadingText.textContent = "Connection failed.";
+        if (error && error.name === 'AbortError') {
+            if (loadingText) loadingText.textContent = "Stopped.";
+        } else {
+            console.error("Stream Error:", error);
+            if (loadingText) loadingText.textContent = "Connection failed.";
+        }
         const spinner = loadingIndicator ? loadingIndicator.querySelector('.uk-spinner') : null;
         if (spinner) spinner.remove();
         if (loadingIndicator) loadingIndicator.classList.replace('text-cyan-400', 'text-rose-400');
     } finally {
         state.isGenerating = false;
+        setSendStopMode(false);
+        window.__activeChatAbort = null;
         
         const lockOverlay = document.getElementById('editor-lock-overlay');
         if (lockOverlay) {

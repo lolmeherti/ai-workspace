@@ -16,9 +16,10 @@ import (
 )
 
 type Assets struct {
-	Compose []byte
-	Models  []byte
-	Icon    []byte
+	Compose  []byte
+	Models   []byte
+	Icon     []byte
+	Template []byte
 }
 
 var embedded Assets

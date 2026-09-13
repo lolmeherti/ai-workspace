@@ -93,7 +93,15 @@ func Bootstrap() {
 
 	util.WriteConfig(filepath.Join(workDir, "docker-compose.yml"), embedded.Compose)
 
-	registry, ctxSize, useLocal := env.MergeAndWrite(workDir, modelID, resolved.Name, resolved.CtxSize)
+	registry, ctxSize, useLocal := env.MergeAndWrite(
+		workDir,
+		modelID,
+		resolved.Name,
+		resolved.CtxSize,
+		resolved.SamplingJSON(),
+		resolved.Runtime.RuntimePolicyJSON(),
+		resolved.ReasoningBudget,
+	)
 
 	relay := bridge.NewRelay()
 	go func() {
@@ -115,6 +123,7 @@ func Bootstrap() {
 	docker.StartCompose(workDir, binDir, registry)
 
 	if useLocal {
+		writeChatTemplate(workDir, resolved)
 		LlamaProcess = llama.StartServerWithFallback(binDir, resolved)
 	}
 
@@ -125,4 +134,21 @@ func Bootstrap() {
 	if !DebugMode {
 		OpenBrowser("http://localhost:8080")
 	}
+}
+
+// writeChatTemplate materializes the embedded chat template (when the resolved
+// runtime requests one) to disk and rewrites m.Runtime.TemplateFile to the
+// absolute path llama-server should load. On failure it clears the field so
+// StartServer falls back to the GGUF-embedded template.
+func writeChatTemplate(workDir string, m *models.ResolvedModel) {
+	if m.Runtime.TemplateFile == "" || len(embedded.Template) == 0 {
+		return
+	}
+	path := filepath.Join(workDir, m.Runtime.TemplateFile)
+	if err := os.WriteFile(path, embedded.Template, 0644); err != nil {
+		util.LogPrint("[!] chat template %s write failed: %v — using GGUF-embedded template\n", path, err)
+		m.Runtime.TemplateFile = ""
+		return
+	}
+	m.Runtime.TemplateFile = path
 }

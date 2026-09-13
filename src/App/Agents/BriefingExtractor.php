@@ -14,8 +14,8 @@ use App\JsonParser;
  * The model never emits [CalendarSuggest] markup — that is assembled in PHP.
  *
  * Uses chat() (not chatWithTools) because the mechanical extraction call must
- * set reasoning_effort='none' on native-thinking models (Gemma 4), which
- * chatWithTools does not expose.
+ * run in instruct mode (mode='instruct' -> reasoning off) on native-thinking
+ * models (Gemma 4), which chatWithTools does not expose.
  */
 class BriefingExtractor
 {
@@ -178,11 +178,12 @@ class BriefingExtractor
             null,
             null,
             'briefing_extract',
-            'none'
+            mode: 'instruct'
         );
 
         // Parse the JSON array from the response (chat() was used, not
-        // chatWithTools, because the mechanical call needs reasoning_effort='none').
+        // chatWithTools, because the mechanical call needs mode=instruct to
+        // suppress native reasoning).
         $decoded = JsonParser::extractAndDecode($raw) ?: [];
 
         $cards = [];

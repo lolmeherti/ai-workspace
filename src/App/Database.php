@@ -74,7 +74,7 @@ Trace: {$traceString}
 
 TEXT;
 
-            file_put_contents($logFile, $logEntry, FILE_APPEND);
+            @file_put_contents($logFile, $logEntry, FILE_APPEND);
             
             throw $e;
         }

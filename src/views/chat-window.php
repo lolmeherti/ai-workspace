@@ -366,8 +366,10 @@
                             
                             <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant..." required autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
                             
-                            <button type="submit" class="btn-futuristic shrink-0 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 h-[44px]">
-                                Send <uk-icon icon="send" class="w-4 h-4"></uk-icon>
+                            <button type="submit" id="send-btn" class="send-btn-futuristic shrink-0 w-11 h-11 rounded-full flex items-center justify-center" title="Send">
+                                <span class="send-spinner" aria-hidden="true"></span>
+                                <svg class="w-[18px] h-[18px] send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                                <svg class="w-[14px] h-[14px] stop-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                             </button>
                         </div>
                     </form>

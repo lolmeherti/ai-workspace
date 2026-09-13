@@ -104,6 +104,7 @@
                     <span id="switch-status-label" class="text-sm text-slate-300 whitespace-nowrap">Preparing…</span>
                     <progress id="switch-status-bar" class="flex-1 h-2 rounded-full" max="100" value="0"></progress>
                     <span id="switch-status-pct" class="text-sm text-cyan-400 font-semibold w-12 text-right"></span>
+                    <button type="button" id="switch-status-cancel" class="hidden text-xs px-2 py-1 rounded border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer whitespace-nowrap">Cancel download</button>
                 </div>
                 <div id="switch-error" class="hidden text-xs text-red-400 mb-3"></div>
                 <div class="flex justify-end items-center gap-3">
@@ -138,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusLabel = document.getElementById('switch-status-label');
     const statusBar = document.getElementById('switch-status-bar');
     const statusPct = document.getElementById('switch-status-pct');
+    const cancelBtn = document.getElementById('switch-status-cancel');
     const errorRow = document.getElementById('switch-error');
     const saveBtn = document.getElementById('save-settings-btn');
 
@@ -174,13 +176,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (st.stage === 'downloading') {
             statusBar.classList.remove('hidden');
             statusPct.classList.remove('hidden');
+            if (cancelBtn) cancelBtn.classList.remove('hidden');
             const pct = Math.round(Number(st.progress) || 0);
             statusBar.value = pct;
             statusPct.textContent = pct + '%';
         } else {
             statusBar.classList.add('hidden');
             statusPct.classList.add('hidden');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
         }
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            fetch('index.php?api_action=cancel_switch', { headers: { 'Accept': 'application/json' } })
+                .catch(() => {});
+            statusLabel.textContent = 'Cancelling download…';
+            cancelBtn.classList.add('hidden');
+        });
     }
 
     function pollSwitchStatus() {

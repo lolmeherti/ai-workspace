@@ -20,6 +20,7 @@ class ChatManager
 {
     private const OUTPUT_RESERVE_TOKENS = 4096;
     private const SAFETY_MARGIN_TOKENS = 256;
+    private const ANSWER_TOKEN_FLOOR = 4096;
 
     private Database $db;
     private AgentManager $agent;
@@ -59,6 +60,11 @@ class ChatManager
 
         $overflow = $this->preflightContext($sessionId, $query, !empty($activeEditFile));
         if ($overflow !== null) {
+            \App\Logger::logEvent('context_overflow', 'Turn rejected: context limit exceeded before processing', [
+                'total' => $overflow['total'] ?? null,
+                'max' => $overflow['max'] ?? null,
+                'output_reserve' => $overflow['output_reserve'] ?? null,
+            ], 'warn', 'ChatManager::process');
             $emit('context_overflow', $overflow);
             return [
                 'status' => 'context_overflow',
@@ -78,15 +84,30 @@ class ChatManager
     {
         $this->ensureSessionExists($sessionId);
 
+        $historyCountForTurn = (int)($this->db->query("SELECT COUNT(*) c FROM chat_history WHERE session_id = ?", [$sessionId])[0]['c'] ?? 0);
+        \App\Logger::logEvent('turn_start', "Turn start (session {$sessionId})", [
+            'is_first_turn' => $historyCountForTurn === 0,
+            'editor_mode' => !empty($activeEditFile),
+            'history_rows' => $historyCountForTurn,
+        ], 'info', 'ChatManager::processLocked');
+
         // Per-turn performance capture: reset the agent's call log and wrap the
         // emit callback to record time-to-first-token (first 'token' event).
         $this->agent->resetCallLog();
         $turnStart = microtime(true);
         $firstTokenTs = null;
         $origEmit = $emit;
-        $emit = function (string $event, array $data = []) use ($origEmit, &$firstTokenTs) {
-            if ($event === 'token' && $firstTokenTs === null) {
-                $firstTokenTs = microtime(true);
+        $contentHashCtx = hash_init('sha256');
+        $contentBytes = 0;
+        $emit = function (string $event, array $data = []) use ($origEmit, &$firstTokenTs, &$contentHashCtx, &$contentBytes) {
+            if ($event === 'token') {
+                if ($firstTokenTs === null) {
+                    $firstTokenTs = microtime(true);
+                }
+                if (isset($data['chunk'])) {
+                    hash_update($contentHashCtx, $data['chunk']);
+                    $contentBytes += strlen($data['chunk']);
+                }
             }
             $origEmit($event, $data);
         };
@@ -112,6 +133,12 @@ class ChatManager
             'token_estimate' => (int)(mb_strlen($query) / 4)
         ]);
 
+        \App\Logger::logEvent('user_message_persisted', 'User message stored', [
+            'query_chars' => mb_strlen($query),
+            'history_row_id' => (int)$this->db->getConnection()->lastInsertId(),
+            'has_image' => $imagePath !== null,
+        ], 'info', 'ChatManager::processLocked');
+
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
         if (count($history) === 1) {
@@ -131,6 +158,12 @@ class ChatManager
             'message_count' => $contextMessageCount,
             'has_search_context' => false,
         ]);
+
+        \App\Logger::logEvent('prompt_assembled', 'System prompt + message array assembled', [
+            'message_count' => count($currentMessages),
+            'context_message_count' => $contextMessageCount,
+            'system_prompt_chars' => mb_strlen($systemPrompt),
+        ], 'info', 'ChatManager::processLocked');
 
         $sourceMap = [];
         $this->toolExecutionService->resetSourceMap();
@@ -263,6 +296,18 @@ class ChatManager
         } else {
             // Normal turn: the first pass already streamed the answer live.
             $aiRawResponse = $first['content'] ?? '';
+
+            // Empty-answer guard: a deep-thinking prompt (e.g. a riddle) can burn
+            // the whole budget on reasoning and emit zero content. Retry once in
+            // instruct mode (reasoning off) so the user gets a direct answer
+            // instead of an empty bubble after a long thinking phase.
+            if ($aiRawResponse === '' && $this->agent->lastReasoningChars > 0) {
+                \App\Logger::logEvent('llm_empty_answer_firstpass', 'First pass produced reasoning with zero content; retrying once in instruct mode', [
+                    'finish_reason' => $first['finish_reason'] ?? null,
+                    'reasoning_chars' => $this->agent->lastReasoningChars,
+                ], 'error', 'ChatManager::handleChat');
+                $aiRawResponse = $this->retryAnswerInstruct($currentMessages, $emit, $this->resolveAnswerMaxTokens($currentMessages));
+            }
         }
         $finalResponse = $aiRawResponse;
 
@@ -316,6 +361,15 @@ class ChatManager
             'perf_metrics' => json_encode($perfMetrics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ], ['id' => $assistantRowId]);
 
+        // Persist the full per-turn metrics (wall clock, TTFT, per-call timings)
+        // into the event log so the session timeline can display them.
+        \App\Logger::logEvent('turn_metrics', "Turn metrics: {$perfMetrics['total_ms']}ms total, " . count($perfMetrics['calls']) . ' calls', [
+            'total_ms' => $perfMetrics['total_ms'],
+            'ttft_ms' => $perfMetrics['ttft_ms'],
+            'calls' => $perfMetrics['calls'],
+            'assistant_row_id' => $assistantRowId,
+        ], 'info', 'ChatManager::processLocked');
+
         $finalHistory = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         if ($usage && isset($usage['prompt_tokens'])) {
             $totalSessionTokens = (int)$usage['prompt_tokens'];
@@ -335,6 +389,15 @@ class ChatManager
         // atomizeBacklogIfNeeded() pass condenses it once the backlog (or
         // context pressure) justifies the cost. The answer is never blocked.
 
+        \App\Logger::logEvent('stream_complete', 'Final response delivered to client', [
+            'response_chars' => mb_strlen($cleanResponse),
+            'total_ms' => $perfMetrics['total_ms'],
+            'ttft_ms' => $perfMetrics['ttft_ms'],
+            'calls' => count($perfMetrics['calls']),
+            'sources' => count($sourceMap),
+            'total_session_tokens' => $totalSessionTokens,
+        ], 'info', 'ChatManager::processLocked');
+
         $emit('done', [
             'message' => $cleanResponse,
             'title' => $updatedTitle,
@@ -342,6 +405,8 @@ class ChatManager
             'session_id' => $sessionId,
             'sources' => $sourceMap,
             'perf_metrics' => $perfMetrics,
+            'content_hash' => hash_final($contentHashCtx),
+            'content_length' => $contentBytes,
         ]);
 
         return [
@@ -550,16 +615,29 @@ class ChatManager
      */
     private function firstPass(array $messages, callable $emit, bool $isEditorMode = false): array
     {
-        $reasoningBuffer = '';
         $utf8Buffer = '';
+        $reasoningBuffer = '';
         $contentEmitted = false;
         $contentChars = 0;
+        $thoughtCompleteSent = false;
+
+        // Pre-decision reasoning is BUFFERED, not streamed live. It is released
+        // only once real content begins (a normal answer turn); on a tool turn
+        // (tool_calls only, no content) it is discarded — so the frontend never
+        // creates a Thinking Process accordion for the model's tool planning.
+        $flushReasoning = function () use ($emit, &$reasoningBuffer) {
+            if ($reasoningBuffer === '') {
+                return;
+            }
+            $emit('reasoning', ['chunk' => $reasoningBuffer]);
+            $reasoningBuffer = '';
+        };
 
         $result = $this->agent->chatToolCapable(
             $messages,
             $this->buildToolSchemas($isEditorMode),
             'auto',
-            function ($chunk, $type) use ($emit, &$reasoningBuffer, &$utf8Buffer, &$contentEmitted, &$contentChars) {
+            function ($chunk, $type) use ($emit, &$utf8Buffer, &$reasoningBuffer, &$contentEmitted, &$contentChars, &$thoughtCompleteSent, $flushReasoning) {
                 if ($type === 'reasoning') {
                     $reasoningBuffer .= $chunk;
                     return;
@@ -570,28 +648,35 @@ class ChatManager
                     return;
                 }
 
-                if (!$contentEmitted && $reasoningBuffer !== '') {
-                    $emit('reasoning', ['chunk' => $reasoningBuffer]);
+                $flushReasoning();
+                if (!$thoughtCompleteSent) {
                     $emit('thought_complete', []);
-                    $reasoningBuffer = '';
+                    $thoughtCompleteSent = true;
                 }
                 $contentEmitted = true;
                 $contentChars += mb_strlen($utf8Buffer);
                 $emit('token', ['chunk' => $utf8Buffer]);
                 $utf8Buffer = '';
-            }
+            },
+            null,
+            null,
+            $this->resolveAnswerMaxTokens($messages)
         );
 
         if ($utf8Buffer !== '') {
-            if (!$contentEmitted && $reasoningBuffer !== '') {
-                $emit('reasoning', ['chunk' => $reasoningBuffer]);
+            $flushReasoning();
+            if (!$thoughtCompleteSent) {
                 $emit('thought_complete', []);
-                $reasoningBuffer = '';
+                $thoughtCompleteSent = true;
             }
             $contentEmitted = true;
             $emit('token', ['chunk' => mb_convert_encoding($utf8Buffer, 'UTF-8', 'UTF-8')]);
             $utf8Buffer = '';
         }
+
+        // A tool turn (or empty first pass) leaves any buffered reasoning
+        // unreleased on purpose — no 'reasoning'/'thought_complete' is emitted,
+        // so no thinking accordion is created for it.
 
         if ($contentEmitted && !empty($result['tool_calls'])) {
             \App\Logger::logEvent('content_before_tool', 'Content emitted before tool_calls in the integrated first pass', [
@@ -614,6 +699,12 @@ class ChatManager
         $preThoughtBuffer = '';
         $isStartOfResponse = true;
         $nativeReasoningSeen = false;
+
+        // Context-aware output budget (Part B): the answer pass must leave
+        // content headroom beyond the reasoning budget so a full-budget
+        // thinking trace can't burn the whole completion into empty content.
+        // Clamped by actual context headroom (prompt size vs LLM_CTX_SIZE).
+        $answerMaxTokens = $this->resolveAnswerMaxTokens($messages);
 
         $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThought, &$thoughtBuffer, &$preThoughtBuffer, &$isStartOfResponse, &$nativeReasoningSeen) {
             if ($type === 'reasoning') {
@@ -775,7 +866,7 @@ class ChatManager
                 $emit('token', ['chunk' => $clean]);
                 $utf8_buffer = '';
             }
-        });
+        }, null, 'answer', null, null, $answerMaxTokens);
 
         // Drain any leftover content from the pre-thought buffer.
         // If the stream ends while the buffer is still < MAX_OPEN_TAG_LEN
@@ -801,7 +892,76 @@ class ChatManager
             $emit('token', ['chunk' => mb_convert_encoding($utf8_buffer, 'UTF-8', 'UTF-8')]);
         }
 
+        // Part C: narrow empty-answer retry. Fires only on the exact signature —
+        // reasoning produced, content empty, and the output budget was exhausted
+        // (completion_tokens >= max_tokens) — then retries once in instruct mode
+        // (no thinking) so the user gets content instead of a silent empty bubble.
+        if ($aiResponse === ''
+            && $this->agent->lastReasoningChars > 0
+            && ($this->agent->lastUsage['completion_tokens'] ?? 0) >= $answerMaxTokens) {
+            \App\Logger::logEvent('llm_empty_answer_thinking_exhausted', 'Answer pass burned its whole output budget on reasoning with zero content; retrying once in instruct mode', [
+                'completion_tokens' => $this->agent->lastUsage['completion_tokens'] ?? 0,
+                'reasoning_chars' => $this->agent->lastReasoningChars,
+                'max_tokens' => $answerMaxTokens,
+            ], 'error', 'ChatManager::streamAgentResponse');
+            return $this->retryAnswerInstruct($messages, $emit, $answerMaxTokens);
+        }
+
         return $aiResponse;
+    }
+
+    /**
+     * Context-aware output budget for the answer pass: max(8192, reasoning
+     * budget + ANSWER_TOKEN_FLOOR), clamped by actual context headroom
+     * (LLM_CTX_SIZE minus estimated prompt tokens minus safety margin).
+     * Invariant: the answer budget exceeds the reasoning budget.
+     */
+    private function resolveAnswerMaxTokens(array $messages): int
+    {
+        $reasoningBudget = (int) Config::get('LLM_REASONING_BUDGET', 0);
+        $maxTokens = max(8192, $reasoningBudget + self::ANSWER_TOKEN_FLOOR);
+
+        $ctxSize = (int) Config::get('LLM_CTX_SIZE', 0);
+        if ($ctxSize > 0) {
+            $promptTokens = 0;
+            foreach ($messages as $m) {
+                $c = $m['content'] ?? '';
+                if (is_array($c)) {
+                    $c = $c[0]['text'] ?? '';
+                }
+                $promptTokens += ($this->countTokens)((string) $c);
+            }
+            $headroom = $ctxSize - $promptTokens - self::SAFETY_MARGIN_TOKENS;
+            if ($headroom > 0) {
+                $maxTokens = min($maxTokens, $headroom);
+            }
+        }
+        return $maxTokens;
+    }
+
+    /**
+     * Bounded empty-answer retry: re-runs the answer pass in instruct mode
+     * (reasoning off) so content is emitted directly instead of being consumed
+     * by a reasoning trace. Streams through the same emit callback.
+     */
+    private function retryAnswerInstruct(array $messages, callable $emit, int $maxTokens): string
+    {
+        return $this->agent->chat(
+            $messages,
+            true,
+            function ($chunk, $type = 'content') use ($emit) {
+                if ($type === 'reasoning') {
+                    $emit('reasoning', ['chunk' => $chunk]);
+                    return;
+                }
+                $emit('token', ['chunk' => $chunk]);
+            },
+            null,
+            'answer_retry',
+            'instruct',
+            null,
+            $maxTokens
+        );
     }
 
     /**
@@ -990,7 +1150,7 @@ class ChatManager
         if (empty($claims)) {
             \App\Logger::logEvent('consolidation_empty', 'Evidence atomization produced no atoms; raw evidence stays active', [
                 'row_id' => $rowId,
-            ], 'info', 'ChatManager::atomizeRow');
+            ], 'warn', 'ChatManager::atomizeRow');
             return 0;
         }
 

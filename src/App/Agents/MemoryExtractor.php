@@ -37,7 +37,7 @@ TEXT;
                 ['role' => 'user', 'content' => $keywordPrompt]
             ];
 
-            $keywordsRaw = $this->agent->chat($keywordMessages, false, null, 0.1);
+            $keywordsRaw = $this->agent->chat($keywordMessages, false, null, 0.1, mode: 'instruct');
             $keywords = trim($keywordsRaw);
 
             if (!empty($keywords)) {
@@ -179,7 +179,7 @@ TEXT;
         ];
 
         $temperature = (float) Config::get('AGENT_EXTRACTOR_TEMP', 0.5);
-        $response = trim($this->agent->chat($messages, false, null, $temperature));
+        $response = trim($this->agent->chat($messages, false, null, $temperature, mode: 'instruct'));
         $data = \App\JsonParser::extractAndDecode($response);
 
         if (is_array($data)) {
@@ -272,7 +272,7 @@ TEXT;
             ['role' => 'user', 'content' => $userPrompt]
         ];
 
-        $response = trim($this->agent->chat($messages, false, null, 0.1));
+        $response = trim($this->agent->chat($messages, false, null, 0.1, mode: 'instruct'));
 
         // Update the user_profiles table (assume id=1 for single-user local app)
         $existingProfile = $this->db->query("SELECT id FROM user_profiles WHERE id = 1");

@@ -63,6 +63,37 @@ func testDefs(t *testing.T) map[string]ModelDefinition {
         "t1": {"ctx_size": 8000, "requirements": {"vram_min": 32}},
         "t5": {"ctx_size": 4000, "requirements": {"vram_min": 0}, "speculative_enabled": false}
       }
+    },
+    "test-model-mtp": {
+      "name": "MTP Self-Spec Model",
+      "model": {"file": "mtp.gguf", "url": "https://example.com/mtp.gguf"},
+      "speculative": {
+        "strategy": "draft-mtp",
+        "n_max": 3
+      },
+      "profiles": {
+        "t1": {"ctx_size": 8000, "requirements": {"vram_min": 0}}
+      }
+    },
+    "test-model-runtime": {
+      "name": "Runtime Model",
+      "runtime": "qwen38",
+      "sampling": {
+        "thinking": {"temperature": 1.0, "top_k": 20},
+        "instruct": {"temperature": 0.7, "top_k": 20}
+      },
+      "model": {"file": "runtime.gguf", "url": "https://example.com/runtime.gguf"},
+      "profiles": {
+        "t1": {"ctx_size": 8000, "requirements": {"vram_min": 0}}
+      }
+    },
+    "test-model-bad-runtime": {
+      "name": "Bad Runtime Model",
+      "runtime": "does-not-exist",
+      "model": {"file": "badruntime.gguf", "url": "https://example.com/badruntime.gguf"},
+      "profiles": {
+        "t1": {"ctx_size": 8000, "requirements": {"vram_min": 0}}
+      }
     }
   }
 }`)
@@ -398,6 +429,32 @@ func TestSpeculativeArtifactMissing(t *testing.T) {
 	}
 	if resolved.Speculative != nil {
 		t.Error("missing draft artifact should disable speculative")
+	}
+}
+
+func TestSpeculativeMTPNoArtifact(t *testing.T) {
+	defs := testDefs(t)
+
+	tmpDir := t.TempDir()
+	modelDir := filepath.Join(tmpDir, "models")
+	os.MkdirAll(modelDir, 0755)
+	os.WriteFile(filepath.Join(modelDir, "mtp.gguf"), []byte("fake"), 0644)
+
+	resolved, err := ResolveModel("test-model-mtp", defs, Hardware{VRAMGB: 32}, modelDir, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.Speculative == nil {
+		t.Fatal("draft-mtp without an artifact should still enable speculative")
+	}
+	if resolved.Speculative.Path != "" {
+		t.Errorf("draft-mtp self-spec should have empty draft path, got %q", resolved.Speculative.Path)
+	}
+	if resolved.Speculative.Strategy != "draft-mtp" {
+		t.Errorf("expected strategy draft-mtp, got %q", resolved.Speculative.Strategy)
+	}
+	if resolved.Speculative.NMax != 3 {
+		t.Errorf("expected n_max=3, got %d", resolved.Speculative.NMax)
 	}
 }
 

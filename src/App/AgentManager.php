@@ -13,6 +13,10 @@ class AgentManager
     /** Server-reported prefill/decode timings (prompt_ms, prompt_n, cache_n, ...) from the last chat() call. */
     public ?array $lastTimings = null;
 
+    /** Chars of reasoning_content / content streamed in the last chat() call. Used by the empty-answer retry. */
+    public int $lastReasoningChars = 0;
+    public int $lastContentChars = 0;
+
     /** Per-call performance log for the current request (purpose + server timings + stream phases). */
     public array $callLog = [];
 
@@ -27,7 +31,7 @@ class AgentManager
      * record and append it to the per-request call log. Reasoning vs content are
      * split at the stream level (llama.cpp reports them as one "predicted" stream).
      */
-    private function finalizeCall(string $purpose, float $startTime, ?array $timings, ?array $usage, ?float $firstReasoningTs, ?float $firstContentTs, int $reasoningChars, int $contentChars): void
+    private function finalizeCall(string $purpose, float $startTime, ?array $timings, ?array $usage, ?float $firstReasoningTs, ?float $firstContentTs, int $reasoningChars, int $contentChars): array
     {
         $end = microtime(true);
         $elapsedMs = ($end - $startTime) * 1000;
@@ -42,7 +46,7 @@ class AgentManager
         $t = $timings ?? [];
         $u = $usage ?? [];
 
-        $this->callLog[] = [
+        $record = [
             'purpose' => $purpose,
             'elapsed_ms' => (int) round($elapsedMs),
             'prompt_ms' => (float) ($t['prompt_ms'] ?? 0),
@@ -59,6 +63,8 @@ class AgentManager
             'prompt_tokens' => (int) ($u['prompt_tokens'] ?? 0),
             'completion_tokens' => (int) ($u['completion_tokens'] ?? 0),
         ];
+        $this->callLog[] = $record;
+        return $record;
     }
 
     public function __construct()
@@ -67,10 +73,22 @@ class AgentManager
         $this->modelName = Config::get('LLM_MODEL_NAME', 'local-model');
     }
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $reasoningEffort = null): string
+    public function chat(
+        array $messages,
+        bool $stream = true,
+        callable $streamCallback = null,
+        ?float $temperature = null,
+        ?string $purpose = null,
+        ?string $mode = null,
+        ?string $effort = null,
+        ?int $maxTokens = null
+    ): string
     {
         $endpoint = $this->apiUrl . '/chat/completions';
-        $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
+
+        // Generic per-mode sampling: explicit per-task temperature still wins,
+        // then the mode's declared value, then the global default.
+        [$finalTemperature, $sampling] = $this->resolveSampling($mode, $temperature);
 
         $payload = [
             'model' => $this->modelName,
@@ -78,14 +96,18 @@ class AgentManager
             'stream' => true,
             'stream_options' => ['include_usage' => true],
             'temperature' => $finalTemperature,
-            'max_tokens' => 4096,
+            'max_tokens' => $maxTokens ?? 4096,
         ];
-        // For mechanical sub-tasks (e.g. evidence atomization) pass 'none' so a
-        // native-thinking model (Gemma 4) emits content directly instead of
-        // spending its whole max_tokens budget on reasoning_content.
-        if ($reasoningEffort !== null) {
-            $payload['reasoning_effort'] = $reasoningEffort;
+        foreach (['top_p', 'top_k', 'min_p', 'presence_penalty', 'repeat_penalty'] as $key) {
+            if (isset($sampling[$key])) {
+                $payload[$key] = $sampling[$key];
+            }
         }
+
+        // Reasoning control: PHP asks only mode/effort; the runtime policy
+        // decides which request field/path to write. No model-name /
+        // reasoning_effort / enable_thinking knowledge lives here.
+        $this->applyReasoning($payload, $mode, $effort);
 
         $msgCount = count($messages);
         $estTokens = 0;
@@ -99,6 +121,8 @@ class AgentManager
             'estimated_tokens' => $estTokens,
             'stream' => $stream,
             'temperature' => $finalTemperature,
+            'purpose' => $purpose,
+            'mode' => $mode,
         ], 'info', 'AgentManager::chat');
 
         $owns = false;
@@ -195,14 +219,40 @@ class AgentManager
 
             $this->lastUsage = $lastUsage;
             $this->lastTimings = $lastTimings;
-            $this->finalizeCall($purpose ?? 'answer', $startTime, $lastTimings, $lastUsage, $firstReasoningTs, $firstContentTs, $reasoningChars, $contentChars);
+            $callRecord = $this->finalizeCall($purpose ?? 'answer', $startTime, $lastTimings, $lastUsage, $firstReasoningTs, $firstContentTs, $reasoningChars, $contentChars);
 
             $responseLen = strlen($fullResponse);
-            $level = $responseLen < 20 ? 'warn' : 'info';
-            \App\Logger::logEvent('llm_response_done', "LLM response: {$responseLen} chars in {$elapsed}ms", [
+            $usageArr = $lastUsage ?? [];
+            $completionTokens = (int)($usageArr['completion_tokens'] ?? 0);
+            // The answer pass always passes a dynamic budget (resolveAnswerMaxTokens,
+            // min 8192); 4096 is only the fallback for auxiliary calls (condenser,
+            // image classification) that don't pass one.
+            $maxOut = (int)($maxTokens ?? 4096);
+            $budgetExhausted = $responseLen === 0 && $completionTokens >= $maxOut;
+
+            if ($responseLen === 0) {
+                $level = 'error';
+                $summary = $budgetExhausted
+                    ? "Empty answer — model hit its output limit ({$completionTokens} tokens, zero content) in {$elapsed}ms"
+                    : "Empty answer — no content in {$elapsed}ms";
+            } elseif ($responseLen < 20) {
+                $level = 'warn';
+                $summary = "Very short answer ({$responseLen} chars) in {$elapsed}ms";
+            } else {
+                $level = 'info';
+                $summary = "LLM response: {$responseLen} chars in {$elapsed}ms";
+            }
+
+            \App\Logger::logEvent('llm_response_done', $summary, [
                 'response_length' => $responseLen,
                 'elapsed_ms' => $elapsed,
                 'tokens_used' => $lastUsage,
+                'purpose' => $callRecord['purpose'],
+                'reasoning_ms' => $callRecord['reasoning_ms'],
+                'reasoning_tok' => $callRecord['reasoning_tok'],
+                'content_ms' => $callRecord['content_ms'],
+                'content_tok' => $callRecord['content_tok'],
+                'budget_exhausted' => $budgetExhausted,
             ], $level, 'AgentManager::chat');
 
             if ($responseLen < 20 && $responseLen > 0) {
@@ -212,11 +262,90 @@ class AgentManager
                 ], 'warn', 'AgentManager::chat');
             }
 
+            $this->lastReasoningChars = $reasoningChars;
+            $this->lastContentChars = $contentChars;
+
             return \App\ThoughtExtractor::strip($fullResponse);
         } finally {
             if ($owns) {
                 ModelLock::release($lockToken);
             }
+        }
+    }
+
+    /**
+     * Resolve the temperature + per-mode sampling values for a call. Mode is
+     * 'thinking' (default) or 'instruct'. An explicit per-task temperature
+     * always wins; otherwise the mode's declared value, then the global default.
+     *
+     * @return array{0: float, 1: array} [finalTemperature, samplingParams]
+     */
+    private function resolveSampling(?string $mode, ?float $temperature): array
+    {
+        $sampling = json_decode((string) Config::get('LLM_SAMPLING', '{}'), true) ?: [];
+        $key = ($mode === 'instruct') ? 'instruct' : 'thinking';
+        $s = $sampling[$key] ?? [];
+
+        if ($temperature !== null) {
+            $finalTemperature = $temperature;
+        } elseif (isset($s['temperature'])) {
+            $finalTemperature = (float) $s['temperature'];
+        } else {
+            $finalTemperature = (float) Config::get('DEFAULT_CHAT_TEMP', 0.7);
+        }
+        return [$finalTemperature, $s];
+    }
+
+    /**
+     * Write the runtime's reasoning on/off value onto the request payload.
+     * Reads LLM_RUNTIME_POLICY (one JSON: {"reasoning":{field, off_value,
+     * default_effort, effort_map}}) and writes the policy's field/path with the
+     * chosen value. mode=instruct writes off_value; mode=thinking with an
+     * explicit/default effort writes the mapped value; otherwise nothing is
+     * written and the template default applies. Model-agnostic — no
+     * reasoning_effort / enable_thinking / model-name knowledge.
+     */
+    private function applyReasoning(array &$payload, ?string $mode, ?string $effort): void
+    {
+        $policy = json_decode((string) Config::get('LLM_RUNTIME_POLICY', '{}'), true) ?: [];
+        $rp = $policy['reasoning'] ?? [];
+        if (empty($rp['field'])) {
+            return;
+        }
+
+        $value = null;
+        if ($mode === 'instruct') {
+            $value = $rp['off_value'] ?? null;
+        } elseif ($effort !== null && isset($rp['effort_map'][$effort])) {
+            $value = $rp['effort_map'][$effort];
+        } elseif (!empty($rp['default_effort']) && isset($rp['effort_map'][$rp['default_effort']])) {
+            $value = $rp['effort_map'][$rp['default_effort']];
+        }
+
+        if ($value !== null) {
+            self::writePath($payload, $rp['field'], $value);
+        }
+    }
+
+    /**
+     * Generic dotted-path setter: writes $value to $arr at the (possibly
+     * nested) $path. "reasoning_effort" sets a top-level key;
+     * "chat_template_kwargs.enable_thinking" builds/extends a nested array.
+     */
+    private static function writePath(array &$arr, string $path, $value): void
+    {
+        $keys = explode('.', $path);
+        $ref = &$arr;
+        $last = count($keys) - 1;
+        foreach ($keys as $i => $key) {
+            if ($i === $last) {
+                $ref[$key] = $value;
+                return;
+            }
+            if (!isset($ref[$key]) || !is_array($ref[$key])) {
+                $ref[$key] = [];
+            }
+            $ref = &$ref[$key];
         }
     }
 
@@ -234,7 +363,7 @@ class AgentManager
      * @param string $toolChoice  'auto' | 'required' | 'none'
      * @return array{finish_reason: string, content: string, tool_calls: ?array, usage: ?array}
      */
-    public function chatToolCapable(array $messages, array $tools, string $toolChoice, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null): array
+    public function chatToolCapable(array $messages, array $tools, string $toolChoice, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?int $maxTokens = null): array
     {
         $endpoint = $this->apiUrl . '/chat/completions';
         $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
@@ -245,7 +374,7 @@ class AgentManager
             'stream' => true,
             'stream_options' => ['include_usage' => true],
             'temperature' => $finalTemperature,
-            'max_tokens' => 4096,
+            'max_tokens' => $maxTokens ?? 4096,
             'tools' => $tools,
             'tool_choice' => $toolChoice,
         ];
@@ -263,6 +392,7 @@ class AgentManager
             'tool_count' => count($tools),
             'tool_choice' => $toolChoice,
             'temperature' => $finalTemperature,
+            'purpose' => $purpose,
         ], 'info', 'AgentManager::chatToolCapable');
 
         $owns = false;
@@ -394,7 +524,9 @@ class AgentManager
 
         $this->lastUsage = $lastUsage;
         $this->lastTimings = $lastTimings;
-        $this->finalizeCall($purpose ?? 'firstpass', $startTime, $lastTimings, $lastUsage, $firstReasoningTs, $firstContentTs, $reasoningChars, $contentChars);
+        $callRecord = $this->finalizeCall($purpose ?? 'firstpass', $startTime, $lastTimings, $lastUsage, $firstReasoningTs, $firstContentTs, $reasoningChars, $contentChars);
+        $this->lastReasoningChars = $reasoningChars;
+        $this->lastContentChars = $contentChars;
 
         ksort($toolCalls);
         $toolCalls = array_values($toolCalls);
@@ -406,6 +538,11 @@ class AgentManager
             'tool_call_count' => count($toolCalls),
             'tokens_used' => $lastUsage,
             'elapsed_ms' => $elapsed,
+            'purpose' => $callRecord['purpose'],
+            'reasoning_ms' => $callRecord['reasoning_ms'],
+            'reasoning_tok' => $callRecord['reasoning_tok'],
+            'content_ms' => $callRecord['content_ms'],
+            'content_tok' => $callRecord['content_tok'],
         ], 'info', 'AgentManager::chatToolCapable');
 
         return [
