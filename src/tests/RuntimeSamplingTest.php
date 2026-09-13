@@ -232,7 +232,6 @@ class RuntimeSamplingTest
     {
         echo "\n=== resolveAnswerMaxTokens ===\n";
 
-        $this->setEnv('LLM_REASONING_BUDGET', '4096');
         $this->setEnv('LLM_CTX_SIZE', '128000');
 
         $ref = new ReflectionClass(ChatManager::class);
@@ -243,11 +242,11 @@ class RuntimeSamplingTest
         $method = $ref->getMethod('resolveAnswerMaxTokens');
         $method->setAccessible(true);
 
-        // No prompt -> max(8192, 4096+4096) = 8192.
-        $this->testEq('empty prompt -> floor of 8192', 8192, $method->invoke($cm, []));
+        // No prompt -> flat hard cap of 8192.
+        $this->testEq('empty prompt -> flat cap 8192', 8192, $method->invoke($cm, []));
 
         // Small prompt under headroom -> unchanged.
-        $this->testEq('small prompt keeps floor', 8192, $method->invoke($cm, [
+        $this->testEq('small prompt keeps cap', 8192, $method->invoke($cm, [
             ['content' => str_repeat('a', 1000)],
         ]));
 
@@ -255,10 +254,6 @@ class RuntimeSamplingTest
         $this->testEq('large prompt clamps by headroom', 7744, $method->invoke($cm, [
             ['content' => str_repeat('a', 120000)],
         ]));
-
-        // No reasoning budget -> still max(8192, 0+4096) = 8192.
-        $this->setEnv('LLM_REASONING_BUDGET', '0');
-        $this->testEq('zero reasoning budget -> floor 8192', 8192, $method->invoke($cm, []));
 
         // No ctx size -> no clamp.
         $this->setEnv('LLM_CTX_SIZE', '0');

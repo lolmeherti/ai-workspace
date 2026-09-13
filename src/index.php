@@ -52,8 +52,6 @@ try {
     $agentManager = new AgentManager();
     $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
-    require_once __DIR__ . '/actions.php';
-
     // Fetch available models from Go API for the settings dropdown
     $modelsList = [];
     try {
@@ -75,6 +73,16 @@ try {
         }
         curl_close($ch);
     } catch (\Exception $_e) {}
+
+    // First-run onboarding preview. Force with ?onboarding=1 to review the flow
+    // on an already-configured machine; the real trigger is Go's
+    // /api/onboarding needs_onboarding (see .hermes/plans/onboarding.md).
+    if (($_GET['onboarding'] ?? '') === '1') {
+        include __DIR__ . '/views/onboarding.php';
+        exit;
+    }
+
+    require_once __DIR__ . '/actions.php';
 
     $pageData = (new PageDataLoader())->load($db, $chatSessionRepository, $memoryRepository, $sessionId, $status);
     extract($pageData);
@@ -156,6 +164,8 @@ try {
         const currentActiveTab = '<?php echo $activeTab; ?>';
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
         const maxTokensLimit = <?php echo (int) Config::get('LLM_CTX_SIZE', 32768); ?>;
+        window.REPLY_DOWNVOTE_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::DOWNVOTE_REASONS, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
+        window.REPLY_TOOL_TURN_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::TOOL_TURN_REASONS); ?>;
     </script>
     <script type="module" src="js/app.js"></script>
     <script type="module" src="js/gallery/galleryBootstrap.js"></script>

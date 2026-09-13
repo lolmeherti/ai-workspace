@@ -61,7 +61,6 @@ class ContextBudgetTest
         $this->testEq('recent_chat tokens', 2, $b['recent_chat']);
         $this->testEq('current_turn tokens', 2, $b['current_turn']);
         $this->testEq('total = sum of four categories', 15, $b['total']);
-        $this->test('no reasoning_budget key (sub-cap, not additive)', !array_key_exists('reasoning_budget', $b));
 
         $empty = $prompt->estimatePromptTokens('SYS', [], 'XY');
         $this->testEq('empty history -> context_data 0', 0, $empty['context_data']);

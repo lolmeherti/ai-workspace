@@ -83,6 +83,13 @@ func Bootstrap() {
 		modelID = fallbackID
 	}
 
+	// Cold-hard VRAM check: clamp the boot ctx to the largest that fits on this
+	// GPU (from the just-downloaded GGUF) so startup can never overflow.
+	if clamped := fitContext(resolved); clamped != resolved.CtxSize {
+		util.LogPrint("[!] boot ctx clamped to fit VRAM: %d -> %d\n", resolved.CtxSize, clamped)
+		resolved.CtxSize = clamped
+	}
+
 	util.LogPrint("[+] Selected model: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
 
 	systray.SetTooltip("Localsy is running background services")
@@ -100,7 +107,6 @@ func Bootstrap() {
 		resolved.CtxSize,
 		resolved.SamplingJSON(),
 		resolved.Runtime.RuntimePolicyJSON(),
-		resolved.ReasoningBudget,
 	)
 
 	relay := bridge.NewRelay()

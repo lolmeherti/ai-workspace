@@ -176,7 +176,4 @@ func TestValidateExtraArgsRejectsRuntimeFlags(t *testing.T) {
 			t.Errorf("expected error for reserved arg %q with value", arg)
 		}
 	}
-	// reasoning-budget stays JSON-configurable (models.json "reasoning_budget"),
-	// so it remains a typed field reserved from extra_args — never an ExtraArgs
-	// override. Its reservation is covered by TestValidateExtraArgsRejectsAllReserved.
 }

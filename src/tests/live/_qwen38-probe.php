@@ -17,7 +17,6 @@ echo "=== PHP sees (real .env) ===\n";
 echo "MODEL_ID      = " . Config::get('LLM_MODEL_ID', '?') . "\n";
 echo "RUNTIME_POLICY= " . Config::get('LLM_RUNTIME_POLICY', '?') . "\n";
 echo "SAMPLING      = " . Config::get('LLM_SAMPLING', '?') . "\n";
-echo "REASONING_BUD = " . Config::get('LLM_REASONING_BUDGET', '?') . "\n";
 echo "CTX_SIZE      = " . Config::get('LLM_CTX_SIZE', '?') . "\n\n";
 
 $agent = new AgentManager();

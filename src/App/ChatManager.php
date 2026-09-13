@@ -20,7 +20,6 @@ class ChatManager
 {
     private const OUTPUT_RESERVE_TOKENS = 4096;
     private const SAFETY_MARGIN_TOKENS = 256;
-    private const ANSWER_TOKEN_FLOOR = 4096;
 
     private Database $db;
     private AgentManager $agent;
@@ -48,7 +47,7 @@ class ChatManager
         $this->atomizationStats = new AtomizationStats($db);
     }
 
-    public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?callable $streamCallback = null): array
+    public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?string $effort = null, ?callable $streamCallback = null): array
     {
         $emit = function(string $event, array $data = []) use ($streamCallback) {
             if ($streamCallback !== null) {
@@ -74,13 +73,13 @@ class ChatManager
 
         $lockToken = ModelLock::acquireOrBusy(ModelLock::PROCESS_TTL_MS);
         try {
-            return $this->processLocked($sessionId, $query, $imageFile, $activeEditFile, $emit);
+            return $this->processLocked($sessionId, $query, $imageFile, $activeEditFile, $effort, $emit);
         } finally {
             ModelLock::release($lockToken);
         }
     }
 
-    private function processLocked(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile, callable $emit): array
+    private function processLocked(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile, ?string $effort, callable $emit): array
     {
         $this->ensureSessionExists($sessionId);
 
@@ -180,8 +179,10 @@ class ChatManager
         // no-tool turn the answer streams live (pre-decision reasoning buffered
         // then released); on a tool turn it assembles tool_calls, we execute
         // them, then run a single second inference over the acquired evidence.
+        [$reasoningMode, $reasoningEffort] = $this->reasoningModeEffort($effort);
+
         $emit('status', ['text' => 'Analyzing request...']);
-        $first = $this->firstPass($currentMessages, $emit, $isEditorMode);
+        $first = $this->firstPass($currentMessages, $emit, $isEditorMode, $reasoningMode, $reasoningEffort);
 
         $freshRowIds = [];
         if (!empty($first['tool_calls'])) {
@@ -195,8 +196,19 @@ class ChatManager
                 $args = json_decode($argsJson, true) ?: [];
                 $queries = $args['queries'] ?? [];
 
-                if (empty($toolName)) continue;
-                if (empty($queries) && $toolName !== 'create_calendar_task') continue;
+                if (empty($toolName)) {
+                    \App\Logger::logEvent('llm_tool_no_match', 'LLM tool_call had no function name', [
+                        'reason' => 'empty_name',
+                    ], 'warn', 'ChatManager::processLocked');
+                    continue;
+                }
+                if (empty($queries) && $toolName !== 'create_calendar_task') {
+                    \App\Logger::logEvent('llm_tool_no_match', 'LLM tool_call had no executable arguments', [
+                        'reason' => 'empty_args',
+                        'tool_name' => $toolName,
+                    ], 'warn', 'ChatManager::processLocked');
+                    continue;
+                }
 
                 $queryList = $toolName === 'create_calendar_task'
                     ? ($args['content'] ?? '')
@@ -292,7 +304,7 @@ class ChatManager
 
         if (!empty($first['tool_calls'])) {
             // Tool turn: single second inference over the acquired evidence.
-            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit);
+            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit, $reasoningMode, $reasoningEffort);
         } else {
             // Normal turn: the first pass already streamed the answer live.
             $aiRawResponse = $first['content'] ?? '';
@@ -345,6 +357,8 @@ class ChatManager
             'token_estimate' => $assistantTokens,
             'search_query' => null,
             'source_map' => empty($sourceMap) ? null : json_encode($sourceMap),
+            'model' => $this->agent->getModelName(),
+            'had_tool_calls' => !empty($first['tool_calls']) ? 1 : 0,
         ]);
 
         $assistantRowId = (int) $this->db->getConnection()->lastInsertId();
@@ -403,6 +417,8 @@ class ChatManager
             'title' => $updatedTitle,
             'total_session_tokens' => $totalSessionTokens,
             'session_id' => $sessionId,
+            'message_id' => $assistantRowId,
+            'had_tool_calls' => !empty($first['tool_calls']),
             'sources' => $sourceMap,
             'perf_metrics' => $perfMetrics,
             'content_hash' => hash_final($contentHashCtx),
@@ -459,8 +475,7 @@ class ChatManager
             $this->db->insert('chat_sessions', [
                 'id' => $sessionId,
                 'title' => 'New Conversation',
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s')
+                'created_at' => date('Y-m-d H:i:s')
             ]);
         }
     }
@@ -605,6 +620,19 @@ class ChatManager
         return $title;
     }
 
+    /** stored ∈ {off, low, medium, high} → [mode, effort] for the thinking passes. */
+    private function reasoningModeEffort(?string $stored): array
+    {
+        $stored = $stored ?: 'medium';
+        if ($stored === 'off') {
+            return ['instruct', null];
+        }
+        if (in_array($stored, ['low', 'medium', 'high'], true)) {
+            return ['thinking', $stored];
+        }
+        return ['thinking', 'medium'];
+    }
+
     /**
      * Integrated first pass: one tool-capable streaming inference. Buffers
      * pre-decision reasoning, releases it (via the reasoning SSE) when normal
@@ -613,7 +641,7 @@ class ChatManager
      *
      * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
      */
-    private function firstPass(array $messages, callable $emit, bool $isEditorMode = false): array
+    private function firstPass(array $messages, callable $emit, bool $isEditorMode = false, ?string $mode = null, ?string $effort = null): array
     {
         $utf8Buffer = '';
         $reasoningBuffer = '';
@@ -660,7 +688,9 @@ class ChatManager
             },
             null,
             null,
-            $this->resolveAnswerMaxTokens($messages)
+            $this->resolveAnswerMaxTokens($messages),
+            $mode,
+            $effort
         );
 
         if ($utf8Buffer !== '') {
@@ -688,7 +718,7 @@ class ChatManager
         return $result;
     }
 
-    public function streamAgentResponse(array $messages, callable $emit): string
+    public function streamAgentResponse(array $messages, callable $emit, ?string $mode = null, ?string $effort = null): string
     {
         $aiResponse = '';
         $utf8_buffer = '';
@@ -866,7 +896,7 @@ class ChatManager
                 $emit('token', ['chunk' => $clean]);
                 $utf8_buffer = '';
             }
-        }, null, 'answer', null, null, $answerMaxTokens);
+        }, null, 'answer', $mode, $effort, $answerMaxTokens);
 
         // Drain any leftover content from the pre-thought buffer.
         // If the stream ends while the buffer is still < MAX_OPEN_TAG_LEN
@@ -911,15 +941,15 @@ class ChatManager
     }
 
     /**
-     * Context-aware output budget for the answer pass: max(8192, reasoning
-     * budget + ANSWER_TOKEN_FLOOR), clamped by actual context headroom
-     * (LLM_CTX_SIZE minus estimated prompt tokens minus safety margin).
-     * Invariant: the answer budget exceeds the reasoning budget.
+     * Hard output cap for the answer pass: a fixed 8192, clamped by actual
+     * context headroom (LLM_CTX_SIZE minus estimated prompt tokens minus safety
+     * margin). The cap is only a safety net against a stuck model looping past a
+     * sane answer length — reasoning depth is governed by reasoning_effort, not
+     * by sizing this cap to a fixed reasoning budget.
      */
     private function resolveAnswerMaxTokens(array $messages): int
     {
-        $reasoningBudget = (int) Config::get('LLM_REASONING_BUDGET', 0);
-        $maxTokens = max(8192, $reasoningBudget + self::ANSWER_TOKEN_FLOOR);
+        $maxTokens = 8192;
 
         $ctxSize = (int) Config::get('LLM_CTX_SIZE', 0);
         if ($ctxSize > 0) {

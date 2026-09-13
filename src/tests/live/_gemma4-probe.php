@@ -20,7 +20,6 @@ echo "=== PHP sees (real .env) ===\n";
 echo "MODEL_ID      = " . Config::get('LLM_MODEL_ID', '?') . "\n";
 echo "RUNTIME_POLICY= " . Config::get('LLM_RUNTIME_POLICY', '?') . "\n";
 echo "SAMPLING      = " . Config::get('LLM_SAMPLING', '?') . "\n";
-echo "REASONING_BUD = " . Config::get('LLM_REASONING_BUDGET', '?') . "\n\n";
 
 $agent = new AgentManager();
 $prompt = 'Explain in a few sentences why a large language model might give a wrong answer, and how to mitigate it.';

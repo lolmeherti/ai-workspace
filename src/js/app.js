@@ -8,6 +8,8 @@ import { initTabs, switchSidebarTab } from './tabs.js';
 import { initFilePaste, previewFile, removeFile } from './fileHandler.js';
 import { parseMarkdownElements, copyToClipboard } from './markdown.js';
 import { handleChatSubmit, toggleChatEditMode, handleChatSelection, submitMultiDelete } from './chatManager.js';
+import { initReplyRating } from './chat/replyRating.js';
+import { initReasoningEffort } from './chat/reasoningEffort.js';
 import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation, triggerManualCondensation, lockChatContext } from './ui.js';
 import './gallery/galleryBootstrap.js';
 import './tabs/tabsBootstrap.js';
@@ -45,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initFilePaste();
     parseMarkdownElements();
+    initReplyRating();
+    initReasoningEffort();
     
     switchSidebarTab(state.activeTab);
 

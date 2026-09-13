@@ -22,6 +22,14 @@ class Schema
         ");
 
         $this->db->executeStatement("
+            CREATE TABLE IF NOT EXISTS app_settings (
+                setting_key VARCHAR(64) PRIMARY KEY,
+                setting_value VARCHAR(255) NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        $this->db->executeStatement("
             CREATE TABLE IF NOT EXISTS chat_sessions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 title VARCHAR(255) NOT NULL,
@@ -57,6 +65,10 @@ class Schema
                 atomic_context JSON NULL,
                 atomic_tokens INT NULL,
                 perf_metrics JSON NULL,
+                model VARCHAR(255) NULL,
+                rating TINYINT NULL,
+                rating_reason VARCHAR(50) NULL,
+                had_tool_calls TINYINT(1) NOT NULL DEFAULT 0,
                 briefing_cards JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_chat_history_session_id
@@ -236,6 +248,38 @@ class Schema
         }
 
         try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'model'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN model VARCHAR(255) NULL AFTER perf_metrics");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'rating'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN rating TINYINT NULL AFTER model");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'rating_reason'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN rating_reason VARCHAR(50) NULL AFTER rating");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'had_tool_calls'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN had_tool_calls TINYINT(1) NOT NULL DEFAULT 0 AFTER rating_reason");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'raw_evicted'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN raw_evicted TINYINT(1) DEFAULT 0 AFTER active_context");
@@ -271,6 +315,7 @@ class Schema
                 context JSON NULL,
                 level ENUM('debug', 'info', 'warn', 'error', 'critical') NOT NULL DEFAULT 'info',
                 source VARCHAR(100) NULL,
+                model VARCHAR(255) NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_event_type (event_type),
                 INDEX idx_session_id (session_id),
@@ -293,6 +338,15 @@ class Schema
             $levelCol = $this->db->query("SHOW COLUMNS FROM app_events WHERE Field = 'level'");
             if (!empty($levelCol) && !str_contains((string)($levelCol[0]['Type'] ?? ''), 'critical')) {
                 $this->db->executeStatement("ALTER TABLE app_events MODIFY level ENUM('debug', 'info', 'warn', 'error', 'critical') NOT NULL DEFAULT 'info'");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // Migration: add model so events can be attributed to the loaded LLM.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM app_events LIKE 'model'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE app_events ADD COLUMN model VARCHAR(255) NULL AFTER source");
             }
         } catch (PDOException $e) {
         }
@@ -440,6 +494,7 @@ class Schema
     public function nukeAndRebuild(): void
     {
         $this->db->executeStatement("SET FOREIGN_KEY_CHECKS = 0;");
+        $this->db->executeStatement("DROP TABLE IF EXISTS app_settings;");
         $this->db->executeStatement("DROP TABLE IF EXISTS chat_history;");
         $this->db->executeStatement("DROP TABLE IF EXISTS chat_sessions;");
         $this->db->executeStatement("DROP TABLE IF EXISTS memories;");

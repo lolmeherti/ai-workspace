@@ -71,6 +71,13 @@ class AgentManager
     {
         $this->apiUrl = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
         $this->modelName = Config::get('LLM_MODEL_NAME', 'local-model');
+        // Attribute every event logged from here on to the loaded model.
+        \App\Logger::setModelName($this->modelName);
+    }
+
+    public function getModelName(): string
+    {
+        return $this->modelName;
     }
 
     public function chat(
@@ -152,8 +159,16 @@ class AgentManager
             $firstContentTs = null;
             $reasoningChars = 0;
             $contentChars = 0;
+            $clientAborted = false;
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, $stream) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, $stream) {
+                // Abort the transfer the instant the client disconnects so the
+                // enclosing finally() releases the inference lock instead of
+                // holding it until the model finishes generating.
+                if (connection_aborted()) {
+                    $clientAborted = true;
+                    return 0;
+                }
                 $lines = explode("\n", $data);
 
                 foreach ($lines as $line) {
@@ -200,6 +215,18 @@ class AgentManager
 
             $result = curl_exec($ch);
             $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($clientAborted) {
+                curl_close($ch);
+                \App\Logger::logEvent('generation_aborted', "Client disconnected — generation aborted after {$elapsed}ms", [
+                    'elapsed_ms' => $elapsed,
+                    'purpose' => $purpose,
+                    'partial_chars' => strlen($fullResponse),
+                ], 'info', 'AgentManager::chat');
+                $this->lastReasoningChars = $reasoningChars;
+                $this->lastContentChars = $contentChars;
+                return \App\ThoughtExtractor::strip($fullResponse);
+            }
 
             if ($result === false) {
                 $error = curl_error($ch);
@@ -363,7 +390,7 @@ class AgentManager
      * @param string $toolChoice  'auto' | 'required' | 'none'
      * @return array{finish_reason: string, content: string, tool_calls: ?array, usage: ?array}
      */
-    public function chatToolCapable(array $messages, array $tools, string $toolChoice, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?int $maxTokens = null): array
+    public function chatToolCapable(array $messages, array $tools, string $toolChoice, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?int $maxTokens = null, ?string $mode = null, ?string $effort = null): array
     {
         $endpoint = $this->apiUrl . '/chat/completions';
         $finalTemperature = $temperature ?? (float) Config::get('DEFAULT_CHAT_TEMP', 0.5);
@@ -378,6 +405,8 @@ class AgentManager
             'tools' => $tools,
             'tool_choice' => $toolChoice,
         ];
+
+        $this->applyReasoning($payload, $mode, $effort);
 
         $msgCount = count($messages);
         $estTokens = 0;
@@ -413,6 +442,7 @@ class AgentManager
         $firstContentTs = null;
         $reasoningChars = 0;
         $contentChars = 0;
+        $clientAborted = false;
 
         try {
             $ch = curl_init($endpoint);
@@ -427,7 +457,13 @@ class AgentManager
 
             $startTime = microtime(true);
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted) {
+                // Abort the transfer the instant the client disconnects so the
+                // enclosing finally() releases the inference lock.
+                if (connection_aborted()) {
+                    $clientAborted = true;
+                    return 0;
+                }
                 $lines = explode("\n", $data);
                 foreach ($lines as $line) {
                     $line = trim($line);
@@ -502,6 +538,21 @@ class AgentManager
 
             $result = curl_exec($ch);
             $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($clientAborted) {
+                curl_close($ch);
+                \App\Logger::logEvent('generation_aborted', "Client disconnected — tool-capable generation aborted after {$elapsed}ms", [
+                    'elapsed_ms' => $elapsed,
+                    'purpose' => $purpose,
+                    'partial_chars' => strlen($fullResponse),
+                ], 'info', 'AgentManager::chatToolCapable');
+                return [
+                    'finish_reason' => 'aborted',
+                    'content' => \App\ThoughtExtractor::strip($fullResponse),
+                    'tool_calls' => empty($toolCalls) ? null : array_values($toolCalls),
+                    'usage' => $lastUsage,
+                ];
+            }
 
             if ($result === false) {
                 $error = curl_error($ch);

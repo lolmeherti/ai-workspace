@@ -6,6 +6,7 @@ use App\Enums\Action;
 use App\Enums\Tab;
 use App\Enums\ApiAction;
 use App\Repositories\ChatSessionRepository;
+use App\Repositories\AppSettingsRepository;
 
 class AISettingsController extends BaseController
 {
@@ -41,6 +42,8 @@ class AISettingsController extends BaseController
             $this->saveSettings($sessionId, $activeTab);
         } elseif ($action === Action::CLEAR_ALL) {
             $this->clearAllData();
+        } elseif ($action === Action::SET_REASONING_EFFORT) {
+            $this->setReasoningEffort();
         }
     }
 
@@ -53,6 +56,8 @@ class AISettingsController extends BaseController
             $this->handleSwitchStatus();
         } elseif ($apiAction === ApiAction::CANCEL_SWITCH) {
             $this->handleCancelSwitch();
+        } elseif ($apiAction === ApiAction::GET_REASONING_EFFORT) {
+            $this->getReasoningEffort();
         }
     }
 
@@ -98,6 +103,23 @@ class AISettingsController extends BaseController
         } else {
             $this->respond($sessionId, $activeTab, ['status' => 'saved']);
         }
+    }
+
+    private function setReasoningEffort(): void
+    {
+        $effort = (string)($_POST['effort'] ?? '');
+        if (!in_array($effort, ['low', 'medium', 'high', 'off'], true)) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Invalid effort value.'], 400);
+            return;
+        }
+        (new AppSettingsRepository($this->db))->set('reasoning_effort', $effort);
+        $this->jsonResponse(['status' => 'saved', 'effort' => $effort]);
+    }
+
+    private function getReasoningEffort(): void
+    {
+        $effort = (new AppSettingsRepository($this->db))->get('reasoning_effort', 'medium');
+        $this->jsonResponse(['status' => 'ok', 'effort' => $effort]);
     }
 
     private function getLoadedModel(): ?array
@@ -256,9 +278,6 @@ class AISettingsController extends BaseController
             // Otherwise the previous model's values are silently carried forward.
             $envUpdates['LLM_SAMPLING']       = (string)($status['sampling'] ?? '');
             $envUpdates['LLM_RUNTIME_POLICY'] = (string)($status['runtime_policy'] ?? '{}');
-            if (!empty($status['reasoning_budget'])) {
-                $envUpdates['LLM_REASONING_BUDGET'] = (string)$status['reasoning_budget'];
-            }
             $this->envEditor->write($envUpdates);
 
             // The health status is cached in Redis for 10s, and during the switch

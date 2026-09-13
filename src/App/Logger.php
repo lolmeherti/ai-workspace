@@ -16,6 +16,8 @@ class Logger
     private static ?Database $db = null;
     /** Ambient chat session id: attached to every event logged in the current request. */
     private static ?int $sessionId = null;
+    /** Ambient model name: attached to every event logged in the current request. */
+    private static ?string $modelName = null;
 
     public static function setDatabase(Database $db): void
     {
@@ -31,6 +33,17 @@ class Logger
     public static function clearSessionId(): void
     {
         self::$sessionId = null;
+    }
+
+    /** Set the ambient model name for the current request (attribution for metrics/errors). */
+    public static function setModelName(?string $modelName): void
+    {
+        self::$modelName = $modelName;
+    }
+
+    public static function clearModelName(): void
+    {
+        self::$modelName = null;
     }
 
     private static function getLogFile(): string
@@ -56,6 +69,7 @@ class Logger
                 self::$db->insert('app_events', [
                     'event_type' => $eventType,
                     'session_id' => self::$sessionId,
+                    'model' => self::$modelName,
                     'message' => mb_substr($fullMessage, 0, 65535),
                     'context' => !empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                     'level' => $level,

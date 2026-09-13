@@ -55,4 +55,6 @@ enum ApiAction: string
     case PRUNE_JOBS = 'prune_jobs';
 
     case LOG_FRONTEND_EVENT = 'log_frontend_event';
+    case RATE_REPLY = 'rate_reply';
+    case GET_REASONING_EFFORT = 'get_reasoning_effort';
 }

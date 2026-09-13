@@ -308,8 +308,7 @@ TEXT;
 
     /**
      * Whether a prompt breakdown plus output reserve and safety margin exceeds
-     * the context window. reasoning_budget is a sub-cap of max_tokens, not an
-     * additive term, so it is deliberately absent here.
+     * the context window.
      *
      * @param array{total:int} $breakdown
      */

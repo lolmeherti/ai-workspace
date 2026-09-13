@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /*
  * reasoning_effort live probe — does none / low / medium / high actually change
- * the model's behavior under the current llama-server boot (--reasoning-budget 4096,
- * --jinja, --flash-attn, -ngl 999, --cache-type-k/v q8_0, etc.)?
+ * the model's behavior under the current llama-server boot (--jinja,
+ * --flash-attn, -ngl 999, --cache-type-k/v q8_0, etc.)?
  *
  * One raw non-streaming /chat/completions call per (task x effort). Observables:
  * elapsed_ms, completion_tokens, reasoning_content length, content length,

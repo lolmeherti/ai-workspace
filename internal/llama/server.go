@@ -17,6 +17,11 @@ import (
 	"localsy/internal/util"
 )
 
+// ParallelSlots is the llama-server --parallel value. It also drives the
+// memcalc recurrent-state multiplier and the settings-gate VRAM ceilings, so it
+// must stay in sync with the --parallel flag emitted in StartServer.
+const ParallelSlots = 1
+
 func StartServer(binDir string, m *models.ResolvedModel) *exec.Cmd {
 	serverPath := filepath.Join(binDir, "llama-server.exe")
 	if _, err := os.Stat(serverPath); os.IsNotExist(err) {
@@ -28,16 +33,12 @@ func StartServer(binDir string, m *models.ResolvedModel) *exec.Cmd {
 		"--alias", m.Name,
 		"--ctx-size", strconv.Itoa(m.CtxSize),
 		"-ngl", "999",
-		"--parallel", "4",
+		"--parallel", strconv.Itoa(ParallelSlots),
 		"--host", "0.0.0.0",
 		"--port", "1234",
 		"--jinja",
 		"--kv-unified",
 		"--load-mode", "mmap+mlock",
-	}
-
-	if m.ReasoningBudget > 0 {
-		args = append(args, "--reasoning-budget", strconv.Itoa(m.ReasoningBudget))
 	}
 
 	// Runtime-owned server flags. Emitted only when the runtime spec requests

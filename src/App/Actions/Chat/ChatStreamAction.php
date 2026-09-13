@@ -14,7 +14,7 @@ class ChatStreamAction extends BaseAction
     ) {
     }
 
-    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile = null): void
+    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile = null, ?string $effort = null): void
     {
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
@@ -22,6 +22,11 @@ class ChatStreamAction extends BaseAction
         header('X-Accel-Buffering: no');
 
         @set_time_limit(600);
+
+        // Keep running after the client disconnects so AgentManager can detect
+        // the abort via connection_aborted() and release the inference lock,
+        // instead of PHP killing the script and leaking the lock until TTL.
+        ignore_user_abort(true);
 
         while (ob_get_level() > 0) {
             ob_end_flush();
@@ -37,7 +42,7 @@ class ChatStreamAction extends BaseAction
         );
 
         try {
-            $chatManager->process($sessionId, $query, $imageFile, $activeEditFile, function ($event, $data) {
+            $chatManager->process($sessionId, $query, $imageFile, $activeEditFile, $effort, function ($event, $data) {
                 $payload = json_encode(['event' => $event, 'data' => $data]);
                 echo "data: {$payload}\n\n";
                 @ob_flush();

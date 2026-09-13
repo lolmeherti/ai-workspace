@@ -41,8 +41,8 @@ var runtimes = map[string]RuntimeSpec{
 	// effort); off via the OpenAI-compat reasoning_effort field.
 	"qwen35": {Reasoning: ReasoningPolicy{Field: "reasoning_effort", OffValue: "none"}},
 	// Gemma 4: embedded template reads enable_thinking (thinking via
-	// <|channel>thought markers). Off-mechanism is template-verified but not
-	// yet empirically confirmed on a loaded Gemma 4 (handoff Q#5).
+	// <|channel>thought markers). Off-mechanism confirmed live (2026-09-13)
+	// on Gemma 4 IQ4_NL + E4B Q8: reasoning_effort=none -> 0 reasoning.
 	"gemma4": {Reasoning: ReasoningPolicy{Field: "reasoning_effort", OffValue: "none"}},
 	// Bonsai 27B: Qwen3-style template, off-switch verified live.
 	"bonsai": {Reasoning: ReasoningPolicy{Field: "reasoning_effort", OffValue: "none"}},

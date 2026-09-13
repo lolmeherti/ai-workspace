@@ -12,6 +12,7 @@ use App\Controllers\EmailController;
 use App\Enums\Action;
 use App\Enums\ApiAction;
 use App\Actions\LogFrontendEventAction;
+use App\Actions\RateReplyAction;
 use App\Controllers\JobController;
 
 class ActionRouter
@@ -49,6 +50,11 @@ class ActionRouter
 
         if ($apiAction === ApiAction::LOG_FRONTEND_EVENT) {
             (new LogFrontendEventAction())->execute();
+            return;
+        }
+
+        if ($apiAction === ApiAction::RATE_REPLY) {
+            (new RateReplyAction($this->db))->execute();
             return;
         }
 
@@ -111,6 +117,7 @@ class ActionRouter
 
                     case Action::SAVE_SETTINGS:
                     case Action::CLEAR_ALL:
+                    case Action::SET_REASONING_EFFORT:
                         $controller = new AISettingsController($this->db, $this->chatSessionRepository, $this->envEditor);
                         break;
 
@@ -133,7 +140,7 @@ class ActionRouter
                 $controller = new ChatController($this->db, $this->chatSessionRepository, $this->agentManager, $this->memoryExtractor, $this->status);
             }
         } else {
-            if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT || $apiAction === ApiAction::GET_SWITCH_STATUS) {
+            if ($apiAction === ApiAction::SYNC_LMSTUDIO_LIMIT || $apiAction === ApiAction::GET_SWITCH_STATUS || $apiAction === ApiAction::GET_REASONING_EFFORT) {
                 $controller = new AISettingsController($this->db, $this->chatSessionRepository, $this->envEditor);
             } elseif ($apiAction === ApiAction::GET_EMAILS || $apiAction === ApiAction::GET_EMAIL_BODY) {
                 $controller = new EmailController($this->db);

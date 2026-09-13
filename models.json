@@ -21,7 +21,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
         "url": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-QAT-GGUF/resolve/main/gemma-4-26B-A4B-it-QAT-Q4_0.gguf"
@@ -44,7 +43,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-UD-IQ4_NL.gguf",
         "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-UD-IQ4_NL.gguf"
@@ -68,7 +66,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-26B-A4B-it-Q8_0.gguf",
         "url": "https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-Q8_0.gguf"
@@ -90,7 +87,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-Q8_0.gguf",
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q8_0.gguf"
@@ -115,7 +111,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-IQ4_NL.gguf",
         "url": "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-IQ4_NL.gguf"
@@ -140,7 +135,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E4B-it-Q4_K_M.gguf",
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
@@ -165,7 +159,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E2B-it-Q4_K_M.gguf",
         "url": "https://huggingface.co/lmstudio-community/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
@@ -188,7 +181,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 },
         "instruct": { "temperature": 1.0, "top_p": 0.95, "top_k": 64 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "gemma-4-E2B-it-IQ4_NL.gguf",
         "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-IQ4_NL.gguf"
@@ -211,7 +203,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 },
         "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "Qwen3.5-9B-IQ4_NL.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-IQ4_NL.gguf"
@@ -235,7 +226,6 @@
         "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0 },
         "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "Qwen3.8-27B-UD-Q5_K_XL.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q5_K_XL.gguf"
@@ -261,7 +251,6 @@
         "thinking": { "temperature": 0.7, "top_p": 0.95, "top_k": 20 },
         "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20 }
       },
-      "reasoning_budget": 4096,
       "model": {
         "file": "Bonsai-27B-Q1_0.gguf",
         "url": "https://huggingface.co/prism-ml/Bonsai-27B-gguf/resolve/main/Bonsai-27B-Q1_0.gguf"
