@@ -71,7 +71,6 @@ type ModelDefinition struct {
 	Model           Artifact                     `json:"model"`
 	MMProj          *Artifact                    `json:"mmproj,omitempty"`
 	Speculative     *SpeculativeConfig           `json:"speculative,omitempty"`
-	ReasoningBudget int                          `json:"reasoning_budget,omitempty"`
 	Capabilities    Capabilities                 `json:"capabilities,omitempty"`
 	Runtime         string                       `json:"runtime,omitempty"`
 	Sampling        Sampling                     `json:"sampling,omitempty"`
@@ -90,7 +89,6 @@ type ResolvedModel struct {
 	CtxSize         int
 	KVCacheType     string
 	FlashAttn       bool
-	ReasoningBudget int
 	Speculative     *ResolvedSpeculative
 	ExtraArgs       []string
 	Runtime         RuntimeSpec

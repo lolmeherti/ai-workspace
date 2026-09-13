@@ -122,6 +122,10 @@ class ToolExecutionService
     {
         $resolvedTool = Tool::tryFrom($toolName);
         if ($resolvedTool === null) {
+            \App\Logger::logEvent('llm_tool_no_match', "LLM tool_call for unknown tool: {$toolName}", [
+                'reason' => 'unknown_tool',
+                'tool_name' => $toolName,
+            ], 'warn', 'ToolExecutionService::executeTool');
             return '';
         }
 

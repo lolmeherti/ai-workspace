@@ -25,26 +25,74 @@ export function initFilePaste() {
             }
         }
 
-        // If files are pasted, upload them in background and append as references
+        // If files are pasted, handle images as message attachments (with a
+        // visible preview) and upload non-image files as references.
         if (filesToUpload.length > 0) {
             e.preventDefault(); // Stop standard text paste behavior
+
+            const imageFile = filesToUpload.find(f => f.type.startsWith('image/'));
+            const otherFiles = filesToUpload.filter(f => !f.type.startsWith('image/'));
+
+            if (imageFile) {
+                state.pastedImageFile = imageFile;
+                state.selectedFile = null;
+
+                const previewContainer = document.getElementById("image-preview-container");
+                const imgPreview = document.getElementById("image-preview");
+                const iconPreview = document.getElementById("file-icon-preview");
+                const previewName = document.getElementById("file-preview-name");
+                const previewType = document.getElementById("file-preview-type");
+
+                if (previewName) previewName.textContent = imageFile.name || "pasted_image.png";
+                if (previewType) previewType.textContent = imageFile.type || "Image";
+                if (previewContainer) {
+                    previewContainer.style.setProperty("display", "flex", "important");
+                    previewContainer.classList.remove("hidden");
+                }
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    if (imgPreview) {
+                        imgPreview.src = ev.target.result;
+                        imgPreview.classList.remove("hidden");
+                    }
+                    if (iconPreview) iconPreview.classList.add("hidden");
+                };
+                reader.readAsDataURL(imageFile);
+            }
+
+            if (otherFiles.length === 0) return;
 
             const chatForm = document.getElementById("chatForm");
             const inputField = document.getElementById("q");
             const submitBtn = chatForm ? chatForm.querySelector("button[type='submit']") : null;
 
-            // Visual loading states
-            const originalPlaceholder = inputField ? inputField.placeholder : "Message AI Assistant...";
-            if (inputField) {
-                inputField.disabled = true;
-                inputField.placeholder = `Uploading and AI indexing ${filesToUpload.length} file(s)...`;
-            }
+            // Keep the input enabled so the user can keep typing; only block
+            // submit until the uploads land.
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.classList.add("opacity-50", "cursor-not-allowed");
             }
 
-            const uploadPromises = filesToUpload.map(file => {
+            // Immediate feedback: an "uploading" chip per pasted file, replaced
+            // by the real reference chip once the upload finishes.
+            otherFiles.forEach(file => {
+                const refContainer = document.getElementById('referenced-files-container');
+                if (!refContainer) return;
+                const chip = document.createElement('div');
+                chip.className = "flex items-center gap-2 bg-[#091124]/90 border border-slate-600 rounded-lg p-2 text-xs text-slate-300 font-medium select-none animate-fade-in";
+                const spinner = document.createElement('span');
+                spinner.className = "h-4 w-4 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin shrink-0";
+                const name = document.createElement('span');
+                name.className = "truncate max-w-[150px]";
+                name.textContent = file.name;
+                const label = document.createElement('span');
+                label.className = "text-[9px] text-slate-500 uppercase";
+                label.textContent = "uploading…";
+                chip.append(spinner, name, label);
+                refContainer.appendChild(chip);
+            });
+
+            const uploadPromises = otherFiles.map(file => {
                 const formData = new FormData();
                 formData.append('file', file);
 
@@ -83,10 +131,7 @@ export function initFilePaste() {
             });
 
             Promise.all(uploadPromises).finally(() => {
-                // Restore input and button states
                 if (inputField) {
-                    inputField.disabled = false;
-                    inputField.placeholder = originalPlaceholder;
                     inputField.focus();
                 }
                 if (submitBtn) {

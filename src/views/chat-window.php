@@ -330,6 +330,28 @@
                                         </button>
                                     </div>
                                 <?php endif; ?>
+
+                                <?php if ($msg['role'] === 'assistant'): ?>
+                                <?php
+                                    $rating = $msg['rating'] ?? null;
+                                    $ratingReason = (string)($msg['rating_reason'] ?? '');
+                                    $hadTool = !empty($msg['had_tool_calls']);
+                                ?>
+                                <div class="reply-rating flex items-center gap-1 mt-2" data-message-id="<?php echo (int)$msg['id']; ?>" data-had-tool-calls="<?php echo $hadTool ? '1' : '0'; ?>" data-rating="<?php echo $rating === null ? '' : (int)$rating; ?>" data-reason="<?php echo htmlspecialchars($ratingReason); ?>">
+                                    <button type="button" data-rate="1" title="Good reply" class="rate-btn w-7 h-7 flex items-center justify-center rounded-lg border border-slate-700 text-slate-500 hover:text-slate-200 hover:border-slate-500 transition-colors cursor-pointer bg-transparent <?php echo ($rating !== null && (int)$rating === 1) ? 'rate-active-up' : ''; ?>">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+                                    </button>
+                                    <button type="button" data-rate="0" title="Bad reply" class="rate-btn w-7 h-7 flex items-center justify-center rounded-lg border border-slate-700 text-slate-500 hover:text-slate-200 hover:border-slate-500 transition-colors cursor-pointer bg-transparent <?php echo ($rating !== null && (int)$rating === 0) ? 'rate-active-down' : ''; ?>">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2v12M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+                                    </button>
+                                    <div class="reason-menu hidden flex flex-wrap gap-1 mt-1.5">
+                                        <?php foreach (\App\Actions\RateReplyAction::DOWNVOTE_REASONS as $rk => $rl): ?>
+                                            <?php if (in_array($rk, \App\Actions\RateReplyAction::TOOL_TURN_REASONS, true) && !$hadTool) continue; ?>
+                                            <button type="button" data-reason="<?php echo htmlspecialchars($rk); ?>" class="text-[10px] px-2 py-1 rounded-full border border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors cursor-pointer"><?php echo htmlspecialchars($rl); ?></button>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -355,8 +377,25 @@
 
                     <div id="referenced-files-container" class="flex flex-wrap gap-2 mb-3"></div>
                     
+                    <style>
+                        .effort-btn { transition: all .15s ease; }
+                        .effort-btn.effort-active { background: rgba(34,211,238,0.14); color: #67e8f9; border-color: rgba(34,211,238,0.45); }
+                    </style>
+                    <div id="effort-control" class="flex items-center justify-end gap-2 mb-2">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Reasoning</span>
+                        <div id="effort-graduated" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="low" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Low</button>
+                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Med</button>
+                            <button type="button" data-effort="high" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">High</button>
+                        </div>
+                        <div id="effort-binary" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="off" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Off</button>
+                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">On</button>
+                        </div>
+                    </div>
                     <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
                         <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
+                        <input type="hidden" name="effort" id="effort-input" value="medium">
                         <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                         
                         <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>

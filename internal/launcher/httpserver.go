@@ -15,7 +15,10 @@ import (
 
 	"localsy/internal/bridge"
 	"localsy/internal/env"
+	"localsy/internal/gguf"
+	"localsy/internal/gpu"
 	"localsy/internal/llama"
+	"localsy/internal/memcalc"
 	"localsy/internal/models"
 	"localsy/internal/util"
 )
@@ -28,6 +31,10 @@ func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware,
 		modelDir: modelDir,
 		relay:    relay,
 	}
+
+	// Precompute every model's max-ctx ceiling in the background so the settings
+	// dropdown is honest (and fast) by the time the user opens it.
+	go handler.warmModelHeaders()
 
 	go func() {
 		if err := http.ListenAndServe(":9876", handler); err != nil {
@@ -49,6 +56,18 @@ type modelsHandler struct {
 	// switchCancel aborts the in-flight switch's download when /api/model-switch/cancel
 	// is called. Nil when no switch is in flight.
 	switchCancel context.CancelFunc
+
+	// headerMu guards headerCache: parsed GGUF headers cached once per model so
+	// the settings dropdown can compute max-ctx without re-fetching headers.
+	headerMu    sync.Mutex
+	headerCache map[string]headerCacheEntry
+}
+
+// headerCacheEntry is a cached GGUF header (plus mmproj size) for one model,
+// used to compute the max context that fits before the user sees any option.
+type headerCacheEntry struct {
+	header      *gguf.Header
+	mmprojBytes uint64
 }
 
 // switchStatus is the observable state of an in-flight (or last completed)
@@ -70,7 +89,6 @@ type switchStatus struct {
 	// switch reaches "starting".
 	Sampling        string `json:"sampling"`
 	RuntimePolicy   string `json:"runtime_policy"`
-	ReasoningBudget int    `json:"reasoning_budget"`
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -107,17 +125,19 @@ type modelSwitchRequest struct {
 
 func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) {
 	type profileEntry struct {
-		ModelID    string  `json:"model_id"`
-		Name       string  `json:"name"`
-		ProfileID  string  `json:"profile_id"`
-		VRAMGroup  string  `json:"vram_group"`
-		VRAMMin    float64 `json:"vram_min"`
-		CtxSize    int     `json:"ctx_size"`
-		Vision     bool    `json:"vision"`
-		Speculative bool   `json:"speculative"`
+		ModelID     string  `json:"model_id"`
+		Name        string  `json:"name"`
+		ProfileID   string  `json:"profile_id"`
+		VRAMGroup   string  `json:"vram_group"`
+		VRAMMin     float64 `json:"vram_min"`
+		CtxSize     int     `json:"ctx_size"`
+		MaxCtx      int     `json:"max_ctx"`
+		Vision      bool    `json:"vision"`
+		Speculative bool    `json:"speculative"`
 	}
 
 	entries := make([]profileEntry, 0)
+	total, _ := gpu.TotalVRAMBytes()
 	for id, def := range h.defs {
 		if def.Model.File == "" || def.Model.URL == "" {
 			continue
@@ -135,14 +155,20 @@ func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) 
 			if p.Requirements.VRAMMin > h.hw.VRAMGB {
 				continue
 			}
+			ctx := p.CtxSize
+			maxCtx := h.maxContextFor(id, p, total)
+			if maxCtx > 0 && ctx > maxCtx {
+				ctx = maxCtx
+			}
 			entries = append(entries, profileEntry{
-				ModelID:    id,
-				Name:       def.Name,
-				ProfileID:  pid,
-				VRAMGroup:  vramGroupLabel(p.Requirements.VRAMMin),
-				VRAMMin:    p.Requirements.VRAMMin,
-				CtxSize:    p.CtxSize,
-				Vision:     def.Capabilities.Vision,
+				ModelID:     id,
+				Name:        def.Name,
+				ProfileID:   pid,
+				VRAMGroup:   vramGroupLabel(p.Requirements.VRAMMin),
+				VRAMMin:     p.Requirements.VRAMMin,
+				CtxSize:     ctx,
+				MaxCtx:      maxCtx,
+				Vision:      def.Capabilities.Vision,
 				Speculative: speculative,
 			})
 		}
@@ -200,6 +226,26 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 	if err := models.ValidateModel(req.ModelID, h.defs, h.hw); err != nil {
 		writeJSON(w, 404, map[string]string{"error": err.Error()})
 		return
+	}
+
+	// VRAM gate (pre-download): fetch the GGUF header over HTTP Range and refuse
+	// the switch if the model can't fit, so the user never downloads an
+	// impossible model. If the header can't be fetched, we log and defer to the
+	// post-download backstop in runModelSwitch.
+	if _, p, ok := models.ResolveProfile(req.ModelID, h.defs, h.hw); ok {
+		kvType := p.KVCacheType
+		if kvType == "" {
+			kvType = "q8_0"
+		}
+		ctx := req.CtxSize
+		if ctx <= 0 {
+			ctx = p.CtxSize
+		}
+		if err := h.preDownloadGate(req.ModelID, ctx, kvType); err != nil {
+			util.LogPrint("[-] model switch to %s refused by VRAM gate: %v\n", req.ModelID, err)
+			writeJSON(w, 409, map[string]string{"error": err.Error()})
+			return
+		}
 	}
 
 	name := h.defs[req.ModelID].Name
@@ -261,6 +307,27 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 
 	if ctxSize > 0 {
 		resolved.CtxSize = ctxSize
+	} else {
+		// No explicit ctx from the client: clamp the profile default to what
+		// actually fits on this GPU, so the default never overflows.
+		resolved.CtxSize = fitContext(resolved)
+	}
+
+	// VRAM gate (backstop): parse the now-local GGUF and refuse before killing
+	// the current server or starting the new one, so an overflow can never be
+	// started even if the pre-download header fetch was skipped.
+	if header, err := gguf.ParseFile(resolved.ModelPath); err == nil {
+		var mmprojBytes uint64
+		if resolved.MMProjPath != "" {
+			if st, err := os.Stat(resolved.MMProjPath); err == nil {
+				mmprojBytes = uint64(st.Size())
+			}
+		}
+		if err := h.vramGate(modelID, resolved.CtxSize, resolved.KVCacheType, header, mmprojBytes); err != nil {
+			h.finishSwitchError("refused by VRAM gate: " + err.Error())
+			util.LogPrint("[-] model switch to %s refused by VRAM gate: %v\n", modelID, err)
+			return
+		}
 	}
 
 	h.switchMu.Lock()
@@ -269,7 +336,6 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 	h.sw.CtxSize = resolved.CtxSize
 	h.sw.Sampling = resolved.SamplingJSON()
 	h.sw.RuntimePolicy = resolved.Runtime.RuntimePolicyJSON()
-	h.sw.ReasoningBudget = resolved.ReasoningBudget
 	h.switchMu.Unlock()
 
 	writeChatTemplate(filepath.Dir(h.modelDir), resolved)
@@ -304,6 +370,154 @@ func (h *modelsHandler) finishSwitchError(errMsg string) {
 	h.switchMu.Unlock()
 }
 
+// preDownloadGate fetches the model's GGUF header over HTTP Range and runs the
+// VRAM check before anything is downloaded. A header-fetch failure is NOT a
+// refusal — the post-download backstop catches that case after download.
+func (h *modelsHandler) preDownloadGate(modelID string, ctxSize int, kvType string) error {
+	def := h.defs[modelID]
+	headerData, err := gguf.FetchHeader(def.Model.URL)
+	if err != nil {
+		util.LogPrint("[!] VRAM gate: header fetch failed for %s: %v (deferring to post-download check)\n", modelID, err)
+		return nil
+	}
+	header, err := gguf.Parse(headerData)
+	if err != nil {
+		util.LogPrint("[!] VRAM gate: header parse failed for %s: %v (deferring to post-download check)\n", modelID, err)
+		return nil
+	}
+	var mmprojBytes uint64
+	if def.MMProj != nil && def.MMProj.URL != "" {
+		if sz, err := gguf.FetchFileSize(def.MMProj.URL); err == nil {
+			mmprojBytes = sz
+		}
+	}
+	return h.vramGate(modelID, ctxSize, kvType, header, mmprojBytes)
+}
+
+// vramGate computes the hard VRAM ceiling for a model at a given ctx and returns
+// an error if it exceeds the currently-free VRAM. --parallel and --kv-unified
+// are set in llama/server.go:StartServer (llama.ParallelSlots) and must stay in sync.
+func (h *modelsHandler) vramGate(modelID string, ctxSize int, kvType string, header *gguf.Header, mmprojBytes uint64) error {
+	total, err := gpu.TotalVRAMBytes()
+	if err != nil {
+		return fmt.Errorf("cannot read total VRAM: %w", err)
+	}
+	opts := memcalc.MemOpts{Ctx: ctxSize, KVType: kvType, Parallel: llama.ParallelSlots, Unified: true}
+	required := memcalc.Required(header, mmprojBytes, opts)
+	if required <= total {
+		return nil
+	}
+	max := memcalc.MaxContext(header, mmprojBytes, total, opts)
+	return fmt.Errorf("%s at ctx %d needs %.2f GiB but the GPU has %.2f GiB total — max ctx for this model is %d",
+		h.defs[modelID].Name, ctxSize,
+		float64(required)/(1024*1024*1024),
+		float64(total)/(1024*1024*1024),
+		max)
+}
+
+// modelHeader returns the parsed GGUF header (and mmproj size) for a model,
+// preferring the local file and falling back to an HTTP Range fetch of just the
+// header when the model isn't downloaded yet. Cached per model so the settings
+// dropdown doesn't re-fetch on every open.
+func (h *modelsHandler) modelHeader(modelID string) (*gguf.Header, uint64) {
+	h.headerMu.Lock()
+	if h.headerCache == nil {
+		h.headerCache = make(map[string]headerCacheEntry)
+	}
+	if e, ok := h.headerCache[modelID]; ok {
+		h.headerMu.Unlock()
+		return e.header, e.mmprojBytes
+	}
+	h.headerMu.Unlock()
+
+	def := h.defs[modelID]
+	var header *gguf.Header
+	var mmprojBytes uint64
+
+	if hh, err := gguf.ParseFile(filepath.Join(h.modelDir, def.Model.File)); err == nil {
+		header = hh
+	} else if data, ferr := gguf.FetchHeader(def.Model.URL); ferr == nil {
+		if hh, perr := gguf.Parse(data); perr == nil {
+			header = hh
+		}
+	}
+
+	if header != nil {
+		if def.MMProj != nil && def.MMProj.URL != "" {
+			if st, err := os.Stat(filepath.Join(h.modelDir, def.MMProj.File)); err == nil {
+				mmprojBytes = uint64(st.Size())
+			} else if sz, err := gguf.FetchFileSize(def.MMProj.URL); err == nil {
+				mmprojBytes = sz
+			}
+		}
+	}
+
+	h.headerMu.Lock()
+	h.headerCache[modelID] = headerCacheEntry{header: header, mmprojBytes: mmprojBytes}
+	h.headerMu.Unlock()
+	return header, mmprojBytes
+}
+
+// maxContextFor returns the largest context (tokens) that fits on the GPU for a
+// profile, or 0 if it can't be computed (no header / no VRAM reading). The
+// settings dropdown clamps its offered ctx to this so it never promises a
+// window that can't actually be loaded.
+func (h *modelsHandler) maxContextFor(modelID string, p models.DeploymentProfile, total uint64) int {
+	if total == 0 {
+		return 0
+	}
+	header, mmprojBytes := h.modelHeader(modelID)
+	if header == nil {
+		return 0
+	}
+	kvType := p.KVCacheType
+	if kvType == "" {
+		kvType = "q8_0"
+	}
+	opts := memcalc.MemOpts{Ctx: p.CtxSize, KVType: kvType, Parallel: llama.ParallelSlots, Unified: true}
+	return memcalc.MaxContext(header, mmprojBytes, total, opts)
+}
+
+// warmModelHeaders prefetches and caches every model's GGUF header in the
+// background so the settings dropdown is fast and honest on first open.
+func (h *modelsHandler) warmModelHeaders() {
+	for id, def := range h.defs {
+		if def.Model.File == "" || def.Model.URL == "" {
+			continue
+		}
+		h.modelHeader(id)
+	}
+}
+
+// fitContext clamps ctx to the largest value that fits the GPU for a resolved
+// model (whose GGUF is already on disk). Returns ctx unchanged if the GGUF or
+// VRAM can't be read — the switch gate backstops that case.
+func fitContext(m *models.ResolvedModel) int {
+	header, err := gguf.ParseFile(m.ModelPath)
+	if err != nil {
+		return m.CtxSize
+	}
+	var mmprojBytes uint64
+	if m.MMProjPath != "" {
+		if st, err := os.Stat(m.MMProjPath); err == nil {
+			mmprojBytes = uint64(st.Size())
+		}
+	}
+	total, err := gpu.TotalVRAMBytes()
+	if err != nil {
+		return m.CtxSize
+	}
+	kvType := m.KVCacheType
+	if kvType == "" {
+		kvType = "q8_0"
+	}
+	opts := memcalc.MemOpts{Ctx: m.CtxSize, KVType: kvType, Parallel: llama.ParallelSlots, Unified: true}
+	if max := memcalc.MaxContext(header, mmprojBytes, total, opts); max > 0 && m.CtxSize > max {
+		return max
+	}
+	return m.CtxSize
+}
+
 func (h *modelsHandler) handleCancelSwitch(w http.ResponseWriter, _ *http.Request) {
 	h.switchMu.Lock()
 	cancel := h.switchCancel
@@ -334,7 +548,7 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 		lines := strings.Split(string(existing), "\n")
 		updated := make([]string, 0, len(lines))
 		hasModelID, hasModelName, hasCtxSize := false, false, false
-		hasSampling, hasPolicy, hasReasoningBudget := false, false, false
+		hasSampling, hasPolicy := false, false
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "LLM_MODEL_ID=") {
@@ -362,13 +576,6 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 				hasPolicy = true
 				continue
 			}
-			if strings.HasPrefix(trimmed, "LLM_REASONING_BUDGET=") {
-				if resolved.ReasoningBudget > 0 {
-					updated = append(updated, "LLM_REASONING_BUDGET="+strconv.Itoa(resolved.ReasoningBudget))
-				}
-				hasReasoningBudget = true
-				continue
-			}
 			updated = append(updated, line)
 		}
 		if !hasModelID {
@@ -385,9 +592,6 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 		}
 		if !hasPolicy {
 			updated = append(updated, "LLM_RUNTIME_POLICY="+env.QuoteEnvValue(resolved.Runtime.RuntimePolicyJSON()))
-		}
-		if !hasReasoningBudget && resolved.ReasoningBudget > 0 {
-			updated = append(updated, "LLM_REASONING_BUDGET="+strconv.Itoa(resolved.ReasoningBudget))
 		}
 		_ = os.WriteFile(envPath, []byte(strings.Join(updated, "\n")), 0644)
 	}

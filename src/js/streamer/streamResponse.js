@@ -10,6 +10,7 @@ import { renderFileChoices } from './streamFileChoices.js';
 import { extractThinking, addCodeCopyButtons } from '../markdown.js';
 import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
 import { renderBriefingActions } from '../chat/chatBriefingCards.js';
+import { renderReplyRating } from '../chat/replyRating.js';
 
 function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1394,6 +1395,9 @@ export async function streamResponse(formData, originalMessage) {
                             }
                             if (data.perf_metrics) {
                                 renderMetricsBubble(aiBubble, data.perf_metrics);
+                            }
+                            if (data.message_id) {
+                                renderReplyRating(aiBubble, { message_id: data.message_id, had_tool_calls: !!data.had_tool_calls });
                             }
 
                             scrollIfStuck(chatWindow);

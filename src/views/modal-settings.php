@@ -47,6 +47,7 @@
                                 $mId = $m['model_id'] ?? '';
                                 $mName = $m['name'] ?? $mId;
                                 $ctxSize = (int)($m['ctx_size'] ?? 0);
+                                $maxCtx = (int)($m['max_ctx'] ?? 0);
                                 $label = $mName;
                                 if ($ctxSize >= 1000) {
                                     $label .= ' — ' . number_format($ctxSize) . ' ctx';
@@ -55,6 +56,7 @@
                             ?>
                                 <option value="<?php echo htmlspecialchars($mId); ?>"
                                         data-ctx="<?php echo $ctxSize; ?>"
+                                        data-max-ctx="<?php echo $maxCtx; ?>"
                                         data-name="<?php echo htmlspecialchars($mName); ?>"
                                         <?php echo $isSelected; ?>>
                                     <?php echo htmlspecialchars($label); ?>
@@ -128,6 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctxInput.value = opt.dataset.ctx;
             } else if (opt && !opt.value) {
                 ctxInput.value = '';
+            }
+            if (opt && opt.dataset.maxCtx && parseInt(opt.dataset.maxCtx) > 0) {
+                ctxInput.max = opt.dataset.maxCtx;
+            } else {
+                ctxInput.removeAttribute('max');
             }
         });
     }

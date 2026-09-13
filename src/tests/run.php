@@ -40,6 +40,9 @@ require_once __DIR__ . '/BriefingTriageTest.php';
 require_once __DIR__ . '/BriefingExtractorTest.php';
 require_once __DIR__ . '/EmailServiceTest.php';
 require_once __DIR__ . '/RuntimeSamplingTest.php';
+require_once __DIR__ . '/ModelPerformanceReportTest.php';
+require_once __DIR__ . '/RateReplyActionTest.php';
+require_once __DIR__ . '/ReasoningEffortTest.php';
 
 use App\Config;
 use App\Database;
@@ -75,6 +78,9 @@ use App\Tests\BriefingTriageTest;
 use App\Tests\BriefingExtractorTest;
 use App\Tests\EmailServiceTest;
 use App\Tests\RuntimeSamplingTest;
+use App\Tests\ModelPerformanceReportTest;
+use App\Tests\RateReplyActionTest;
+use App\Tests\ReasoningEffortTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -184,6 +190,15 @@ $allOk = (new EmailServiceTest())->run() && $allOk;
 
 echo "\n=== Phase 31: Runtime Sampling / Reasoning Policy Tests ===\n";
 $allOk = (new RuntimeSamplingTest())->run() && $allOk;
+
+echo "\n=== Phase 32: Model Performance Report Tests ===\n";
+$allOk = (new ModelPerformanceReportTest())->run() && $allOk;
+
+echo "\n=== Phase 33: Rate Reply Action Tests ===\n";
+$allOk = (new RateReplyActionTest())->run() && $allOk;
+
+echo "\n=== Phase 34: Reasoning Effort Tests ===\n";
+$allOk = (new ReasoningEffortTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

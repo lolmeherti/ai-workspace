@@ -12,7 +12,7 @@ import (
 	"localsy/internal/download"
 )
 
-var reservedArgPattern = regexp.MustCompile(`^-?-?(m|alias|ctx-size|mmproj|spec-type|spec-draft-model|spec-draft-n-max|spec-draft-ngl|cache-type-k|cache-type-v|flash-attn|host|port|jinja|reasoning-budget|reasoning-format|reasoning-preserve|chat-template-file|ngl|parallel)(=.*)?$`)
+var reservedArgPattern = regexp.MustCompile(`^-?-?(m|alias|ctx-size|mmproj|spec-type|spec-draft-model|spec-draft-n-max|spec-draft-ngl|cache-type-k|cache-type-v|flash-attn|host|port|jinja|reasoning-format|reasoning-preserve|chat-template-file|ngl|parallel)(=.*)?$`)
 
 func ResolveModel(
 	modelID string,
@@ -64,7 +64,6 @@ func ResolveModelContext(
 		CtxSize:         profile.CtxSize,
 		KVCacheType:     profile.KVCacheType,
 		FlashAttn:       true,
-		ReasoningBudget: def.ReasoningBudget,
 		ExtraArgs:       profile.ExtraArgs,
 		Speculative:     nil,
 		Runtime:         runtimeSpec,
@@ -172,6 +171,21 @@ func selectProfile(profiles map[string]DeploymentProfile, hw Hardware) (string, 
 		return candidates[i].prof.CtxSize > candidates[j].prof.CtxSize
 	})
 	return candidates[0].id, candidates[0].prof
+}
+
+// ResolveProfile returns the deployment profile selected for the hardware
+// WITHOUT downloading any artifacts — used by the VRAM gate to learn the
+// ctx_size / kv_cache_type for a switch request before the model is fetched.
+func ResolveProfile(modelID string, defs map[string]ModelDefinition, hw Hardware) (string, DeploymentProfile, bool) {
+	def, ok := defs[modelID]
+	if !ok {
+		return "", DeploymentProfile{}, false
+	}
+	pid, p := selectProfile(def.Profiles, hw)
+	if pid == "" {
+		return "", DeploymentProfile{}, false
+	}
+	return pid, p, true
 }
 
 func validateExtraArgs(args []string) error {

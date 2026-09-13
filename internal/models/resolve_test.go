@@ -16,7 +16,6 @@ func testDefs(t *testing.T) map[string]ModelDefinition {
       "name": "Test Model Big",
       "model": {"file": "big.gguf", "url": "https://example.com/big.gguf"},
       "mmproj": {"file": "mmproj.gguf", "url": "https://download.invalid/mmproj.gguf"},
-      "reasoning_budget": 4096,
       "profiles": {
         "t1": {"ctx_size": 160000, "requirements": {"vram_min": 32}},
         "t2": {"ctx_size": 60000,  "requirements": {"vram_min": 24}}
@@ -226,34 +225,6 @@ func TestResolveModelEmptyArtifact(t *testing.T) {
 	}
 }
 
-func TestResolveModelReasoningBudget(t *testing.T) {
-	defs := testDefs(t)
-	hw := Hardware{VRAMGB: 32}
-
-	tmpDir := t.TempDir()
-	modelDir := filepath.Join(tmpDir, "models")
-	os.MkdirAll(modelDir, 0755)
-	os.WriteFile(filepath.Join(modelDir, "small.gguf"), []byte("fake"), 0644)
-	os.WriteFile(filepath.Join(modelDir, "big.gguf"), []byte("fake"), 0644)
-	os.WriteFile(filepath.Join(modelDir, "mmproj.gguf"), []byte("fake"), 0644)
-
-	resolvedWith, err := ResolveModel("test-model-big", defs, hw, modelDir, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resolvedWith.ReasoningBudget != 4096 {
-		t.Errorf("model with reasoning_budget=4096 should propagate, got %d", resolvedWith.ReasoningBudget)
-	}
-
-	resolvedWithout, err := ResolveModel("test-model-small", defs, hw, modelDir, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resolvedWithout.ReasoningBudget != 0 {
-		t.Errorf("model without reasoning_budget should get 0, got %d", resolvedWithout.ReasoningBudget)
-	}
-}
-
 func TestValidateExtraArgsOK(t *testing.T) {
 	defs := testDefs(t)
 	hw := Hardware{VRAMGB: 32}
@@ -312,7 +283,7 @@ func TestValidateExtraArgsRejectsAllReserved(t *testing.T) {
 		"-m", "--alias", "--ctx-size", "--mmproj",
 		"--spec-type", "--spec-draft-model", "--spec-draft-n-max", "--spec-draft-ngl",
 		"--cache-type-k", "--cache-type-v", "--flash-attn",
-		"--host", "--port", "--jinja", "--reasoning-budget",
+		"--host", "--port", "--jinja",
 		"--ngl", "--parallel",
 	}
 	for _, arg := range reserved {
