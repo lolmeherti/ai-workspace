@@ -2,6 +2,7 @@ import { flushDraftChanges } from './chat/draftSync.js';
 import { captureDraft, recoverSubmittedDraft } from './chat/chatNavigation.js';
 import { ensureAIAvailable } from './workspace/availability.js';
 import { notify, confirmAction } from './workspace/feedback.js';
+import { showChatSkeleton } from './workspace/chatSkeleton.js';
 import { state } from './state.js';
 import { streamResponse } from './streamer/streamResponse.js';
 import { removeFile } from './fileHandler.js';
@@ -233,6 +234,7 @@ export async function submitMultiDelete() {
     
     const confirmMsg = `Are you sure you want to permanently delete these ${state.selectedChatIds.length} conversations?`;
     if (!(await confirmAction(confirmMsg, { title: 'Delete conversations', confirmLabel: 'Delete', destructive: true }))) return;
+    showChatSkeleton();
 
     const form = document.createElement('form');
     form.method = 'POST';
