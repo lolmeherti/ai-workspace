@@ -284,7 +284,8 @@ function fmtScalar($v): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diagnostics — Event Log</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/utilities.css"><link rel="stylesheet" href="css/styles.css">
+    <script type="module">import { initWorkspaceShell } from "./js/workspace/shell.js"; initWorkspaceShell();</script>
     <style>
         body { background: #020617; font-size: 15px; }
         .event-card { transition: border-color .15s ease; }
@@ -301,21 +302,22 @@ function fmtScalar($v): string {
 
         <!-- Header -->
         <div class="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-slate-800">
+            <a href="index.php" class="ui-button">← Workspace</a>
             <h1 class="text-lg font-bold text-cyan-400">Diagnostics — Event Log</h1>
 
             <form method="GET" class="flex items-center gap-2 ml-2">
                 <label class="text-sm text-slate-500">Session</label>
-                <input type="number" name="session_id" value="<?php echo $sessionFilter > 0 ? $sessionFilter : ''; ?>"
+                <input type="number" aria-label="Session ID" name="session_id" value="<?php echo $sessionFilter > 0 ? $sessionFilter : ''; ?>"
                        placeholder="paste id"
                        class="px-3 py-1.5 text-sm rounded bg-slate-900 border border-slate-700 text-slate-200 focus:border-cyan-500/50 focus:outline-none w-28" />
                 <button class="px-3 py-1.5 text-sm rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/20">Go</button>
             </form>
 
             <form method="GET" class="flex items-center gap-2 flex-1 min-w-[200px]">
-                <input type="hidden" name="session_id" value="<?php echo $sessionFilter; ?>" />
+                <input type="hidden" aria-label="Session ID" name="session_id" value="<?php echo $sessionFilter; ?>" />
                 <?php if ($typeFilter) echo '<input type="hidden" name="type" value="' . htmlspecialchars($typeFilter) . '">'; ?>
                 <?php if ($sourceFilter) echo '<input type="hidden" name="source" value="' . htmlspecialchars($sourceFilter) . '">'; ?>
-                <input type="search" name="q" value="<?php echo htmlspecialchars($q); ?>" placeholder="Search message, type, source…"
+                <input type="search" aria-label="Search events" name="q" value="<?php echo htmlspecialchars($q); ?>" placeholder="Search message, type, source…"
                        class="px-3 py-1.5 text-sm rounded bg-slate-900 border border-slate-700 text-slate-200 focus:border-cyan-500/50 focus:outline-none flex-1" />
                 <button class="px-3 py-1.5 text-sm rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">Search</button>
             </form>
@@ -326,7 +328,7 @@ function fmtScalar($v): string {
                     <?php echo $view === 'domains' ? 'Events' : 'Site ranking'; ?>
                 </a>
                 <a href="logs.php" class="px-3 py-1.5 text-sm rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">Reset</a>
-                <form method="POST" onsubmit="return confirm('Clear ALL events?')">
+                <form method="POST" data-confirm="Clear ALL events?">
                     <input type="hidden" name="clear" value="1">
                     <button class="px-3 py-1.5 text-sm rounded bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20">Clear All</button>
                 </form>
@@ -392,7 +394,7 @@ function fmtScalar($v): string {
             <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-slate-800 text-left text-xs text-slate-500 uppercase tracking-wider">
+                        <tr class="border-b border-slate-800 text-left text-xs text-slate-500 normal-case tracking-normal">
                             <th class="p-3 w-12">#</th>
                             <th class="p-3">Domain</th>
                             <th class="p-3 w-20 text-right">Score</th>
@@ -435,7 +437,7 @@ function fmtScalar($v): string {
             <!-- Facets -->
             <div class="space-y-5">
                 <div>
-                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Event types</h3>
+                    <h3 class="text-sm font-semibold text-slate-400 normal-case tracking-normal mb-2">Event types</h3>
                     <div class="max-h-[420px] overflow-y-auto pr-1 space-y-0.5">
                         <?php foreach ($typeCounts as $t => $c): ?>
                         <?php $active = $t === $typeFilter; ?>
@@ -450,7 +452,7 @@ function fmtScalar($v): string {
                 </div>
 
                 <div>
-                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Sources</h3>
+                    <h3 class="text-sm font-semibold text-slate-400 normal-case tracking-normal mb-2">Sources</h3>
                     <div class="max-h-[280px] overflow-y-auto pr-1 space-y-0.5">
                         <?php foreach ($sourceCounts as $src => $c): ?>
                         <?php $active = $src === $sourceFilter; $label = $src === '' ? '(none)' : $src; ?>

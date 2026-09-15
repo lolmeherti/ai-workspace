@@ -24,7 +24,7 @@ export function renderEditorBlocks() {
         const displayLineNum = block.id.replace('b-', '');
 
         blockNode.innerHTML = `
-            <div class="select-none text-[10px] font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
+            <div class="select-none text-xs font-mono ${isSelected ? 'text-cyan-400 font-bold' : 'text-slate-600'} group-hover:text-cyan-400/70 transition-colors w-7 text-right pr-2 border-r border-slate-800/80 shrink-0 self-stretch flex items-start justify-end pt-0.5 line-num-gutter">
                 ${displayLineNum}
             </div>
             <div class="flex-1 min-w-0 pl-3">

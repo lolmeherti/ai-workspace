@@ -17,15 +17,15 @@ export function setChatFilter(filter) {
     const inactiveFilterClass = "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20";
 
     if (filter === 'all') {
-        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-[11px] transition-all duration-200 text-center cursor-pointer ${activeFilterClass}`;
-        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-[11px] transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${inactiveFilterClass}`;
+        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center cursor-pointer ${activeFilterClass}`;
+        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${inactiveFilterClass}`;
 
         items.forEach(item => {
             item.classList.remove('hidden');
         });
     } else if (filter === 'starred') {
-        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-[11px] transition-all duration-200 text-center cursor-pointer ${inactiveFilterClass}`;
-        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-[11px] transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${activeFilterClass}`;
+        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center cursor-pointer ${inactiveFilterClass}`;
+        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${activeFilterClass}`;
 
         items.forEach(item => {
             const isStarred = item.getAttribute('data-starred') === '1';

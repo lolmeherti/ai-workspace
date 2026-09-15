@@ -87,6 +87,20 @@ LUA;
         return 'AI is busy with another task. Please try again shortly.';
     }
 
+    /** Read ownership and its matching status atomically; never expose the token. */
+    public static function availability(): array
+    {
+        $script = <<<'LUA'
+local token = redis.call('GET', KEYS[1])
+if not token then return {0, ''} end
+return {1, redis.call('GET', ARGV[1] .. token) or ''}
+LUA;
+        $snapshot = self::redis()->eval($script, 1, self::LOCK_KEY, self::STATUS_PREFIX);
+        $status = json_decode($snapshot[1] ?? '', true);
+        return ['busy' => (bool)($snapshot[0] ?? false),
+            'message' => $status['message'] ?? 'AI is busy with another task. Your draft is kept.'];
+    }
+
     public static function setStatus(string $token, string $message): void
     {
         self::redis()->setex(self::STATUS_PREFIX . $token, 3600, json_encode(['message' => $message]));

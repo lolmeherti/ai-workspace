@@ -1,9 +1,9 @@
 <div id="panel-emails" class="hidden h-full flex flex-col bg-[#070b14]/40">
     <div class="p-4 border-b border-slate-800/50 flex justify-between items-center bg-[#0d1321]/30">
-        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 m-0">
+        <h3 class="text-xs font-bold normal-case tracking-normal text-slate-400 flex items-center gap-1.5 m-0">
             <uk-icon icon="mail" class="w-3.5 h-3.5 text-cyan-400"></uk-icon> Linked Mailboxes
         </h3>
-        <button uk-toggle="target: #add-email-modal" type="button" class="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-cyan-400 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 rounded transition-colors cursor-pointer outline-none">
+        <button uk-toggle="target: #add-email-modal" type="button" class="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-cyan-400 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 rounded transition-colors cursor-pointer outline-none">
             <uk-icon icon="plus" class="w-3 h-3"></uk-icon> Add Account
         </button>
     </div>
@@ -20,8 +20,8 @@
             <div class="flex items-center gap-2 text-slate-500 peer-checked:text-cyan-400 transition-colors duration-200">
                 <uk-icon icon="history" class="w-3.5 h-3.5"></uk-icon>
                 <div class="flex flex-col">
-                    <span class="text-[10px] font-bold tracking-wider uppercase">Include Already-Read Mail</span>
-                    <span class="text-[8px] text-slate-500/85 font-medium uppercase tracking-tight peer-checked:text-cyan-600/70 transition-colors duration-200">Within the last 24 hours</span>
+                    <span class="text-xs font-bold tracking-normal normal-case">Include Already-Read Mail</span>
+                    <span class="text-xs text-slate-500/85 font-medium normal-case tracking-tight peer-checked:text-cyan-600/70 transition-colors duration-200">Within the last 24 hours</span>
                 </div>
             </div>
 
@@ -47,12 +47,12 @@
                             <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
                             <?php echo htmlspecialchars($mailbox['label']); ?>
                         </div>
-                        <div class="text-[10px] text-slate-400 truncate mt-0.5 font-mono"><?php echo htmlspecialchars($mailbox['email_address']); ?></div>
-                        <span class="inline-block px-1.5 py-0.5 text-[9px] font-semibold tracking-wider uppercase bg-slate-850 border border-slate-800 text-slate-400 rounded mt-1.5 font-mono">
+                        <div class="text-xs text-slate-400 truncate mt-0.5 font-mono"><?php echo htmlspecialchars($mailbox['email_address']); ?></div>
+                        <span class="inline-block px-1.5 py-0.5 text-xs font-semibold tracking-normal normal-case bg-slate-850 border border-slate-800 text-slate-400 rounded mt-1.5 font-mono">
                             <?php echo htmlspecialchars($mailbox['provider']); ?>
                         </span>
                     </div>
-                    <form method="POST" action="index.php" onsubmit="return confirm('Disconnect this email account?');" class="ml-2 shrink-0">
+                    <form method="POST" action="index.php" data-confirm="Disconnect this email account?" class="ml-2 shrink-0">
                         <input type="hidden" name="action" value="delete_email_account">
                         <input type="hidden" name="account_id" value="<?php echo (int)$mailbox['id']; ?>">
                         <button type="submit" class="text-slate-500 hover:text-rose-400 transition-colors p-1 cursor-pointer bg-transparent border-0 outline-none">
@@ -97,7 +97,7 @@
             <div>
                 <label class="block text-slate-400 font-medium mb-1.5">App Password</label>
                 <input type="password" name="app_password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" class="w-full bg-[#0b101c] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 font-mono">
-                <p class="text-[10px] text-slate-500 mt-1">For Gmail/Yahoo, generate an "App Password" in your account security settings. Do not use your primary password.</p>
+                <p class="text-xs text-slate-500 mt-1">For Gmail/Yahoo, generate an "App Password" in your account security settings. Do not use your primary password.</p>
             </div>
 
             <div id="custom-imap-wrapper" class="hidden border-t border-slate-850 pt-4 space-y-4">
@@ -113,7 +113,7 @@
                 </div>
             </div>
 
-            <div id="add-email-error" class="hidden text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2 leading-relaxed break-words"></div>
+            <div id="add-email-error" class="hidden text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2 leading-relaxed break-words"></div>
 
             <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-850">
                 <button type="button" class="uk-modal-close px-4 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg text-slate-300 font-bold transition-colors cursor-pointer">Cancel</button>

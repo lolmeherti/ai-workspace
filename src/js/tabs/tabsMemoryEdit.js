@@ -1,3 +1,4 @@
+import { ensureAIAvailable } from '../workspace/availability.js';
 /**
  * @file js/tabs/tabsMemoryEdit.js
  * @description Memory list bulk select and consolidate form UI.
@@ -16,7 +17,8 @@ export function initMemoryTab() {
         const consolidateText = document.getElementById('consolidate-text');
 
         if (consolidateForm) {
-            consolidateForm.addEventListener('submit', function() {
+            consolidateForm.addEventListener('submit', function(e) {
+                if (!ensureAIAvailable(consolidateForm)) { e.preventDefault(); return; }
                 consolidateBtn.disabled = true;
                 consolidateBtn.classList.add('opacity-70', 'cursor-not-allowed');
                 consolidateBtn.classList.remove('hover:bg-cyan-500/20');
@@ -59,6 +61,7 @@ export function initMemoryTab() {
             }
 
             if (selectAllCheckbox) {
+                selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < memoryCheckboxes.length;
                 selectAllCheckbox.checked = checkedCount === memoryCheckboxes.length && memoryCheckboxes.length > 0;
             }
         }

@@ -14,8 +14,8 @@ function renderBriefingActions(bubble, actions) {
 
     const header = document.createElement('div');
     header.className = 'px-4 pt-3 pb-2 flex items-center gap-2 border-b border-slate-800/60';
-    header.innerHTML = '<span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-400">Suggested Tasks</span>'
-        + '<span class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono">' + actions.length + '</span>';
+    header.innerHTML = '<span class="text-xs font-extrabold normal-case tracking-normal text-indigo-400">Suggested Tasks</span>'
+        + '<span class="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono">' + actions.length + '</span>';
     section.appendChild(header);
 
     for (const a of actions) {
@@ -35,14 +35,14 @@ function renderBriefingActions(bubble, actions) {
 
         if (due) {
             const dueEl = document.createElement('p');
-            dueEl.className = 'text-[10px] text-indigo-400/80 font-mono mt-0.5';
+            dueEl.className = 'text-xs text-indigo-400/80 font-mono mt-0.5';
             dueEl.textContent = 'Suggested schedule: ' + due;
             textWrap.appendChild(dueEl);
         }
 
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'btn-create-todoist flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer outline-none shrink-0';
+        btn.className = 'btn-create-todoist flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-extrabold tracking-normal normal-case bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer outline-none shrink-0';
         btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><polyline points="20 6 9 17 4 12"/></svg>Accept & Create Task';
         btn.setAttribute('onclick', "window.createTodoistTaskDirectly('" + escAttr(content) + "', '" + escAttr(due) + "', this)");
 

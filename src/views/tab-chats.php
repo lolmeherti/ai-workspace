@@ -12,62 +12,13 @@ $currentSessionId = (int)($sessionId ?? ($_GET['session_id'] ?? 0));
 $chatsActive = ($activeTab ?? 'chats') === 'chats';
 ?>
 
-<style>
 
-.chat-session-item {
-    position: relative;
-    border-left: 2px solid transparent !important;
-}
-
-
-.chat-session-item[data-starred="1"] {
-    border-left: 2px solid rgba(6, 182, 212, 0.75) !important;
-    box-shadow: inset 4px 0 10px -4px rgba(6, 182, 212, 0.15);
-}
-
-
-.star-glow-active {
-    color: #fbbf24 !important; 
-    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.6));
-}
-
-.star-glow-inactive {
-    color: #475569 !important; 
-}
-
-.star-glow-inactive:hover {
-    color: #22d3ee !important; 
-    filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.4));
-}
-
-
-.in-edit-mode .chat-session-item {
-    transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
-}
-
-
-.in-edit-mode .chat-session-item:hover {
-    border-color: rgba(244, 63, 94, 0.2) !important;
-    background-color: rgba(244, 63, 94, 0.05) !important;
-}
-
-
-.in-edit-mode .chat-session-item a {
-    pointer-events: none !important;
-    user-select: none;
-}
-
-
-.in-edit-mode .btn-star-session {
-    display: none !important;
-}
-</style>
 
 <div id="panel-chats" class="h-full flex flex-col <?php echo $chatsActive ? '' : 'hidden'; ?> overflow-hidden relative">
     
     <!-- Tab Sub-Header -->
     <div class="flex justify-between items-center px-4 py-3 border-b border-slate-800/40 bg-[#0b101f]">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider select-none">Conversations</span>
+        <span class="text-xs font-bold text-slate-500 normal-case tracking-normal select-none">Conversations</span>
         <button id="btn-manage-chats" onclick="toggleChatEditMode()" class="text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1">
             <uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage
         </button>
@@ -76,11 +27,11 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
     <!-- High-Tech Filter Segment Control -->
     <div class="px-4 py-2.5 border-b border-slate-800/40 bg-[#080d1a] flex gap-2">
         <button onclick="setChatFilter('all')" id="btn-filter-all" 
-                class="flex-1 py-1.5 px-3 rounded-md border text-[11px] font-medium transition-all duration-200 text-center cursor-pointer">
+                class="flex-1 py-1.5 px-3 rounded-md border text-xs font-medium transition-all duration-200 text-center cursor-pointer">
             All
         </button>
         <button onclick="setChatFilter('starred')" id="btn-filter-starred" 
-                class="flex-1 py-1.5 px-3 rounded-md border text-[11px] font-medium transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer">
+                class="flex-1 py-1.5 px-3 rounded-md border text-xs font-medium transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer">
             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="text-amber-400/90 drop-shadow-[0_0_3px_rgba(245,158,11,0.5)]"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             Starred
         </button>
@@ -113,7 +64,7 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
                     </a>
 
                     <!-- Star Button Toggle -->
-                    <button onclick="toggleStarSession(event, <?php echo $session['id']; ?>)" 
+                    <button type="button" aria-label="Star conversation" aria-pressed="<?php echo $isStarred ? 'true' : 'false'; ?>" onclick="toggleStarSession(event, <?php echo $session['id']; ?>)"
                             class="btn-star-session absolute right-2 <?php echo $isStarred ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'; ?> transition-all duration-300 py-1 px-1.5 rounded hover:bg-slate-800/40 z-10">
                         <svg xmlns="http://www.w3.org/2000/svg" 
                              width="13" 

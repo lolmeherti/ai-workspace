@@ -37,6 +37,7 @@ class FileDeleteAction extends BaseAction
 
         $uploadDir = realpath(__DIR__ . '/../../../uploads/');
         $deletedCount = 0;
+        $deletedIds = [];
         $errors = [];
 
         foreach ($ids as $id) {
@@ -62,6 +63,7 @@ class FileDeleteAction extends BaseAction
 
                 $this->db->query("DELETE FROM uploaded_files WHERE id = :id", [':id' => $id]);
                 $deletedCount++;
+                $deletedIds[] = (int)$id;
             } catch (\Exception $e) {
                 $errors[] = "ID {$id}: " . $e->getMessage();
             }
@@ -72,11 +74,13 @@ class FileDeleteAction extends BaseAction
                 'status' => 'partial_success',
                 'message' => 'Some files failed to delete.',
                 'deleted_count' => $deletedCount,
+                'deleted_ids' => $deletedIds,
                 'errors' => $errors
             ], 207);
         } else {
             $this->jsonResponse([
                 'status' => 'success',
+                'deleted_ids' => $deletedIds,
                 'message' => 'Successfully deleted ' . $deletedCount . ' file(s).'
             ]);
         }

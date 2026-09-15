@@ -9,8 +9,8 @@
                 <uk-icon icon="file-text" class="w-3.5 h-3.5 text-cyan-400"></uk-icon>
             </div>
             <div class="flex flex-col min-w-0">
-                <span id="editor-file-title" class="text-[11px] font-bold tracking-wider text-slate-100 truncate uppercase">No File Selected</span>
-                <span class="text-[9px] font-bold text-slate-500 tracking-wider uppercase flex items-center gap-1.5 mt-0.5">
+                <span id="editor-file-title" class="text-xs font-bold tracking-normal text-slate-100 truncate normal-case">No File Selected</span>
+                <span class="text-xs font-bold text-slate-500 tracking-normal normal-case flex items-center gap-1.5 mt-0.5">
                     <span class="w-1.5 h-1.5 rounded-full bg-amber-500/80 animate-pulse"></span> Draft Workspace
                 </span>
             </div>
@@ -18,19 +18,20 @@
         
         <div class="flex items-center gap-2">
             <!-- Edit Selection Button (Hidden by default, visible when 2+ adjacent blocks selected) -->
-            <button id="editor-edit-selection-btn" class="hidden flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 border border-blue-500/30 rounded-lg transition-all cursor-pointer outline-none shadow-md">
+            <button id="editor-edit-selection-btn" class="hidden flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-extrabold tracking-normal normal-case bg-blue-950/30 hover:bg-blue-900/50 text-blue-400 border border-blue-500/30 rounded-lg transition-all cursor-pointer outline-none shadow-md">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-blue-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                 Edit Selection
             </button>
 
              <!-- Delete Selection Button (Hidden by default, visible when 1+ blocks selected) -->
-            <button id="editor-delete-selection-btn" class="hidden flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-rose-950/20 hover:bg-rose-950/50 text-rose-400 border border-rose-500/30 rounded-lg transition-all cursor-pointer outline-none shadow-md">
+            <button id="editor-delete-selection-btn" class="hidden flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-extrabold tracking-normal normal-case bg-rose-950/20 hover:bg-rose-950/50 text-rose-400 border border-rose-500/30 rounded-lg transition-all cursor-pointer outline-none shadow-md">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-rose-400"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 Delete Selection
             </button>
 
             <!-- Save/Commit Button -->
-            <button id="editor-save-btn" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none shadow-[0_0_12px_rgba(6,182,212,0.15)]">
+            <button type="button" class="ui-button" onclick="window.discardEditorDraft()">Discard draft</button>
+            <button type="button" id="editor-save-btn" class="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-extrabold tracking-normal normal-case bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none shadow-[0_0_12px_rgba(6,182,212,0.15)]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                 Save Changes
             </button>
@@ -41,7 +42,8 @@
     </div>
 
     <!-- 2. Drawer Body (Scrollable Block Container) -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-1.5 select-text bg-[#070c19] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent" id="editor-blocks-container">
+    <div id="editor-notices" aria-live="polite"></div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-1.5 select-text bg-[#070c19] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent" id="editor-blocks-container">
         <!-- Javascript will inject the interactive blocks here dynamically -->
     </div>
 
@@ -56,8 +58,8 @@
                 </svg>
             </div>
             <div class="text-center">
-                <span class="text-[11px] text-cyan-400 font-extrabold tracking-widest uppercase animate-pulse block">Work in progress.</span>
-                <span class="text-[9px] text-slate-500 uppercase tracking-widest block mt-1">Please hold on while the application is running...</span>
+                <span class="text-xs text-cyan-400 font-extrabold tracking-normal normal-case animate-pulse block">Work in progress.</span>
+                <span class="text-xs text-slate-500 normal-case tracking-normal block mt-1">Please hold on while the application is running...</span>
             </div>
         </div>
     </div>

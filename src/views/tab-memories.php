@@ -26,7 +26,7 @@
             </button>
         </div>
         <?php if ($memoryCount >= 500): ?>
-            <p class="text-[10px] text-rose-400 font-semibold tracking-wide">Memory bank capacity (500) reached.</p>
+            <p class="text-xs text-rose-400 font-semibold tracking-normal">Memory bank capacity (500) reached.</p>
         <?php endif; ?>
     </form>
 
@@ -37,7 +37,7 @@
                 <label id="select-all-label" for="select-all-memories" class="text-slate-400 font-medium cursor-pointer select-none">Select All</label>
             </div>
             
-            <form id="bulk-delete-form" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" onsubmit="return confirm('Nuke selected memories permanently?');" class="hidden items-center">
+            <form id="bulk-delete-form" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" data-confirm="Delete selected memories permanently?" class="hidden items-center">
                 <input type="hidden" name="delete_multiple_memories" value="1">
                 <button type="submit" class="text-rose-400 hover:text-rose-300 font-semibold transition-colors flex items-center gap-1.5">
                     <uk-icon icon="trash" class="w-3.5 h-3.5"></uk-icon>
@@ -61,11 +61,11 @@
                     <div class="flex-1 min-w-0">
                         <div id="memory-view-<?php echo $m['id']; ?>" class="space-y-2.5">
                             <p class="m-0 text-slate-200 leading-relaxed break-words whitespace-pre-line"><?php echo htmlspecialchars($m['memory_text']); ?></p>
-                            <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-800/40">
+                            <div class="flex justify-between items-center text-xs text-slate-500 pt-1 border-t border-slate-800/40">
                                 <span><?php echo date('M d, Y', strtotime($m['created_at'])); ?></span>
                                 <div class="flex gap-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                     <button onclick="enableMemoryEdit(<?php echo $m['id']; ?>)" class="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">Edit</button>
-                                    <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="inline" onsubmit="return confirm('Nuke this memory permanently?');">
+                                    <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="inline" data-confirm="Delete this memory permanently?">
                                         <input type="hidden" name="delete_memory" value="1">
                                         <input type="hidden" name="memory_id" value="<?php echo $m['id']; ?>">
                                         <button type="submit" class="text-rose-400 hover:text-rose-300 font-semibold transition-colors">Delete</button>
@@ -78,7 +78,7 @@
                             <input type="hidden" name="update_memory" value="1">
                             <input type="hidden" name="memory_id" value="<?php echo $m['id']; ?>">
                             <textarea name="memory_text" class="input-futuristic w-full rounded-lg p-2 text-xs h-20 leading-relaxed focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500" required><?php echo htmlspecialchars($m['memory_text']); ?></textarea>
-                            <div class="flex justify-end gap-1.5 text-[10px]">
+                            <div class="flex justify-end gap-1.5 text-xs">
                                 <button type="button" onclick="disableMemoryEdit(<?php echo $m['id']; ?>)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">Cancel</button>
                                 <button type="submit" class="px-3 py-1 rounded btn-futuristic font-semibold">Save</button>
                             </div>

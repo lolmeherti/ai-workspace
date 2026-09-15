@@ -25,8 +25,8 @@ if ($db) {
                 <uk-icon icon="folder" class="w-4 h-4"></uk-icon>
             </span>
             <div>
-                <h3 class="text-xs font-bold text-slate-200 tracking-wide uppercase">Uploads Gallery</h3>
-                <p class="text-[10px] text-cyan-500/70 italic uppercase tracking-wider">Active Workspace View</p>
+                <h3 class="text-xs font-bold text-slate-200 tracking-normal normal-case">Uploads Gallery</h3>
+                <p class="text-xs text-cyan-500/70 italic normal-case tracking-normal">Active Workspace View</p>
             </div>
         </div>
         
@@ -59,8 +59,8 @@ if ($db) {
 
     <!-- Guidance Notes -->
     <div class="bg-slate-900/40 border border-slate-800/60 rounded-lg p-3 space-y-2">
-        <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gallery Actions</h4>
-        <ul class="text-[11px] text-slate-400 leading-relaxed list-disc list-inside space-y-1">
+        <h4 class="text-xs font-bold text-slate-400 normal-case tracking-normal">Gallery Actions</h4>
+        <ul class="text-xs text-slate-400 leading-relaxed list-disc list-inside space-y-1">
             <li>Click a card to toggle file selection.</li>
             <li>Hover on cards for fast file actions.</li>
             <li>Use the floating bottom bar to batch append or delete files.</li>

@@ -36,8 +36,8 @@ export function updateFileReferencesUI() {
             badge.innerHTML = `
                 <img src="uploads/${file.physical_name}" class="w-8 h-8 object-cover rounded border border-cyan-500/30 shrink-0" alt="Preview"/>
                 <div class="truncate flex-1 min-w-0 text-left">
-                    <div class="text-[10px] font-bold tracking-wider uppercase text-slate-200 truncate">${file.generated_title}</div>
-                    <div class="text-[9px] text-cyan-500/70 truncate">${file.original_name}</div>
+                    <div class="text-xs font-bold tracking-normal normal-case text-slate-200 truncate">${file.generated_title}</div>
+                    <div class="text-xs text-cyan-500/70 truncate">${file.original_name}</div>
                 </div>
                 <button type="button" class="text-slate-500 hover:text-rose-400 transition-colors duration-150 focus:outline-none ml-1 font-extrabold text-xs cursor-pointer shrink-0" onclick="window.removeFileReference('${file.physical_name}')">×</button>
             `;
@@ -50,8 +50,8 @@ export function updateFileReferencesUI() {
                     </svg>
                 </span>
                 <div class="truncate flex-1 min-w-0 text-left">
-                    <div class="text-[10px] font-bold tracking-wider uppercase text-slate-200 truncate">${file.generated_title}</div>
-                    <div class="text-[9px] text-slate-400/80 truncate italic">"${previewSnippet}"</div>
+                    <div class="text-xs font-bold tracking-normal normal-case text-slate-200 truncate">${file.generated_title}</div>
+                    <div class="text-xs text-slate-400/80 truncate italic">"${previewSnippet}"</div>
                 </div>
                 <button type="button" class="text-slate-500 hover:text-rose-400 transition-colors duration-150 focus:outline-none ml-1 font-extrabold text-xs cursor-pointer shrink-0" onclick="window.removeFileReference('${file.physical_name}')">×</button>
             `;

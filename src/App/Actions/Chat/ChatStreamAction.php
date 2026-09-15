@@ -49,7 +49,7 @@ class ChatStreamAction extends BaseAction
                 @flush();
             });
         } catch (ModelBusyException $e) {
-            $payload = json_encode(['event' => 'error', 'data' => ['message' => $e->getMessage()]]);
+            $payload = json_encode(['event' => 'error', 'data' => ['code' => 'model_busy', 'message' => $e->getMessage()]]);
             echo "data: {$payload}\n\n";
             @ob_flush();
             @flush();

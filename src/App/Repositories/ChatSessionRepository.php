@@ -21,6 +21,12 @@ class ChatSessionRepository
         return $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
     }
 
+    public function getById(int $sessionId): ?array
+    {
+        $rows = $this->db->selectSafe('chat_sessions', ['id' => $sessionId]);
+        return $rows[0] ?? null;
+    }
+
     public function delete(int $id): void
     {
         $this->db->query("DELETE FROM chat_sessions WHERE id = :id", [':id' => $id]);

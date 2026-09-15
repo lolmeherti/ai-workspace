@@ -67,7 +67,8 @@ function reasonLabel(string $key): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Model Performance</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/utilities.css"><link rel="stylesheet" href="css/styles.css">
+    <script type="module">import { initWorkspaceShell } from "./js/workspace/shell.js"; initWorkspaceShell();</script>
     <style>
         body { background: #020617; font-size: 14px; }
         details > summary { cursor: pointer; list-style: none; }
@@ -79,10 +80,11 @@ function reasonLabel(string $key): string
 <body class="bg-slate-950 text-slate-200 antialiased">
     <div class="max-w-[1400px] mx-auto p-5">
         <div class="flex flex-wrap items-center gap-3 mb-1 pb-4 border-b border-slate-800">
+            <a href="index.php" class="ui-button">← Workspace</a>
             <h1 class="text-lg font-bold text-cyan-400">Model Performance</h1>
             <span class="text-sm text-slate-500 ml-1">raw per-model numbers — LLM speed, faults, satisfaction</span>
             <a href="logs.php" class="ml-auto px-3 py-1.5 text-sm rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">Event log →</a>
-            <form method="POST" class="ml-2" onsubmit="return confirm('Reset all model statistics? This clears ratings, speed metrics and model attribution.');">
+            <form method="POST" class="ml-2" data-confirm="Reset all model statistics? This clears ratings, speed metrics and model attribution.">
                 <button type="submit" name="reset_stats" value="1" class="px-3 py-1.5 text-sm rounded bg-transparent text-rose-300 border border-rose-500/30 hover:bg-rose-500/10 transition-colors">Reset statistics</button>
             </form>
         </div>
@@ -106,7 +108,7 @@ function reasonLabel(string $key): string
         <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
-                    <tr class="border-b border-slate-800 text-left text-xs text-slate-500 uppercase tracking-wider">
+                    <tr class="border-b border-slate-800 text-left text-xs text-slate-500 normal-case tracking-normal">
                         <th class="p-3">Model</th>
                         <th class="p-3 text-right">turns</th>
                         <th class="p-3 text-right">decode tok/s</th>
@@ -114,8 +116,8 @@ function reasonLabel(string $key): string
                         <th class="p-3 text-right">cache %</th>
                         <th class="p-3 text-right">model faults</th>
                         <th class="p-3 text-right">other errors</th>
-                        <th class="p-3 text-right">▲</th>
-                        <th class="p-3 text-right">▼</th>
+                        <th class="p-3 text-right">Helpful</th>
+                        <th class="p-3 text-right">Unhelpful</th>
                         <th class="p-3 text-right">% positive</th>
                     </tr>
                 </thead>
@@ -148,7 +150,7 @@ function reasonLabel(string $key): string
                             <div class="flex flex-wrap gap-4 text-xs text-slate-400">
                                 <?php if (!empty($r['fault_breakdown'])): ?>
                                 <div>
-                                    <span class="text-slate-500 font-semibold uppercase tracking-wider">faults:</span>
+                                    <span class="text-slate-500 font-semibold normal-case tracking-normal">faults:</span>
                                     <?php foreach ($r['fault_breakdown'] as $type => $count): ?>
                                     <a href="logs.php?type=<?php echo htmlspecialchars($type); ?>&q=<?php echo urlencode($r['model']); ?>&level=all" class="text-rose-300 hover:text-rose-200"><?php echo htmlspecialchars($FAULT_LABELS[$type] ?? $type); ?> <?php echo $count; ?></a>
                                     <?php endforeach; ?>
@@ -156,7 +158,7 @@ function reasonLabel(string $key): string
                                 <?php endif; ?>
                                 <?php if (!empty($r['down_reasons'])): ?>
                                 <div>
-                                    <span class="text-slate-500 font-semibold uppercase tracking-wider">downvote reasons:</span>
+                                    <span class="text-slate-500 font-semibold normal-case tracking-normal">downvote reasons:</span>
                                     <?php foreach ($r['down_reasons'] as $reason => $count): ?>
                                     <span class="text-slate-300"><?php echo htmlspecialchars(reasonLabel($reason)); ?> <?php echo $count; ?></span>
                                     <?php endforeach; ?>

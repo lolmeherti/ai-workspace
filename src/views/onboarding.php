@@ -58,7 +58,7 @@ $cards = array_slice($cards, 0, 3);
                     $vram = $m['vram_group'] ?? '';
                 ?>
                     <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-5 flex flex-col hover:border-cyan-500/40 transition-colors">
-                        <div class="text-xs uppercase tracking-wider text-slate-500 mb-1"><?php echo htmlspecialchars($vram); ?></div>
+                        <div class="text-xs normal-case tracking-normal text-slate-500 mb-1"><?php echo htmlspecialchars($vram); ?></div>
                         <h2 class="text-base font-semibold text-white leading-snug mb-2"><?php echo htmlspecialchars($name); ?></h2>
                         <p class="text-sm text-slate-400 mb-4"><?php echo $ctx >= 1000 ? number_format($ctx) . ' ctx' : ''; ?></p>
                         <button type="button"
@@ -147,6 +147,7 @@ $cards = array_slice($cards, 0, 3);
                     updateProgress(st);
                     setTimeout(tick, 2000);
                 } catch (_) {
+                    status.textContent = 'Connection interrupted. Checking download status…';
                     setTimeout(tick, 3000);
                 }
             };
