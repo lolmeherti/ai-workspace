@@ -1,3 +1,7 @@
+import { flushDraftChanges } from '../chat/draftSync.js';
+import { updateConversation } from '../chat/chatNavigation.js';
+import { paintAvailability, refreshAvailability, reportBusy } from '../workspace/availability.js';
+import { RequestError, notify } from '../workspace/feedback.js';
 /**
  * @file js/streamer/streamResponse.js
  * @description SSE chat response streaming handler with automatic HTML tag-level thought parsing.
@@ -43,12 +47,12 @@ function renderSourcesList(bubble, sources) {
     header.className = 'flex items-center gap-2 px-4 pt-3 pb-2';
     header.innerHTML = `
         <span class="relative flex items-center justify-center w-6 h-6 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.12)]">${SOURCE_GLOBE_ICON}</span>
-        <span class="text-[10px] font-semibold tracking-wider uppercase bg-gradient-to-r from-cyan-300 via-blue-400 to-emerald-400 bg-clip-text text-transparent">Sources</span>
+        <span class="text-xs font-semibold tracking-normal normal-case bg-gradient-to-r from-cyan-300 via-blue-400 to-emerald-400 bg-clip-text text-transparent">Sources</span>
         <span class="relative flex h-1.5 w-1.5">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400"></span>
         </span>
-        <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono">${sources.length}</span>
+        <span class="ml-auto text-xs px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono">${sources.length}</span>
     `;
     panel.appendChild(header);
 
@@ -78,7 +82,7 @@ function renderSourcesList(bubble, sources) {
 
         if (s.domain && s.domain !== titleText) {
             const domain = document.createElement('span');
-            domain.className = 'text-[10px] text-slate-500 truncate font-mono group-hover:text-slate-400 transition-colors';
+            domain.className = 'text-xs text-slate-500 truncate font-mono group-hover:text-slate-400 transition-colors';
             domain.textContent = s.domain;
             textWrap.appendChild(domain);
         }
@@ -146,7 +150,7 @@ function renderMetricsBubble(bubble, metrics) {
     details.className = 'metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40';
     details.innerHTML = `
         <summary class="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none text-slate-300">
-            <span class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span class="flex items-center gap-2 text-xs font-semibold normal-case tracking-normal text-slate-400">
                 <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 metrics
             </span>
@@ -154,12 +158,12 @@ function renderMetricsBubble(bubble, metrics) {
                 <button type="button" class="metrics-copy shrink-0 text-slate-500 hover:text-cyan-400 transition-colors" title="Copy metrics">
                     <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
-                <span class="text-[11px] font-mono text-slate-400 truncate">${summary}</span>
+                <span class="text-xs font-mono text-slate-400 truncate">${summary}</span>
             </span>
         </summary>
         <div class="px-3 pb-3 border-t border-slate-800/60">
-            <div class="text-[10px] text-slate-500 font-mono py-1.5">${chain}</div>
-            <table class="w-full text-[10px] font-mono text-slate-400">
+            <div class="text-xs text-slate-500 font-mono py-1.5">${chain}</div>
+            <table class="w-full text-xs font-mono text-slate-400">
                 <thead><tr class="text-slate-500 text-left">
                     <th class="py-1 pr-2 font-normal">call</th>
                     <th class="py-1 pr-2 font-normal">time</th>
@@ -456,10 +460,21 @@ async function verifyStreamIntegrity(data, markdownBuffer) {
 }
 
 export async function streamResponse(formData, originalMessage) {
+    if (state.generation) return { recoverDraft: true, started: false };
+    const generation = { sessionId: Number(formData.get('session_id')) || 0,
+        title: document.getElementById('conversation-title')?.textContent || 'this conversation',
+        context: document.getElementById('context-data-items'), editorFile: formData.get('active_edit_file') };
+    const isVisible = () => state.sessionId === generation.sessionId;
+    state.generation = generation;
     state.isGenerating = true;
     setSendStopMode(true);
+    paintAvailability();
+    let completed = false;
+    let started = false;
+    let outcome = null;
     const controller = new AbortController();
     window.__activeChatAbort = controller;
+    generation.controller = controller;
     
     const lockOverlay = document.getElementById('editor-lock-overlay');
     if (lockOverlay) {
@@ -468,6 +483,7 @@ export async function streamResponse(formData, originalMessage) {
     }
 
     const chatWindow = document.getElementById('chatWindow');
+    generation.chat = chatWindow;
     const tplAi = document.getElementById('tpl-ai-message');
     const aiNode = tplAi.content.cloneNode(true);
     const aiWrapper = aiNode.querySelector('.ai-wrapper');
@@ -497,13 +513,13 @@ export async function streamResponse(formData, originalMessage) {
                             <line x1="12" y1="19" x2="20" y2="19"/>
                         </svg>
                     </span>
-                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-emerald-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Execution Trace</span>
+                    <span class="text-sm font-semibold tracking-normal bg-gradient-to-r from-emerald-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Execution Trace</span>
                     <span class="flex h-2 w-2 relative trace-pulse-dot">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
                     </span>
                 </span>
-                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-normal normal-case">
                     <span class="trace-step-counter"></span>
                     <svg class="w-3.5 h-3.5 transition-transform duration-300 group-open:rotate-180 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </span>
@@ -533,13 +549,13 @@ export async function streamResponse(formData, originalMessage) {
                             <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04Z"/>
                         </svg>
                     </span>
-                    <span class="text-sm font-semibold tracking-wide bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Thinking Process</span>
+                    <span class="text-sm font-semibold tracking-normal bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">Thinking Process</span>
                     <span class="flex h-2 w-2 relative thinking-pulse-dot">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]"></span>
                     </span>
                 </span>
-                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-wide uppercase">
+                <span class="flex items-center gap-2 text-[0.65rem] text-slate-500 font-medium tracking-normal normal-case">
                     <span class="thinking-status-label">Streaming</span>
                     <svg class="thinking-chevron w-3.5 h-3.5 transition-transform duration-300 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </span>
@@ -615,10 +631,10 @@ export async function streamResponse(formData, originalMessage) {
         activeTaskStartTs = Date.now();
         if (traceTimer) traceTimer.textContent = '0s';
         activeTaskTimerId = setInterval(() => {
-            if (traceTimer && activeTaskStartTs !== null) {
+            if (!document.hidden && isVisible() && traceTimer && activeTaskStartTs !== null) {
                 traceTimer.textContent = formatTaskElapsed(Date.now() - activeTaskStartTs);
             }
-        }, 250);
+        }, 1000);
     }
 
     function stopTaskTimer() {
@@ -666,7 +682,7 @@ export async function streamResponse(formData, originalMessage) {
         row.className = `flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150`;
         row.innerHTML = `
             <span class="w-0.5 self-stretch rounded-full shrink-0 ${c.accent}"></span>
-            <span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-wide flex-1 leading-relaxed">\u2713 ${label}</span>
+            <span class="text-[0.7rem] ${c.text} mt-px font-medium tracking-normal flex-1 leading-relaxed">\u2713 ${label}</span>
         `;
         traceContent.appendChild(row);
 
@@ -883,7 +899,8 @@ export async function streamResponse(formData, originalMessage) {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
+            const problem = await response.json().catch(() => ({}));
+            throw new RequestError(problem.message || 'The request was rejected by the server.', problem.code || 'request_failed', response.status);
         }
 
         const reader = response.body.getReader();
@@ -904,48 +921,46 @@ export async function streamResponse(formData, originalMessage) {
                     try {
                         const payload = JSON.parse(payloadStr);
                         const event = payload.event;
-                        const data = payload.data;
+                        const data = payload.data || {};
+                        if (!['error', 'limit_warning', 'context_overflow'].includes(event)) started = true;
 
                         if (event === 'context_overflow') {
                             state.isGenerating = false;
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
-                            lockChatContext();
+                            updateConversation(generation.sessionId, { contextLocked: true });
+                            if (isVisible()) lockChatContext();
                             const overflowMsg = document.createElement('div');
                             overflowMsg.className = 'text-rose-400 text-sm py-1';
                             overflowMsg.textContent = (data && data.message) ? data.message : 'Context limit reached.';
                             textContainer.appendChild(overflowMsg);
                             aiBubble.classList.add('parsed');
-                            return;
+                            return { recoverDraft: true, started };
                         }
 
                         if (event === 'limit_warning') {
                             state.isGenerating = false;
                             aiWrapper.remove();
-                            showCondensationModal(formData, originalMessage);
-                            return;
+                            if (isVisible()) showCondensationModal(formData, originalMessage);
+                            else notify('The conversation you were sending to is getting full. Its draft is kept.', {
+                                id: 'context-warning-' + generation.sessionId, kind: 'warning', action: 'Review conversation', onAction: async () => {
+                                    await window.navigateConversation?.(generation.sessionId);
+                                    if (isVisible()) showCondensationModal(formData, originalMessage);
+                                }
+                            });
+                            return { recoverDraft: true, started: false, message: 'Review the context warning. Your draft is kept.' };
                         }
 
                         if (event === 'error') {
-                            state.isGenerating = false;
-                            if (loadingIndicator && loadingIndicator.parentNode) {
-                                loadingIndicator.remove();
-                            }
-                            const errMsg = document.createElement('div');
-                            errMsg.className = 'text-rose-400 text-sm py-1';
-                            errMsg.textContent = (data && data.message) ? data.message : 'AI is busy with another task.';
-                            textContainer.appendChild(errMsg);
-                            aiBubble.classList.add('parsed');
-                            return;
+                            throw new RequestError(data.message || 'The task could not finish.', data.code || 'stream_error');
                         }
 
                         if (event === 'title_updated') {
-                            const headerTitle = document.querySelector('header h2');
-                            if (headerTitle) headerTitle.innerHTML = `<uk-icon icon="message-square" class="w-5 h-5 text-cyan-500"></uk-icon> ${data.title}`;
-                            const activeItemTitle = document.querySelector('.group.bg-slate-800\\/80 .session-title');
-                            if (activeItemTitle) activeItemTitle.textContent = data.title;
-                            addTraceEntry(`Title assigned: \u201c${data.title}\u201d`, 'cyan');
+                            generation.title = data.title;
+                            updateConversation(generation.sessionId, { title: data.title });
+                            paintAvailability();
+                            addTraceEntry('Title assigned: ' + data.title, 'cyan');
                         }
 
                         if (event === 'search_decided') {
@@ -1111,11 +1126,11 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'context_data_added') {
-                            addContextItem(data);
+                            addContextItem(data, generation.context);
                         }
 
                         if (event === 'context_data_atomized') {
-                            refreshContextItem(data.id);
+                            refreshContextItem(data.id, { root: generation.context, updateViewer: isVisible() }).catch(() => {});
                         }
 
                         if (event === 'status') {
@@ -1263,25 +1278,14 @@ export async function streamResponse(formData, originalMessage) {
                                     if (endIndex !== -1) {
                                         let finalContent = parseBuffer.substring(tagEndIndex + 2, endIndex).trim();
                                         
-                                        if (!window.activeEditFile && !window.processedBlockIds.has(blockId)) {
-                                            window.processedBlockIds.add(blockId);
-                                            window.commitBlockEditDirectly(blockId, finalContent);
-                                        }
+                                        // Document changes are committed on the done event below.
                                         hasAppliedEdit = true;
-                                        if (window.activeEditFile) {
+                                        if (generation.editorFile) {
                                             parseBuffer = parseBuffer.substring(0, startIndex) + finalContent + parseBuffer.substring(endIndex + 9);
                                         } else {
                                             parseBuffer = parseBuffer.substring(0, startIndex) + parseBuffer.substring(endIndex + 9);
                                         }
                                     } else {
-                                        if (!window.activeEditFile) {
-                                            let partialContent = parseBuffer.substring(tagEndIndex + 2).trim();
-                                            let nextTagIndex = partialContent.indexOf('<update id="');
-                                            if (nextTagIndex !== -1) {
-                                                partialContent = partialContent.substring(0, nextTagIndex).trim();
-                                            }
-                                            window.streamUpdateBlockContent(blockId, partialContent);
-                                        }
                                         hasAppliedEdit = true;
                                         parseBuffer = parseBuffer.substring(0, startIndex);
                                         break;
@@ -1302,15 +1306,16 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'done') {
+                            completed = true;
                             verifyStreamIntegrity(data, markdownBuffer);
                             const cursor = textContainer.querySelector('.streaming-cursor');
                             if (cursor) cursor.remove();
                             flushFinalRender();
-                            if (window.evaluateStreamCompletion && window.activeToggledBlocks) {
+                            if (generation.editorFile && window.evaluateStreamCompletion && window.activeToggledBlocks) {
                                 window.evaluateStreamCompletion(turnHadEdit, aiBubble, textContainer);
                             }
 
-                            if (window.activeEditFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {
+                            if (generation.editorFile && markdownBuffer && markdownBuffer.indexOf('<update id=') !== -1) {
                                 const re = /<update id="([^"]+)">([\s\S]*?)<\/update>/g;
                                 let match;
                                 while ((match = re.exec(markdownBuffer)) !== null) {
@@ -1319,7 +1324,7 @@ export async function streamResponse(formData, originalMessage) {
                                     const blockExists = window.activeBlocks && window.activeBlocks.some(b => b.id === blockId);
                                     if (blockId && blockExists && !window.processedBlockIds.has(blockId)) {
                                         window.processedBlockIds.add(blockId);
-                                        window.commitBlockEditDirectly(blockId, finalContent);
+                                        if (generation.editorFile) window.commitBlockEditDirectly(blockId, finalContent);
                                     }
                                 }
                             }
@@ -1352,37 +1357,11 @@ export async function streamResponse(formData, originalMessage) {
                                 }
                             }
 
-                            if (data.total_session_tokens && typeof maxTokensLimit !== 'undefined') {
-                                updateTokenCounter(data.total_session_tokens, maxTokensLimit);
-                            }
-
-                            if (data.session_id) {
-                                const chatSessionInput = document.querySelector('#chatForm input[name="session_id"]');
-                                let oldSessionId = 0;
-                                if (chatSessionInput && chatSessionInput.value) {
-                                    const parsed = parseInt(chatSessionInput.value, 10);
-                                    if (!isNaN(parsed)) {
-                                        oldSessionId = parsed;
-                                    }
-                                }
-
-                                if (oldSessionId === 0) {
-                                    const url = new URL(window.location.href);
-                                    url.searchParams.set('session_id', data.session_id);
-                                    window.location.replace(url.toString());
-                                    return;
-                                } else {
-                                    const sessionIdInputs = document.querySelectorAll('input[name="session_id"]');
-                                    sessionIdInputs.forEach(input => {
-                                        input.value = data.session_id;
-                                    });
-                                    const url = new URL(window.location.href);
-                                    if (url.searchParams.get('session_id') !== String(data.session_id)) {
-                                        url.searchParams.set('session_id', data.session_id);
-                                        window.history.pushState({ session_id: data.session_id }, '', url.toString());
-                                    }
-                                }
-                            }
+                            updateConversation(generation.sessionId, {
+                                tokens: data.total_session_tokens,
+                                newId: data.session_id ? Number(data.session_id) : undefined,
+                                title: generation.title
+                            });
 
                             if (data.message) {
                                 aiBubble.setAttribute('data-raw', data.message);
@@ -1403,34 +1382,60 @@ export async function streamResponse(formData, originalMessage) {
                             scrollIfStuck(chatWindow);
                         }
 
-                    } catch (e) {}
+                    } catch (e) {
+                        if (e instanceof RequestError) throw e;
+                        throw new RequestError('An update could not be displayed. Review the conversation before trying again.', 'stream_format');
+                    }
                 }
             }
         }
 
+        if (!completed) throw new RequestError('Connection ended before completion. Review the conversation before sending again.', 'connection');
         aiBubble.classList.add('parsed');
 
     } catch (error) {
-        if (error && error.name === 'AbortError') {
-            if (loadingText) loadingText.textContent = "Stopped.";
-        } else {
-            console.error("Stream Error:", error);
-            if (loadingText) loadingText.textContent = "Connection failed.";
+        const busy = error.code === 'model_busy';
+        const stopped = error.name === 'AbortError';
+        const message = stopped ? 'Stopped receiving. Checking AI availability…' : (error.message || 'Connection interrupted.');
+        if (busy) reportBusy(message);
+        if (loadingIndicator?.parentNode && loadingText) loadingText.textContent = message;
+        else {
+            const errorText = document.createElement('p');
+            errorText.className = 'ui-notice ui-notice--' + (busy || stopped ? 'warning' : 'error');
+            errorText.textContent = message;
+            aiBubble.append(errorText);
         }
-        const spinner = loadingIndicator ? loadingIndicator.querySelector('.uk-spinner') : null;
-        if (spinner) spinner.remove();
-        if (loadingIndicator) loadingIndicator.classList.replace('text-cyan-400', 'text-rose-400');
+        loadingIndicator?.querySelectorAll('.uk-spinner, .ui-spinner').forEach(el => el.remove());
+        if (loadingIndicator) {
+            loadingIndicator.className = 'ui-notice ui-notice--' + (busy || stopped ? 'warning' : 'error');
+            loadingIndicator.setAttribute('role', 'status');
+        }
+        aiBubble.dataset.outcome = busy ? 'busy' : stopped ? 'stopped' : 'failed';
+        outcome = { message, recoverDraft: busy || (error.status >= 400 && error.status < 500), started };
+        if (!started && busy) aiWrapper.remove();
     } finally {
-        state.isGenerating = false;
-        setSendStopMode(false);
-        window.__activeChatAbort = null;
-        
-        const lockOverlay = document.getElementById('editor-lock-overlay');
+        if (traceSpinner) { traceSpinner.classList.add('hidden'); traceSpinner.classList.remove('animate-spin'); }
+        stopTaskTimer();
+        cancelAnimationFrame(renderRafId);
+        cancelAnimationFrame(thinkingTypewriter.rafId);
+        if (markdownBuffer && !completed) flushFinalRender();
+        if (generation.editorFile) { try { await flushDraftChanges(); } catch {} }
+        aiWrapper.querySelectorAll('.thinking-pulse-dot, .trace-pulse-dot').forEach(el => el.classList.add('hidden'));
+        if (state.generation === generation) {
+            state.isGenerating = false;
+            state.generation = null;
+            window.__activeChatAbort = null;
+            setSendStopMode(false);
+            paintAvailability();
+            refreshAvailability();
+        }
         if (lockOverlay) {
             lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
             lockOverlay.classList.add('opacity-0', 'pointer-events-none');
         }
     }
+    return outcome;
+
 }
 
 function renderThinkingContent(container, text) {

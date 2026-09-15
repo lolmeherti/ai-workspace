@@ -41,7 +41,7 @@ class HealthCheck
         }
     }
 
-    private function checkAi(): array
+    public function checkAi(): array
     {
         $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
 

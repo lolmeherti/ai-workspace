@@ -1,9 +1,16 @@
+import { rememberEmailDraft } from './emailReplyForm.js';
+let requestSequence = 0;
 /**
  * @file js/email/emailBodyLoader.js
  * @description Load and render a single email body in the reader pane.
  */
 
 export function loadEmailBody(accountId, uid, element) {
+    if (document.getElementById('reply-submit-btn')?.disabled) return;
+    rememberEmailDraft();
+    const request = ++requestSequence;
+    window.selectedEmailAccountId = accountId;
+    document.getElementById('email-workspace').classList.add('has-email');
     document.querySelectorAll('#email-list-container > div').forEach(el => {
         el.classList.remove('border-cyan-500/40', 'bg-cyan-950/15', 'shadow-[inset_2px_0_0_#22d3ee]');
     });
@@ -59,9 +66,9 @@ export function loadEmailBody(accountId, uid, element) {
                 }
                 .label {
                     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-                    font-size: 10px;
+                    font-size: 13px;
                     font-weight: 700;
-                    color: #475569;
+                    color: #a2b2ca;
                     letter-spacing: 0.2em;
                     text-transform: uppercase;
                 }
@@ -70,7 +77,7 @@ export function loadEmailBody(accountId, uid, element) {
         <body>
             <div class="loader">
                 <div class="spinner"></div>
-                <div class="label">Decrypting Transmission</div>
+                <div class="label">Loading email…</div>
             </div>
         </body>
         </html>`;
@@ -78,6 +85,7 @@ export function loadEmailBody(accountId, uid, element) {
     fetch(`index.php?api_action=get_email_body&account_id=${accountId}&uid=${uid}`)
         .then(res => res.json())
         .then(data => {
+            if (request !== requestSequence) return;
             if (data.status === 'success') {
                 document.getElementById('read-subject').textContent = data.subject || '(No Subject)';
                 document.getElementById('read-from').textContent = data.from;
@@ -101,10 +109,10 @@ export function loadEmailBody(accountId, uid, element) {
 
                     const badge = element.querySelector('span.bg-cyan-950\\/50, span[class*="bg-cyan-950/50"]');
                     if (badge) {
-                        badge.outerHTML = '<span class="px-1.5 py-0.5 text-[8px] font-bold tracking-widest uppercase bg-slate-900/60 border border-slate-800 text-slate-500 rounded-md shrink-0">READ</span>';
+                        badge.outerHTML = '<span class="px-1.5 py-0.5 text-xs font-bold tracking-normal normal-case bg-slate-900/60 border border-slate-800 text-slate-500 rounded-md shrink-0">READ</span>';
                     }
 
-                    const fromEl = element.querySelector('.text-\\[10px\\].tracking-wide');
+                    const fromEl = element.querySelector('.text-\\[10px\\].tracking-normal');
                     if (fromEl) {
                         fromEl.classList.remove('text-slate-100', 'font-extrabold');
                         fromEl.classList.add('text-slate-400', 'font-medium');
@@ -206,12 +214,13 @@ export function loadEmailBody(accountId, uid, element) {
             } else {
                 iframe.srcdoc = `
                     <div style="font-family: sans-serif; font-size: 12px; color: #f43f5e; padding: 30px; text-align: center; background-color: #040810; height: 100vh;">
-                        Link Failure: ${data.message}
+                        Could not load email: ${data.message}
                     </div>
                 `;
             }
         })
         .catch(err => {
+            if (request !== requestSequence) return;
             iframe.srcdoc = `
                 <div style="font-family: sans-serif; font-size: 12px; color: #f43f5e; padding: 30px; text-align: center; background-color: #040810; height: 100vh;">
                     Communication Error: ${err.message}
@@ -231,7 +240,7 @@ function buildThreadStyledBody(doc, cleanSenderName) {
                                 background-color: #040810 !important;
                                 color: #cbd5e1 !important;
                                 font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
-                                font-size: 11px !important;
+                                font-size: 15px !important;
                                 line-height: 1.6 !important;
                                 padding: 12px !important;
                                 margin: 0 !important;
@@ -255,9 +264,9 @@ function buildThreadStyledBody(doc, cleanSenderName) {
                                 box-shadow: 0 0 15px rgba(6, 182, 212, 0.05) !important;
                             }
                             .latest-message-container::before {
-                                content: "${cleanSenderName} ◀ TRANSMISSION RECEIVED ▶" !important;
+                                content: "${cleanSenderName} ◀ Received ▶" !important;
                                 display: block !important;
-                                font-size: 8px !important;
+                                font-size: 12px !important;
                                 font-weight: bold !important;
                                 color: #22d3ee !important;
                                 letter-spacing: 0.15em !important;
@@ -281,7 +290,7 @@ function buildThreadStyledBody(doc, cleanSenderName) {
                             }
                             .bubble.outgoing .bubble-header {
                                 display: block !important;
-                                font-size: 8px !important;
+                                font-size: 12px !important;
                                 font-weight: bold !important;
                                 color: #6366f1 !important;
                                 letter-spacing: 0.15em !important;
@@ -304,7 +313,7 @@ function buildThreadStyledBody(doc, cleanSenderName) {
 
                             .history-summary {
                                 padding: 12px 16px !important;
-                                font-size: 9px !important;
+                                font-size: 13px !important;
                                 font-weight: bold !important;
                                 color: #94a3b8 !important;
                                 cursor: pointer !important;

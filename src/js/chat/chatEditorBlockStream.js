@@ -1,9 +1,13 @@
+import { queueDraftChange, flushDraftChanges } from './draftSync.js';
 /**
  * @file js/chat/chatEditorBlockStream.js
  * @description Stream and commit block edits during AI-assisted document editing.
  */
 
 import { clearActiveBlockToggles } from './chatEditorBlockSelection.js';
+import { renderEditorBlocks } from './chatEditorRenderBlocks.js';
+import { notify, withPending } from '../workspace/feedback.js';
+import { state } from '../state.js';
 
 export function streamUpdateBlockContent(blockId, partialText) {
     const card = document.getElementById(`block-card-${blockId}`);
@@ -28,21 +32,8 @@ export function commitBlockEditDirectly(blockId, finalContent) {
         if (textDiv) textDiv.textContent = finalContent || '\u00A0';
     }
 
-    fetch('index.php?api_action=update_draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            file: window.activeEditFile,
-            block_id: blockId,
-            content: finalContent
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            window.activeBlocks = data.blocks;
-        }
-    });
+    queueDraftChange(blockId, finalContent);
+    return flushDraftChanges().catch(() => {});
 }
 
 export function evaluateStreamCompletion(hasAppliedEdit, bubble, textContainer) {
@@ -50,40 +41,45 @@ export function evaluateStreamCompletion(hasAppliedEdit, bubble, textContainer) 
 
     if (bubble.querySelector('.manual-apply-trigger')) return;
 
+    const filename = window.activeEditFile;
     const toggledArray = Array.from(window.activeToggledBlocks);
 
     const applyBtn = document.createElement('button');
     applyBtn.type = 'button';
-    applyBtn.className = "manual-apply-trigger flex items-center justify-center gap-1.5 px-4 py-2 mt-4 text-[10px] font-extrabold tracking-wider uppercase bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none";
+    applyBtn.className = "manual-apply-trigger flex items-center justify-center gap-1.5 px-4 py-2 mt-4 text-xs font-extrabold tracking-normal normal-case bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 rounded-lg transition-all cursor-pointer outline-none w-fit self-start shadow-md select-none";
     applyBtn.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><polyline points="20 6 9 17 4 12"/></svg>
         Apply Suggestion to Selected Blocks (${toggledArray.join(', ')})
     `;
 
-    applyBtn.onclick = function() {
-        const rawText = bubble.getAttribute('data-raw') || bubble.textContent;
-        const cleanedText = rawText.replace(/user has toggled[\s\S]*?prompt:/gi, '').trim();
-        const suggestionLines = cleanedText.split("\n").map(l => l.trim()).filter(l => l !== '');
-
-        let lineIdx = 0;
-        toggledArray.forEach(blockId => {
-            const replacementText = suggestionLines[lineIdx] || suggestionLines[suggestionLines.length - 1] || '';
-            if (replacementText) {
-                commitBlockEditDirectly(blockId, replacementText);
-            }
-            lineIdx++;
-        });
-
-        applyBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><polyline points="20 6 9 17 4 12"/></svg>
-            Applied!
-        `;
-        applyBtn.className = applyBtn.className.replace('text-cyan-400', 'text-emerald-400').replace('border-cyan-500/30', 'border-emerald-500/40');
-
-        setTimeout(() => {
-            clearActiveBlockToggles();
-            applyBtn.remove();
-        }, 1500);
+    applyBtn.onclick = async function() {
+        if (window.activeEditFile !== filename) {
+            notify('Open the original document before applying this suggestion.');
+            return;
+        }
+        if (state.generation || state.editorSaving) {
+            notify('Wait for the current document operation to finish.');
+            return;
+        }
+        state.editorSaving = true;
+        try {
+            const applied = await withPending(applyBtn, async () => {
+                const rawText = bubble.getAttribute('data-raw') || bubble.textContent;
+                const cleanedText = rawText.replace(/user has toggled[\s\S]*?prompt:/gi, '').trim();
+                const suggestionLines = cleanedText.split('\n').map(line => line.trim()).filter(Boolean);
+                if (!suggestionLines.length) throw new Error('There is no suggestion text to apply.');
+                toggledArray.forEach((blockId, index) => {
+                    const replacement = suggestionLines[index] || suggestionLines.at(-1);
+                    queueDraftChange(blockId, replacement);
+                });
+                await flushDraftChanges();
+                clearActiveBlockToggles();
+                renderEditorBlocks();
+                applyBtn.textContent = 'Applied to document draft';
+                return true;
+            }, { target: document.getElementById('editor-notices') });
+            if (applied) applyBtn.disabled = true;
+        } finally { state.editorSaving = false; }
     };
 
     textContainer.appendChild(applyBtn);

@@ -1,3 +1,6 @@
+import { confirmAction, notify, requestJson } from '../workspace/feedback.js';
+import { flushDraftChanges } from './draftSync.js';
+import { state } from '../state.js';
 /**
  * @file js/chat/chatEditorBlockDelete.js
  * @description Delete selected or single blocks from the document editor draft.
@@ -6,20 +9,22 @@
 import { renderEditorBlocks } from './chatEditorRenderBlocks.js';
 import { updateActiveTargetPill } from './chatEditorBlockSelection.js';
 
-export function deleteSelectedBlocks(targetIds = null) {
+export async function deleteSelectedBlocks(targetIds = null) {
     const idsToDelete = targetIds || Array.from(window.activeToggledBlocks);
+    if (state.generation) return;
     if (!window.activeEditFile || idsToDelete.length === 0) return;
 
     const confirmMsg = `Are you sure you want to permanently delete these ${idsToDelete.length} line(s) from the draft?`;
-    if (!confirm(confirmMsg)) return;
+    if (!await confirmAction(confirmMsg, { confirmLabel: 'Delete lines', destructive: true })) return;
 
+    try { await flushDraftChanges(); } catch { return; }
     const lockOverlay = document.getElementById('editor-lock-overlay');
     if (lockOverlay) {
         lockOverlay.classList.remove('opacity-0', 'pointer-events-none');
         lockOverlay.classList.add('opacity-100', 'pointer-events-auto');
     }
 
-    fetch('index.php?api_action=delete_draft_blocks', {
+    requestJson('index.php?api_action=delete_draft_blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -27,7 +32,6 @@ export function deleteSelectedBlocks(targetIds = null) {
             block_ids: idsToDelete
         })
     })
-    .then(res => res.json())
     .then(data => {
         if (data.status === 'success') {
             window.activeBlocks = data.blocks;
@@ -42,10 +46,10 @@ export function deleteSelectedBlocks(targetIds = null) {
             if (deleteSelectionBtn) deleteSelectionBtn.classList.add('hidden');
             if (editSelectionBtn) editSelectionBtn.classList.add('hidden');
         } else {
-            alert(`Deletion failed: ${data.message}`);
+            notify(`Deletion failed: ${data.message}`);
         }
     })
-    .catch(err => alert(`Deletion Error: ${err.message}`))
+    .catch(err => notify(`Deletion Error: ${err.message}`))
     .finally(() => {
         if (lockOverlay) {
             lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');

@@ -5,6 +5,9 @@
  */
 export const state = {
     activeTab: 'chats',
+    sessionId: 0,
+    generation: null,
+    contextLocked: false,
     isGenerating: false,
     pastedImageFile: null,
     pendingFormData: null,

@@ -1,73 +1,18 @@
-/**
- * @file js/tabs/tabsChatStar.js
- * @description Toggle star state on chat session list items.
- */
-
-export function toggleStarSession(event, sessionId) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    const btn = event.currentTarget;
-    const item = btn.closest('.chat-session-item');
-    const svg = btn.querySelector('.star-icon');
-    if (!item || !svg) return;
-
-    const isStarredNow = item.getAttribute('data-starred') === '1';
-    const nextStarredState = !isStarredNow;
-
-    item.setAttribute('data-starred', nextStarredState ? '1' : '0');
-
-    if (nextStarredState) {
-        btn.classList.remove('opacity-0');
-        btn.classList.add('opacity-100');
-        svg.setAttribute('fill', 'currentColor');
-        svg.className.baseVal = "star-icon star-glow-active transition-all duration-300";
-    } else {
-        btn.classList.add('opacity-0');
-        btn.classList.remove('opacity-100');
-        svg.setAttribute('fill', 'none');
-        svg.className.baseVal = "star-icon star-glow-inactive transition-all duration-300";
-    }
-
-    fetch(`index.php?toggle_star=${sessionId}&ajax=1`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                const confirmed = !!data.is_starred;
-                item.setAttribute('data-starred', confirmed ? '1' : '0');
-                if (confirmed) {
-                    btn.classList.remove('opacity-0');
-                    btn.classList.add('opacity-100');
-                    svg.setAttribute('fill', 'currentColor');
-                    svg.className.baseVal = "star-icon star-glow-active transition-all duration-300";
-                } else {
-                    btn.classList.add('opacity-0');
-                    btn.classList.remove('opacity-100');
-                    svg.setAttribute('fill', 'none');
-                    svg.className.baseVal = "star-icon star-glow-inactive transition-all duration-300";
-                }
-
-                if (window.currentChatFilter === 'starred' && !confirmed) {
-                    item.classList.add('hidden');
-                }
-            }
-        })
-        .catch(err => {
-            console.error('Failed to star session:', err);
-
-            item.setAttribute('data-starred', isStarredNow ? '1' : '0');
-            if (isStarredNow) {
-                btn.classList.add('opacity-100');
-                btn.classList.remove('opacity-0');
-                svg.setAttribute('fill', 'currentColor');
-                svg.className.baseVal = "star-icon star-glow-active transition-all duration-300";
-            } else {
-                btn.classList.add('opacity-0');
-                btn.classList.remove('opacity-100');
-                svg.setAttribute('fill', 'none');
-                svg.className.baseVal = "star-icon star-glow-inactive transition-all duration-300";
-            }
-        });
+import { requestJson, notify } from '../workspace/feedback.js';
+export async function toggleStarSession(event, sessionId) {
+    event.preventDefault(); event.stopPropagation();
+    const button = event.currentTarget, row = button.closest('.chat-session-item');
+    if (!row || button.disabled) return;
+    button.disabled = true; button.setAttribute('aria-busy', 'true');
+    const paint = starred => {
+        row.dataset.starred = starred ? '1' : '0';
+        button.setAttribute('aria-pressed', String(starred)); button.setAttribute('aria-label', starred ? 'Unstar conversation' : 'Star conversation');
+        const svg = button.querySelector('.star-icon'); svg?.setAttribute('fill', starred ? 'currentColor' : 'none'); svg?.classList.toggle('star-glow-active', starred); svg?.classList.toggle('star-glow-inactive', !starred);
+        if (window.currentChatFilter === 'starred') row.classList.toggle('hidden', !starred);
+    };
+    try { const data = await requestJson(`index.php?toggle_star=${sessionId}&ajax=1`); paint(!!data.is_starred); }
+    catch {
+        try { const actual = await requestJson(`index.php?api_action=get_conversation&session_id=${sessionId}`); paint(!!actual.is_starred); }
+        catch { notify('Could not confirm the star change. Reopen this conversation before trying again.'); }
+    } finally { button.disabled = false; button.removeAttribute('aria-busy'); }
 }

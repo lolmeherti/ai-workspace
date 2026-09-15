@@ -5,6 +5,8 @@
  * DB (set_reasoning_effort) and is sent with each chat via the hidden #effort-input.
  */
 
+import { requestJson, notify, clearNotice } from '../workspace/feedback.js';
+
 const VALID = ['low', 'medium', 'high', 'off'];
 
 function setActive(control, value) {
@@ -15,14 +17,12 @@ function setActive(control, value) {
     });
 }
 
-function persist(effort) {
+async function persist(effort) {
     const fd = new FormData();
     fd.append('action', 'set_reasoning_effort');
     fd.append('effort', effort);
-    fetch('index.php', { method: 'POST', body: fd })
-        .then((r) => r.json())
-        .then((j) => { if (j.status !== 'saved') console.warn('set_reasoning_effort failed', j); })
-        .catch((err) => console.warn('set_reasoning_effort error', err));
+    const result = await requestJson('index.php', { method: 'POST', body: fd });
+    if (result.status !== 'saved') throw new Error('The reasoning setting could not be saved.');
 }
 
 async function initReasoningEffort() {
@@ -66,11 +66,22 @@ async function initReasoningEffort() {
     setActive(control, effort);
 
     control.querySelectorAll('.effort-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            effort = btn.dataset.effort;
-            hidden.value = effort;
-            setActive(control, effort);
-            persist(effort);
+        btn.addEventListener('click', async () => {
+            if (control.getAttribute('aria-busy') === 'true' || effort === btn.dataset.effort) return;
+            control.setAttribute('aria-busy', 'true');
+            control.querySelectorAll('button').forEach(button => { button.disabled = true; });
+            try {
+                await persist(btn.dataset.effort);
+                effort = btn.dataset.effort;
+                hidden.value = effort;
+                setActive(control, effort);
+                clearNotice('reasoning-setting');
+            } catch {
+                notify('The reasoning setting could not be saved. Your previous choice is still selected; try again.', { id: 'reasoning-setting', target: document.getElementById('composer-notices') });
+            } finally {
+                control.removeAttribute('aria-busy');
+                control.querySelectorAll('button').forEach(button => { button.disabled = false; });
+            }
         });
     });
 }

@@ -1,3 +1,6 @@
+import { notify, confirmAction } from '../workspace/feedback.js';
+import { ensureAIAvailable } from '../workspace/availability.js';
+import { esc } from '../jobs/jobUtil.js';
 /**
  * Uploads Gallery & File Management Controller
  */
@@ -13,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let limitPerPage = 12;
 
     let searchTimeout = null;
+    let requestSequence = 0;
     let idToDelete = []; 
 
     const isImageFile = (file) => {
@@ -64,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function fetchGalleryFiles() {
         if (!galleryLoader || !galleryGrid) return;
+        const request = ++requestSequence;
         
         galleryLoader.classList.remove('opacity-0', 'pointer-events-none');
         galleryLoader.style.display = 'flex';
@@ -73,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetch(url)
             .then(res => res.json())
             .then(data => {
+                if (request !== requestSequence) return;
                 if (data.status === 'success') {
                     allFiles = data.files || [];
                     totalPages = data.pagination?.pages || 1;
@@ -106,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .catch(err => {
+                if (request !== requestSequence) return;
                 console.error(err);
                 if (galleryGrid) {
                     galleryGrid.innerHTML = `
@@ -116,9 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             })
             .finally(() => {
-                // Fade loader out
+                if (request !== requestSequence) return;
+                // Only the latest request controls the loading state.
                 galleryLoader.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => { galleryLoader.style.display = 'none'; }, 300);
+                galleryLoader.style.display = 'none';
             });
     }
 
@@ -159,6 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardId = `gallery-card-${file.id}`;
 
             const card = document.createElement('div');
+            card.tabIndex = 0; card.setAttribute('role', 'button');
+            card.addEventListener('keydown', e => { if (e.target === card && ['Enter', ' '].includes(e.key)) { e.preventDefault(); card.click(); } });
             card.id = cardId;
             card.className = `group bg-[#091124]/90 border ${isSelected ? 'border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500' : 'border-slate-800/80'} rounded-xl overflow-hidden shadow-md cursor-pointer transition-all duration-200 hover:border-cyan-500/40 relative flex flex-col h-[280px] select-none`;
             
@@ -175,8 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<div class="h-44 w-full overflow-hidden border-b border-slate-900 bg-slate-950/20 flex items-center justify-center">
                              <img src="uploads/${file.physical_name}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                            </div>`
-                        : `<div class="h-44 w-full p-4 border-b border-slate-900 bg-slate-950/40 overflow-hidden font-mono text-[9px] leading-relaxed text-slate-400/90 italic tracking-wide select-none">
-                             <div class="flex items-center gap-1.5 mb-2 text-[8px] font-bold text-cyan-400 tracking-wider uppercase select-none shrink-0">
+                        : `<div class="h-44 w-full p-4 border-b border-slate-900 bg-slate-950/40 overflow-hidden font-mono text-xs leading-relaxed text-slate-400/90 italic tracking-normal select-none">
+                             <div class="flex items-center gap-1.5 mb-2 text-xs font-bold text-cyan-400 tracking-normal normal-case select-none shrink-0">
                                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-cyan-400"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
                                  ${file.file_type.split('/').pop().toUpperCase()} EXTRACT
                              </div>
@@ -186,8 +196,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     <!-- Meta Info Area -->
                     <div class="p-4 flex flex-col justify-between flex-1 min-w-0">
-                        <div class="truncate text-xs font-bold text-slate-100 truncate tracking-wide" title="${file.generated_title}">${file.generated_title}</div>
-                        <div class="text-[10px] text-slate-400/70 truncate font-mono mt-1">${file.original_name}</div>
+                        <div class="truncate text-xs font-bold text-slate-100 truncate tracking-normal" title="${esc(file.generated_title)}">${esc(file.generated_title)}</div>
+                        <div class="text-xs text-slate-400/70 truncate font-mono mt-1">${esc(file.original_name)}</div>
                     </div>
                 </div>
             `;
@@ -277,22 +287,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set up active drawer content template
         drawerBody.innerHTML = `
             <div>
-                <h4 class="text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1">File Title</h4>
-                <p class="text-sm font-semibold text-slate-100 break-words leading-relaxed">${file.generated_title}</p>
+                <h4 class="text-xs font-bold text-cyan-500 normal-case tracking-normal mb-1">File Title</h4>
+                <p class="text-sm font-semibold text-slate-100 break-words leading-relaxed">${esc(file.generated_title)}</p>
             </div>
             <div class="h-[1px] bg-slate-800/80"></div>
             <div>
-                <h4 class="text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-1">Physical Details</h4>
-                <div class="text-[11px] font-mono text-slate-400 space-y-1.5 leading-normal bg-slate-950/30 p-3 rounded-lg border border-slate-900">
-                    <div class="flex"><span class="w-16 text-slate-500 font-sans">Name:</span> <span class="break-all text-slate-300">${file.original_name}</span></div>
-                    <div class="flex"><span class="w-16 text-slate-500 font-sans">Type:</span> <span class="text-slate-300">${file.file_type}</span></div>
+                <h4 class="text-xs font-bold text-cyan-500 normal-case tracking-normal mb-1">Physical Details</h4>
+                <div class="text-xs font-mono text-slate-400 space-y-1.5 leading-normal bg-slate-950/30 p-3 rounded-lg border border-slate-900">
+                    <div class="flex"><span class="w-16 text-slate-500 font-sans">Name:</span> <span class="break-all text-slate-300">${esc(file.original_name)}</span></div>
+                    <div class="flex"><span class="w-16 text-slate-500 font-sans">Type:</span> <span class="text-slate-300">${esc(file.file_type)}</span></div>
                     <div class="flex"><span class="w-16 text-slate-500 font-sans">Disk:</span> <span class="break-all text-slate-300">${file.physical_name}</span></div>
                     <div class="flex"><span class="w-16 text-slate-500 font-sans">Date:</span> <span class="text-slate-300">${new Date(file.uploaded_at).toLocaleString()}</span></div>
                 </div>
             </div>
             <div class="h-[1px] bg-slate-800/80"></div>
             <div>
-                <h4 class="text-[10px] font-bold text-cyan-500 uppercase tracking-wider mb-2">Content Preview</h4>
+                <h4 class="text-xs font-bold text-cyan-500 normal-case tracking-normal mb-2">Content Preview</h4>
                 ${isImage 
                     ? `<div class="bg-slate-950/50 p-1.5 border border-slate-900 rounded-xl overflow-hidden shadow-inner">
                          <img src="uploads/${file.physical_name}" class="w-full h-auto max-h-[300px] object-contain rounded-lg block" alt="Preview"/>
@@ -302,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
                              <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                              Streaming file from local disk...
                          </span>
-                         <pre class="drawer-lazy-load hidden text-[11px]" data-loaded="false"></pre>
+                         <pre class="drawer-lazy-load hidden text-xs" data-loaded="false"></pre>
                        </div>`
                 }
             </div>
@@ -360,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Execute secure deletion payload to backend
      */
     function confirmAndExecuteDeletion() {
-        if (idToDelete.length === 0) return;
+        if (idToDelete.length === 0 || deleteModalConfirm.disabled) return;
 
         const originalConfirmHTML = deleteModalConfirm.innerHTML;
         deleteModalConfirm.disabled = true;
@@ -378,7 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             if (data.status === 'success' || data.status === 'partial_success') {
                 // Remove deleted items from our active selection set
-                idToDelete.forEach(id => selectedFileIds.delete(id));
+                (data.deleted_ids || (data.status === 'success' ? idToDelete : [])).forEach(id => selectedFileIds.delete(id));
+                notify(data.status === 'partial_success' ? `${data.deleted_count} files deleted. Some could not be deleted; remaining files stay selected.` : 'Files deleted.', { kind: data.status === 'partial_success' ? 'warning' : 'success' });
                 updateBatchBar();
                 closePreviewDrawer();
                 deleteModal.classList.add('hidden');
@@ -390,11 +401,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 fetchGalleryFiles(); // Reload refreshed dataset
             } else {
-                alert(`Deletion failed: ${data.message}`);
+                notify(`Deletion failed: ${data.message}`);
             }
         })
         .catch(err => {
-            alert(`Error connecting to server: ${err.message}`);
+            notify(`Error connecting to server: ${err.message}`);
         })
         .finally(() => {
             deleteModalConfirm.disabled = false;
@@ -410,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function batchAppendSelected() {
         if (selectedFileIds.size === 0) return;
         if (typeof window.addFileReference !== 'function') {
-            alert("Chat system reference utility missing.");
+            notify("Chat system reference utility missing.");
             return;
         }
 
@@ -659,11 +670,11 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(data => {
                 if (data.status !== 'success') {
-                    console.error(`Upload error for file ${file.name}: ${data.message}`);
+                    notify(`${file.name}: ${data.message}`);
                 }
             })
             .catch(err => {
-                console.error(`Network communication error for file ${file.name}:`, err);
+                notify(`${file.name}: Upload could not be confirmed. Check Files before retrying.`);
             });
         });
 
@@ -683,7 +694,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Disk Synchronization click handler
     if (gallerySyncBtn) {
+        gallerySyncBtn.dataset.aiAction = 'true';
         gallerySyncBtn.addEventListener('click', () => {
+            if (!ensureAIAvailable()) return;
             const loader = document.getElementById('gallery-loader');
             const originalBtnHTML = gallerySyncBtn.innerHTML;
             gallerySyncBtn.disabled = true;
@@ -714,13 +727,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         let msg = `Sync complete. ${synced} new file(s) indexed.`;
                         if (reindexed > 0) msg += ` ${reindexed} file(s) re-indexed.`;
                         if (failed > 0) msg += ` ${failed} file(s) failed.`;
-                        alert(msg);
+                        notify(msg, { kind: failed ? 'warning' : 'success' });
                     } else {
-                        alert(`Sync failed: ${data.message}`);
+                        notify(`Sync failed: ${data.message}`);
                     }
                 })
                 .catch(err => {
-                    alert(`Network error during sync: ${err.message}`);
+                    notify(`Network error during sync: ${err.message}`);
                 })
                 .finally(() => {
                     gallerySyncBtn.disabled = false;

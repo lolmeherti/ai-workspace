@@ -23,6 +23,12 @@ use App\Bootstrap\PageDataLoader;
 
 Config::load(__DIR__);
 
+$workspaceAction = $_GET['api_action'] ?? '';
+if (in_array($workspaceAction, \App\Actions\WorkspaceStateAction::ACTIONS, true)) {
+    (new \App\Actions\WorkspaceStateAction())->execute($workspaceAction);
+    exit;
+}
+
 try {
     $envEditor = new EnvEditor(__DIR__ . '/.env');
     $sessionId = isset($_GET['session_id']) ? (int)$_GET['session_id'] : 0;
@@ -89,7 +95,7 @@ try {
 } catch (\App\Services\ModelBusyException $e) {
     http_response_code(409);
     header('Content-Type: application/json');
-    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    echo json_encode(['status' => 'error', 'code' => 'model_busy', 'message' => $e->getMessage()]);
     exit;
 } catch (\Throwable $e) {
     \App\Logger::critical("Bootstrap failure in index.php", [
@@ -110,22 +116,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Continuous Chat Session</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        slate: {
-                            750: '#2a3b55',
-                            850: '#182236',
-                        },
-                    },
-                },
-            },
-        };
-    </script>
+    <title>Localsy · AI workspace</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/core.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/icon.iife.js" type="module"></script>
@@ -135,14 +126,20 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.2/lib/index.umd.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="css/utilities.css">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased selection:bg-cyan-500/30">
-    <div class="h-full w-full flex">
+    <div id="app-shell" class="h-full w-full flex">
+        <button type="button" id="sidebar-toggle" class="ui-icon-button sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="workspace-sidebar"><uk-icon icon="menu" class="w-5 h-5" aria-hidden="true"></uk-icon></button>
         <?php include __DIR__ . '/views/sidebar.php'; ?>
         
         <div id="chat-workspace" class="flex-1 flex flex-col h-full min-w-0">
             <?php include __DIR__ . '/views/chat-window.php'; ?>
+        </div>
+
+        <div id="memory-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">
+            <?php include __DIR__ . '/views/tab-memories.php'; ?>
         </div>
 
         <div id="gallery-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">

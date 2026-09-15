@@ -20,7 +20,7 @@
             <!-- Model Switcher Section -->
             <div class="px-6 pt-4 flex gap-4 items-end">
                 <div class="flex-1">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" for="model_id">Model</label>
+                    <label class="block text-xs font-semibold text-slate-400 normal-case tracking-normal mb-1.5" for="model_id">Model</label>
                     <select name="model_id" id="model_id" class="input-futuristic w-full rounded-lg px-3 py-2 text-sm">
                         <option value="">— Select a model —</option>
                         <?php 
@@ -67,7 +67,7 @@
                     </select>
                 </div>
                 <div class="w-48">
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" for="ctx_size">Ctx Size</label>
+                    <label class="block text-xs font-semibold text-slate-400 normal-case tracking-normal mb-1.5" for="ctx_size">Ctx Size</label>
                     <?php 
                     $currentCtxSize = '';
                     if (file_exists($envPath)) {
@@ -87,7 +87,7 @@
                         $label = ucwords(strtolower(str_replace('_', ' ', $key)));
                     ?>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" for="<?php echo htmlspecialchars($key); ?>">
+                        <label class="block text-xs font-semibold text-slate-400 normal-case tracking-normal mb-1.5" for="<?php echo htmlspecialchars($key); ?>">
                             <?php echo htmlspecialchars($label); ?>
                         </label>
                         <input type="text" 
@@ -215,7 +215,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (st.active === false) {
                     polling = false;
                     if (st.stage === 'loaded') {
-                        window.location.reload();
+                        statusLabel.textContent = 'Saved. Reload the workspace to display the updated settings.';
+                        setBusy(false);
+                        let reload = document.getElementById('settings-reload');
+                        if (!reload) { reload = document.createElement('button'); reload.id = 'settings-reload'; reload.type = 'button'; reload.className = 'ui-button'; reload.textContent = 'Reload workspace'; reload.addEventListener('click', () => window.location.reload()); statusLabel.parentElement.append(reload); }
                     } else {
                         showError(st.error || 'Model switch failed.');
                     }
@@ -224,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgress(st);
                 setTimeout(tick, 2000);
             } catch (err) {
+                statusLabel.textContent = 'Connection interrupted. Checking the model switch status…';
                 setTimeout(tick, 3000);
             }
         };
@@ -232,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saveBtn.disabled) return;
         showStatus();
         statusLabel.textContent = 'Saving…';
         statusBar.classList.add('hidden');
@@ -256,7 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgress({ stage: data.stage || 'downloading', progress: data.progress || 0 });
                 pollSwitchStatus();
             } else if (status === 'saved') {
-                window.location.reload();
+                statusLabel.textContent = 'Saved. Reload the workspace to display the updated settings.';
+                        setBusy(false);
+                        let reload = document.getElementById('settings-reload');
+                        if (!reload) { reload = document.createElement('button'); reload.id = 'settings-reload'; reload.type = 'button'; reload.className = 'ui-button'; reload.textContent = 'Reload workspace'; reload.addEventListener('click', () => window.location.reload()); statusLabel.parentElement.append(reload); }
             } else {
                 showError(data.message || 'Failed to save settings.');
             }

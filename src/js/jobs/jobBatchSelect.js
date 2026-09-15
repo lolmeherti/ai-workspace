@@ -1,3 +1,5 @@
+import { confirmAction } from '../workspace/feedback.js';
+let pending = false;
 /**
  * @file js/jobs/jobBatchSelect.js
  * @description Card checkbox selection and per-category / universal batch actions.
@@ -47,9 +49,9 @@ function renderBatchBar() {
 
     bar.innerHTML = `
         <div class="px-3 py-2 border-t border-slate-850 bg-[#0a0f1d] flex items-center gap-1.5 flex-wrap">
-            <span class="text-[9px] font-bold uppercase tracking-widest text-slate-400 mr-1">${selected.size} selected</span>
-            ${actions.map(a => `<button class="job-batch-btn px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border ${a.key === 'delete' ? 'border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40' : 'border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40'} transition-all cursor-pointer outline-none" data-action="${a.key}">${esc(a.label)}</button>`).join('')}
-            <button class="job-batch-clear px-2 py-1 text-[9px] uppercase tracking-wider text-slate-500 hover:text-slate-300 cursor-pointer outline-none ml-auto">Clear</button>
+            <span class="text-xs font-bold normal-case tracking-normal text-slate-400 mr-1">${selected.size} selected</span>
+            ${actions.map(a => `<button class="job-batch-btn px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border ${a.key === 'delete' ? 'border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40' : 'border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40'} transition-all cursor-pointer outline-none" data-action="${a.key}">${esc(a.label)}</button>`).join('')}
+            <button class="job-batch-clear px-2 py-1 text-xs normal-case tracking-normal text-slate-500 hover:text-slate-300 cursor-pointer outline-none ml-auto">Clear</button>
         </div>`;
     bar.classList.remove('hidden');
 }
@@ -105,12 +107,16 @@ function onBatchBarClick(e) {
 }
 
 export async function performBatchAction(action) {
-    if (selected.size === 0) return;
-    if (action === 'delete' && !confirm(`Delete ${selected.size} selected job(s)? This is permanent.`)) return;
+    if (pending || selected.size === 0) return;
+    if (action === 'delete' && !await confirmAction(`Delete ${selected.size} selected job(s)? This is permanent.`)) return;
 
+    pending = true;
     const uuids = [...selected.keys()];
+    document.getElementById('job-batch-bar').setAttribute('aria-busy', 'true');
     const data = await postJson('batch_action', { uuids: JSON.stringify(uuids), action });
 
+    pending = false;
+    document.getElementById('job-batch-bar').removeAttribute('aria-busy');
     if (data.status === 'success') {
         flash(`${data.updated ?? 0} job(s) updated.`);
         clearSelection();
