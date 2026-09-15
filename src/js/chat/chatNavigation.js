@@ -4,6 +4,7 @@ import { updateTokenCounter } from '../ui.js';
 import { notify, clearNotice, requestJson } from '../workspace/feedback.js';
 import { paintAvailability } from '../workspace/availability.js';
 import { enhanceControls } from '../workspace/shell.js';
+import { showChatSkeleton, hideChatSkeleton } from '../workspace/chatSkeleton.js';
 
 const conversations = new Map();
 const drafts = new Map();
@@ -86,7 +87,7 @@ function setURL(id, replace = false) {
     if (replace || url.href === window.location.href) history.replaceState({ session_id: id }, '', url);
     else history.pushState({ session_id: id }, '', url);
     document.querySelectorAll('form[action]').forEach(form => {
-        const action = new URL(form.action);
+        const action = new URL(form.getAttribute('action'), window.location.href);
         if (action.searchParams.has('session_id')) {
             action.searchParams.set('session_id', id);
             form.action = action.href;
@@ -120,10 +121,10 @@ export async function navigateConversation(id, { fromHistory = false, refresh = 
         return;
     }
     loading = new AbortController();
-    const notice = notify('Opening conversation…', { id: 'conversation-loading', kind: 'info', target: document.getElementById('composer-notices') });
     try {
         let entry = refresh ? null : conversations.get(id);
         if (!entry?.chat) {
+            showChatSkeleton();
             const data = await requestJson('index.php?api_action=get_conversation&session_id=' + id, { signal: loading.signal });
             if (request !== sequence) return;
             const chat = document.createElement('div');
@@ -176,8 +177,8 @@ export async function navigateConversation(id, { fromHistory = false, refresh = 
             if (fromHistory) setURL(state.sessionId, true);
         }
     } finally {
-        notice.remove();
         if (request === sequence) {
+            hideChatSkeleton();
             state.navigationPending = false;
             paintAvailability();
             paintSelection();

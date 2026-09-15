@@ -1,4 +1,5 @@
 import { confirmAction } from './feedback.js';
+import { showChatSkeleton } from './chatSkeleton.js';
 
 let controlId = 0;
 const disclosureAnimations = new WeakMap();
@@ -40,6 +41,7 @@ export function initWorkspaceShell() {
         e.preventDefault();
         if (await confirmAction(form.dataset.confirm, { destructive: true, confirmLabel: 'Delete', title: 'Confirm deletion' })) {
             confirmed.add(form);
+            if (form.querySelector('input[name="clear_all"]')) showChatSkeleton();
             form.requestSubmit(e.submitter || undefined);
             confirmed.delete(form);
         }
