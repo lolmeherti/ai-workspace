@@ -19,6 +19,7 @@ use App\EnvEditor;
 use App\Cache;
 use App\Repositories\MemoryRepository;
 use App\Repositories\ChatSessionRepository;
+use App\Repositories\AppSettingsRepository;
 use App\Bootstrap\PageDataLoader;
 
 Config::load(__DIR__);
@@ -57,6 +58,24 @@ try {
     }
     $agentManager = new AgentManager();
     $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
+
+    // Reasoning-effort control state is rendered server-side so the composer
+    // shows the correct slider/toggle on first paint (no async fetch). Saved
+    // value comes from app_settings; control type from the runtime policy the
+    // launcher persisted to .env at boot.
+    $reasoningEffort = 'medium';
+    if ($db) {
+        $reasoningEffort = (new AppSettingsRepository($db))->get('reasoning_effort', 'medium');
+    }
+    $runtimePolicy = json_decode((string) Config::get('LLM_RUNTIME_POLICY', '{}'), true) ?: [];
+    $reasoningGraduated = !empty($runtimePolicy['reasoning']['effort_map'] ?? []);
+    if ($reasoningGraduated) {
+        if (!in_array($reasoningEffort, ['low', 'medium', 'high'], true)) {
+            $reasoningEffort = 'medium';
+        }
+    } else {
+        $reasoningEffort = $reasoningEffort === 'off' ? 'off' : 'medium';
+    }
 
     // Fetch available models from Go API for the settings dropdown
     $modelsList = [];
@@ -159,6 +178,7 @@ try {
         const currentActiveTab = '<?php echo $activeTab; ?>';
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
         const maxTokensLimit = <?php echo (int) Config::get('LLM_CTX_SIZE', 32768); ?>;
+        const reasoningEffortGraduated = <?php echo $reasoningGraduated ? 'true' : 'false'; ?>;
         window.REPLY_DOWNVOTE_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::DOWNVOTE_REASONS, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
         window.REPLY_TOOL_TURN_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::TOOL_TURN_REASONS); ?>;
     </script>

@@ -306,47 +306,90 @@
 
     const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NAV", "NOSCRIPT", "IFRAME", "SVG", "TEMPLATE", "HEADER", "FOOTER", "ASIDE"]);
     const HEADING_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6"]);
-
-    const walker = document.createTreeWalker(
-      selectContentRoot(),
-      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: (node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          const tag = node.tagName;
-          if (!tag) return NodeFilter.FILTER_SKIP;
-          if (SKIP_TAGS.has(tag)) return NodeFilter.FILTER_REJECT;
-          // Accept all other elements so we can detect headings.
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
+    // Elements that close the current line: their text must not run into the
+    // next block. Flushing here keeps prose, lists, and rows from collapsing
+    // into one long run-on paragraph.
+    const BLOCK_TAGS = new Set(["P", "DIV", "SECTION", "ARTICLE", "BLOCKQUOTE", "FIGURE", "FIGCAPTION", "LI", "UL", "OL", "DL", "DT", "DD", "PRE", "HR", "ADDRESS", "MAIN"]);
 
     const seenText = new Set();
 
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.nodeType === Node.ELEMENT_NODE && HEADING_TAGS.has(node.tagName)) {
-        // Flush current buffer as a section, start new heading.
-        flushSection();
-        currentHeading = cleanText(node.textContent);
-        currentLevel = parseInt(node.tagName.charAt(1), 10);
-        continue;
-      }
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = cleanText(node.textContent);
-        if (!text || seenText.has(text)) continue;
-        seenText.add(text);
-
-        if (buffer) buffer += " ";
-        buffer += text;
-      }
+    function flushSection() {
+      const b = buffer.trim();
+      buffer = "";
+      if (!b) return;
+      sections.push({
+        heading: currentHeading,
+        heading_level: currentHeading ? currentLevel : 0,
+        body: b
+      });
+      currentHeading = "";
     }
 
-    // Flush trailing buffer.
+    function appendText(raw) {
+      const text = cleanText(raw);
+      if (!text || seenText.has(text)) return;
+      seenText.add(text);
+      if (buffer && !buffer.endsWith("\n")) buffer += " ";
+      buffer += text;
+    }
+
+    // Render a <table> as a GFM pipe table so it survives into the app's
+    // markdown renderer. Cell text is cleaned and pipe characters escaped so a
+    // stray "|" inside a cell can't break the table grid.
+    function renderTable(tableEl) {
+      const rows = [];
+      for (const tr of tableEl.querySelectorAll("tr")) {
+        const cells = [];
+        for (const cell of tr.children) {
+          if (cell.tagName === "TH" || cell.tagName === "TD") {
+            cells.push(cleanText(cell.textContent).replace(/\|/g, "\\|"));
+          }
+        }
+        if (cells.length) rows.push(cells);
+      }
+      if (!rows.length) return "";
+      const width = Math.max(...rows.map(r => r.length));
+      const pad = r => { const a = r.slice(); while (a.length < width) a.push(""); return a; };
+      const header = pad(rows[0].slice());
+      const lines = ["| " + header.join(" | ") + " |", "| " + header.map(() => "---").join(" | ") + " |"];
+      for (let i = 1; i < rows.length; i++) {
+        lines.push("| " + pad(rows[i].slice()).join(" | ") + " |");
+      }
+      return lines.join("\n");
+    }
+
+    function walk(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        appendText(node.textContent);
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      const tag = node.tagName;
+      if (!tag) return;
+      if (SKIP_TAGS.has(tag)) return; // skip the whole subtree
+      if (HEADING_TAGS.has(tag)) {
+        flushSection();
+        currentHeading = cleanText(node.textContent);
+        currentLevel = parseInt(tag.charAt(1), 10);
+        return; // heading text captured as the heading; don't re-walk it
+      }
+      if (tag === "TABLE") {
+        flushSection();
+        const md = renderTable(node);
+        if (md) sections.push({ heading: currentHeading, heading_level: currentHeading ? currentLevel : 0, body: md });
+        return; // skip subtree (cells already rendered)
+      }
+      if (tag === "BR") {
+        buffer += "\n";
+        return;
+      }
+      const isBlock = BLOCK_TAGS.has(tag);
+      if (isBlock) flushSection();
+      for (const child of node.childNodes) walk(child);
+      if (isBlock) flushSection();
+    }
+
+    walk(selectContentRoot());
     flushSection();
 
     // Assemble full body from all sections.
@@ -358,7 +401,7 @@
       }
     }
 
-    // If TreeWalker produced nothing (SPA, shadow DOM), fall back to innerText.
+    // If the walk produced nothing (SPA, shadow DOM), fall back to innerText.
     if (!fullBody.trim()) {
       fullBody = cleanText(document.body.innerText);
     }
@@ -380,18 +423,6 @@
     }
 
     return { body: fullBody.slice(0, 120000), sections, links };
-
-    function flushSection() {
-      const b = buffer.trim();
-      buffer = "";
-      if (!b) return;
-      sections.push({
-        heading: currentHeading,
-        heading_level: currentHeading ? currentLevel : 0,
-        body: b
-      });
-      currentHeading = "";
-    }
   }
 
   function cleanText(value) {

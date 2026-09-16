@@ -19,7 +19,7 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
     <!-- Tab Sub-Header -->
     <div class="flex justify-between items-center px-4 py-3 border-b border-slate-800/40 bg-[#0b101f]">
         <span class="text-xs font-bold text-slate-500 normal-case tracking-normal select-none">Conversations</span>
-        <button id="btn-manage-chats" onclick="toggleChatEditMode()" class="text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1">
+        <button id="btn-manage-chats" onclick="toggleChatEditMode()" class="text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1">
             <uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage
         </button>
     </div>

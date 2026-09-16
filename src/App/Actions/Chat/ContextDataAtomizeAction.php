@@ -80,13 +80,47 @@ class ContextDataAtomizeAction extends BaseAction
     private function loadRow(int $id): ?array
     {
         $rows = $this->db->query(
-            "SELECT id, message, token_estimate, search_query, selected_chunks, backing_chunks,
+            "SELECT id, session_id, message, token_estimate, search_query, selected_chunks, backing_chunks,
                     raw_evicted, atomic_context, atomic_tokens, source_map
              FROM chat_history
              WHERE id = :id AND message_type = 'data_fetching'",
             [':id' => $id]
         );
         return empty($rows) ? null : $rows[0];
+    }
+
+    /** Active prompt-token contribution of a data_fetching row (mirrors the frontend's activeTokens and PromptAssemblyService::injectedEvidenceContent). */
+    private static function rowActiveTokens(array $row): int
+    {
+        $raw = (int)($row['raw_evicted'] ?? 0) === 1 ? 0 : (int)($row['token_estimate'] ?? 0);
+        $atomic = $row['atomic_context'] ?? null;
+        $hasAtoms = $atomic !== null && $atomic !== '' && $atomic !== 'null';
+        $atoms = $hasAtoms ? (int)($row['atomic_tokens'] ?? 0) : 0;
+        return $raw + $atoms;
+    }
+
+    /**
+     * Reconcile chat_sessions.context_tokens after an evidence mutation. The stored
+     * value is the last prompt's token count; the evidence delta (before vs after
+     * contribution) approximates how much that prompt shrinks/grows, so the header
+     * meter reflects the change without waiting for the next turn.
+     *
+     * @return int|null New total, or null when the row has no session.
+     */
+    private function reconcileContextTokens(array $before, array $after): ?int
+    {
+        $sessionId = (int)($before['session_id'] ?? 0);
+        if ($sessionId <= 0) {
+            return null;
+        }
+        $delta = self::rowActiveTokens($after) - self::rowActiveTokens($before);
+        $rows = $this->db->query('SELECT context_tokens FROM chat_sessions WHERE id = :id', [':id' => $sessionId]);
+        $current = !empty($rows) ? (int)($rows[0]['context_tokens'] ?? 0) : 0;
+        $next = max(0, $current + $delta);
+        if ($next !== $current) {
+            $this->db->update('chat_sessions', ['context_tokens' => $next], ['id' => $sessionId]);
+        }
+        return $next;
     }
 
     /** Manual edits replace both snapshots: deleted text must not return on extraction. */
@@ -110,7 +144,8 @@ class ContextDataAtomizeAction extends BaseAction
             return;
         }
         $this->db->update('chat_history', $fields, ['id' => $id, 'message_type' => 'data_fetching']);
-        $this->jsonResponse(['status' => 'success', 'id' => $id]);
+        $total = $this->reconcileContextTokens($row, array_merge($row, $fields));
+        $this->jsonResponse(['status' => 'success', 'id' => $id, 'total_session_tokens' => $total]);
     }
 
     /** Build a coherent evidence snapshot without sending manual edits to an LLM. */
@@ -223,23 +258,30 @@ class ContextDataAtomizeAction extends BaseAction
     /** Null out atoms; raw_evicted untouched (source becomes Raw or Evicted). */
     private function deleteAtoms(int $id): void
     {
-        $this->db->update('chat_history', [
-            'atomic_context' => null,
-            'atomic_tokens' => null,
-        ], ['id' => $id]);
+        $before = $this->loadRow($id);
+        $fields = ['atomic_context' => null, 'atomic_tokens' => null];
+        $this->db->update('chat_history', $fields, ['id' => $id]);
 
-        $this->jsonResponse(['status' => 'success', 'id' => $id, 'raw_evicted' => $this->isRawEvicted($id)]);
+        $total = $before !== null ? $this->reconcileContextTokens($before, array_merge($before, $fields)) : null;
+
+        $this->jsonResponse(['status' => 'success', 'id' => $id, 'raw_evicted' => $this->isRawEvicted($id), 'total_session_tokens' => $total]);
     }
 
     private function setRawEvicted(int $id, bool $evicted): void
     {
-        $this->db->update('chat_history', ['raw_evicted' => $evicted ? 1 : 0], ['id' => $id]);
-        $this->jsonResponse(['status' => 'success', 'id' => $id, 'raw_evicted' => $evicted]);
+        $before = $this->loadRow($id);
+        $fields = ['raw_evicted' => $evicted ? 1 : 0];
+        $this->db->update('chat_history', $fields, ['id' => $id]);
+
+        $total = $before !== null ? $this->reconcileContextTokens($before, array_merge($before, $fields)) : null;
+
+        $this->jsonResponse(['status' => 'success', 'id' => $id, 'raw_evicted' => $evicted, 'total_session_tokens' => $total]);
     }
 
     /** Persist a claim set; when $rawEvicted is non-null it also updates raw_evicted. */
     private function writeAtoms(int $id, array $claims, ?int $rawEvicted): void
     {
+        $before = $this->loadRow($id);
         $atomTokens = self::countAtomTokens($claims);
         $fields = [
             'atomic_context' => json_encode($claims, JSON_UNESCAPED_UNICODE),
@@ -250,11 +292,14 @@ class ContextDataAtomizeAction extends BaseAction
         }
         $this->db->update('chat_history', $fields, ['id' => $id]);
 
+        $total = $before !== null ? $this->reconcileContextTokens($before, array_merge($before, $fields)) : null;
+
         $this->jsonResponse([
             'status' => 'success',
             'id' => $id,
             'atom_tokens' => $atomTokens,
             'raw_evicted' => (bool)($rawEvicted ?? $this->isRawEvicted($id)),
+            'total_session_tokens' => $total,
         ]);
     }
 
