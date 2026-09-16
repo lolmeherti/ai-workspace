@@ -43,8 +43,8 @@ button:disabled { opacity: 0.55; }
 button:not(:disabled), .ui-button, summary, a {
     transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
-button:not(:disabled):hover, summary:hover { background-color: var(--elevated); }
-button:not(:disabled):active, .ui-button:active { background-color: #233b53; }
+:where(button:not(:disabled)):hover, summary:hover { background-color: var(--elevated); }
+:where(button:not(:disabled)):active { background-color: #233b53; }
 :focus-visible {
     outline: 2px solid var(--accent) !important;
     outline-offset: 3px;
@@ -93,15 +93,20 @@ progress { accent-color: var(--accent); }
     box-shadow: none;
     text-shadow: none;
 }
-.ui-button:hover, .ui-icon-button:hover { border-color: #6886a5; background: var(--elevated); }
+.ui-button:not(:disabled):hover, .ui-icon-button:not(:disabled):hover { border-color: #6886a5; background: var(--elevated); color: var(--text); }
 .ui-button--primary, .btn-futuristic {
     background: var(--accent);
     color: var(--accent-ink);
     border-color: var(--accent);
     font-weight: 650;
 }
-.ui-button--primary:hover, .btn-futuristic:hover { background: #a5edfa; color: var(--accent-ink); transform: none; box-shadow: none; }
-.ui-button--danger { color: var(--danger); border-color: #864758; background: #34202c; }
+.ui-button.ui-button--primary:not(:disabled):hover, .btn-futuristic:not(:disabled):hover { background: #a5edfa; border-color: #a5edfa; color: var(--accent-ink); transform: none; box-shadow: none; }
+.ui-button--secondary { color: #b7f2fa; border-color: #3b7185; background: #123044; }
+.ui-button.ui-button--secondary:not(:disabled):hover { color: #e5fbff; border-color: var(--accent); background: #174158; }
+.ui-button--danger { color: #ffd5dc; border-color: #a84d61; background: #4a2030; }
+.ui-button.ui-button--danger:not(:disabled):hover { color: #fff4f6; border-color: #ff9bac; background: #702d40; }
+.ui-button--primary uk-icon, .ui-button--primary svg, .ui-button--secondary uk-icon, .ui-button--secondary svg, .ui-button--danger uk-icon, .ui-button--danger svg { color: currentColor; opacity: 1; }
+.ui-button--primary:disabled, .ui-button--secondary:disabled, .ui-button--danger:disabled { opacity: .72; }
 .ui-icon-button { width: 36px; height: 36px; padding: 5px; flex-shrink: 0; font-size: 1.15rem; }
 .ui-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ui-count { font-variant-numeric: tabular-nums; font-size: 0.75rem; padding: 1px 7px; border-radius: 7px; background: var(--elevated); color: var(--accent); }
@@ -192,6 +197,8 @@ progress { accent-color: var(--accent); }
 #chat-section > header > div { gap: 10px; flex-wrap: wrap; }
 #token-counter-container { border-radius: 9px; padding: 6px 10px; flex-wrap: wrap; gap: 8px; }
 #token-counter-container button { min-height: 32px; font-size: 0.75rem; }
+#context-toggle { min-height: 32px; padding: 5px 10px; border-color: var(--line-soft); border-radius: 999px; background: transparent; color: var(--muted); font-size: .75rem; font-weight: 650; }
+#context-toggle:not(:disabled):hover, #context-toggle[aria-expanded="true"] { border-color: #3b7185; background: #123044; color: #b7f2fa; }
 .chat-split, #chat-pane { min-height: 0; }
 #chatWindow { padding: 32px clamp(16px, 3vw, 56px); overscroll-behavior: contain; scrollbar-gutter: stable; }
 #chat-pane { position: relative; }
@@ -264,7 +271,7 @@ progress { accent-color: var(--accent); }
 .send-btn-futuristic.stop .stop-icon { display: block; }
 .send-spinner { display: none; pointer-events: none; }
 .stop .send-spinner { display: block; position: absolute; inset: 4px; border: 2px solid transparent; border-top-color: #b7f2fa; border-radius: 50%; animation: ui-spin 1000ms linear infinite; }
-#effort-control { justify-content: flex-start; gap: 10px; margin: 0 0 8px; }
+#effort-control { justify-content: flex-end; gap: 10px; margin: 0 0 8px; }
 .effort-btn { min-height: 32px; }
 #referenced-files-container:empty { display: none; }
 .composer-notices:empty { display: none; }
@@ -289,6 +296,10 @@ progress { accent-color: var(--accent); }
 .context-evidence label { display: block; margin: 16px 0 8px; }
 .context-evidence textarea { resize: vertical; }
 .context-inspector h3 { overflow-wrap: anywhere; }
+.context-progress { position: sticky; top: -20px; z-index: 3; display: flex; align-items: center; gap: 10px; margin: -4px 0 0; padding: 12px 14px; border: 1px solid #4f8296; border-radius: 10px; background: #143449; color: #d9f9ff; box-shadow: 0 8px 24px #050a12cc; }
+.context-progress strong { display: block; font-size: .875rem; }
+.context-progress span:last-child { display: block; color: #afcce0; font-size: .75rem; }
+.context-detail-host[aria-busy="true"] .context-actions button { pointer-events: none; opacity: .58; }
 .context-meta { font: 0.75rem/1.6 system-ui, sans-serif; color: var(--muted); }
 .context-badge { padding: 3px 8px; font-size: 0.75rem; width: fit-content; }
 .context-detail-host { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }

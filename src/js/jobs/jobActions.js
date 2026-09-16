@@ -40,7 +40,7 @@ async function restore(uuid) {
 }
 
 async function deleteJob(uuid) {
-    if (!await confirmAction('Delete this job permanently?')) return;
+    if (!await confirmAction('Delete this job permanently?', { confirmLabel: 'Delete job', destructive: true })) return;
     const data = await postJson('batch_action', { uuids: JSON.stringify([uuid]), action: 'delete' });
     if (data.status === 'success') {
         flash('Job deleted.');
@@ -52,12 +52,12 @@ async function deleteJob(uuid) {
 }
 
 async function blockCompany(uuid) {
-    if (!await confirmAction('Block this company for 7 days? Its unread jobs will be removed.')) return;
+    if (!await confirmAction('Block this company for 7 days? Its unread jobs will be removed.', { confirmLabel: 'Block company', destructive: true })) return;
     await handleMutation(await postJson('block_company', { uuid }));
 }
 
 async function blockDomain(uuid) {
-    if (!await confirmAction('Block this source domain for 7 days? Its unread jobs will be removed.')) return;
+    if (!await confirmAction('Block this source domain for 7 days? Its unread jobs will be removed.', { confirmLabel: 'Block source', destructive: true })) return;
     await handleMutation(await postJson('block_domain', { uuid }));
 }
 

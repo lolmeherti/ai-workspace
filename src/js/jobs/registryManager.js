@@ -90,7 +90,7 @@ async function saveRegistry(e) {
 }
 
 async function editRegistry(uuid) {
-    if (document.getElementById('registry-form').dataset.dirty === 'true' && !await confirmAction('Discard the source edits in this form?', { confirmLabel: 'Discard edits' })) return;
+    if (document.getElementById('registry-form').dataset.dirty === 'true' && !await confirmAction('Discard the source edits in this form?', { confirmLabel: 'Discard edits', destructive: true })) return;
     const entry = entriesCache.find(e => e.uuid === uuid);
     if (!entry) return;
     document.getElementById('registry-form').dataset.dirty = 'false';

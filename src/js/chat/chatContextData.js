@@ -15,7 +15,7 @@ const host = () => document.getElementById('context-detail-host');
 const list = () => document.getElementById('context-data-items');
 function stateOf(d) { return d.raw_evicted ? d.atomic_context?.length ? 'atomized' : 'evicted' : d.atomic_context?.length ? 'raw_atoms' : 'raw'; }
 function node(tag, text, cls = '') { const el = document.createElement(tag); el.textContent = text; el.className = cls; return el; }
-function button(text, fn) { const el = node('button', text, 'ui-button'); el.type = 'button'; el.addEventListener('click', () => withPending(el, fn, { target: host() })); return el; }
+function button(text, fn, variant = '') { const el = node('button', text, `ui-button${variant ? ` ui-button--${variant}` : ''}`); el.type = 'button'; el.addEventListener('click', () => withPending(el, fn, { target: host() })); return el; }
 const fetchView = id => requestJson(`index.php?view_context=${encodeURIComponent(id)}&ajax=1`);
 const post = (op, id, claims) => {
     const body = new URLSearchParams({ action: 'atomize_context', op, id: String(id) });
@@ -24,7 +24,7 @@ const post = (op, id, claims) => {
 };
 export async function canLeaveContext() {
     if (pending) { notify('Context is being updated. Wait for this operation to finish.', { target: host() }); return false; }
-    return !dirty || await confirmAction({ title: 'Discard unsaved context changes?', message: 'Your edits or extracted preview have not been saved.', confirmLabel: 'Discard changes' });
+    return !dirty || await confirmAction({ title: 'Discard unsaved context changes?', message: 'Your edits or extracted preview have not been saved.', confirmLabel: 'Discard changes', destructive: true });
 }
 export function resetContextDetail() {
     epoch++; dirty = false; currentData = null;
@@ -55,8 +55,8 @@ function renderRow(id, d, root = list()) {
     const actions = row.querySelector('.context-btns');
     if (actions) {
         actions.replaceChildren();
-        for (const [action, label] of [['view', 'View'], ['edit_raw', 'Edit evidence'], [d.atomic_context?.length ? 'reatomize' : 'atomize', d.atomic_context?.length ? 'Extract again' : 'Extract key facts']]) {
-            const btn = node('button', label, 'ui-button'); btn.type = 'button'; btn.dataset.action = action; btn.dataset.id = id; actions.append(btn);
+        for (const [action, label, variant] of [['view', 'View', ''], ['edit_raw', 'Edit evidence', 'secondary'], [d.atomic_context?.length ? 'reatomize' : 'atomize', d.atomic_context?.length ? 'Extract again' : 'Extract key facts', 'primary']]) {
+            const btn = node('button', label, `ui-button${variant ? ` ui-button--${variant}` : ''}`); btn.type = 'button'; btn.dataset.action = action; btn.dataset.id = id; actions.append(btn);
         }
     }
 }
@@ -105,7 +105,7 @@ function factsEditor(d, claims, preview) {
         pending = true;
         try { await post(preview ? 'commit' : 'edit_atoms', d.id, parsed); dirty = false; await refreshContextItem(d.id); unlock(); }
         finally { pending = false; }
-    }), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
+    }, 'primary'), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
     area.append(label, ta, node('p', 'One [source_id] fact per line. Applying a preview removes the full evidence from the active context; you can restore it later.', 'text-xs text-slate-400'), actions);
     ta.focus();
 }
@@ -119,18 +119,24 @@ async function runPreview(id, op) {
     if (currentData?.id != id) await viewContextItem(id);
     if (currentData?.id != id) return;
     const d = currentData; const version = epoch; pending = true;
+    const progress = node('div', '', 'context-progress'); progress.id = 'context-extraction-progress';
+    const spinner = node('span', '', 'ui-spinner'); spinner.setAttribute('aria-hidden', 'true');
+    const copy = node('span', ''); copy.append(node('strong', 'Extracting key facts…'), node('span', 'The AI is reviewing the retained evidence. This can take a moment.'));
+    progress.append(spinner, copy); progress.setAttribute('role', 'status'); progress.setAttribute('aria-live', 'polite');
+    host().prepend(progress); host().setAttribute('aria-busy', 'true'); host().scrollTop = 0;
     const area = host().querySelector('.context-atoms'); area.replaceChildren(node('p', 'Extracting key facts… Your saved evidence is unchanged.', 'text-slate-400')); area.setAttribute('aria-busy', 'true');
     try {
         const res = await post(op, id);
         if (version !== epoch) return;
+        progress.remove();
         if (res.status === 'preview') factsEditor(d, res.claims || [], true);
         else { fill(d); notify(res.message || 'No key facts were found.', { target: host(), kind: 'info' }); }
     } catch (e) { if (version === epoch) { fill(d); notify(e.message, { target: host() }); if (e.code === 'model_busy') reportBusy(e.message); } }
-    finally { pending = false; area.removeAttribute('aria-busy'); }
+    finally { pending = false; progress.remove(); host()?.removeAttribute('aria-busy'); area.removeAttribute('aria-busy'); }
 }
 async function mutate(id, op) {
     if (pending || !await canLeaveContext()) return;
-    if (['delete_atoms', 'evict_raw'].includes(op) && !await confirmAction({ title: op === 'delete_atoms' ? 'Delete these key facts?' : 'Exclude full evidence?', message: op === 'delete_atoms' ? 'The extracted key facts will be deleted. Original evidence remains available to restore.' : 'The full source text will stop being sent to the AI. Saved key facts remain active. You can restore the evidence later.', confirmLabel: op === 'delete_atoms' ? 'Delete key facts' : 'Exclude evidence' })) return;
+    if (['delete_atoms', 'evict_raw'].includes(op) && !await confirmAction({ title: op === 'delete_atoms' ? 'Delete these key facts?' : 'Exclude full evidence?', message: op === 'delete_atoms' ? 'The extracted key facts will be deleted. Original evidence remains available to restore.' : 'The full source text will stop being sent to the AI. Saved key facts remain active. You can restore the evidence later.', confirmLabel: op === 'delete_atoms' ? 'Delete key facts' : 'Exclude evidence', destructive: true })) return;
     pending = true;
     try {
         await post(op, id); dirty = false; await refreshContextItem(id);
@@ -166,7 +172,7 @@ function evidenceEditor(d) {
             await refreshContextItem(d.id);
             notify('Evidence saved. Extract key facts when you are ready.', { target: host(), kind: 'info' });
         } finally { pending = false; editors.forEach(({ta}) => { ta.disabled = false; }); }
-    }), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
+    }, 'primary'), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
     area.append(actions); editors[0]?.ta.focus();
 }
 export async function editEvidenceContextItem(id) {
@@ -177,7 +183,7 @@ function fill(d) {
     currentData = d; dirty = false; const root = host(); root.hidden = false; list().hidden = true; root.replaceChildren();
     root.append(button('← All context', async () => { if (await canLeaveContext()) resetContextDetail(); }), node('h3', d.search_query || d.tool_name || 'Context source'), node('p', labels[stateOf(d)], 'context-badge'));
     const topActions = node('div', '', 'context-actions');
-    topActions.append(button('Edit evidence', async () => { if (await canLeaveContext()) evidenceEditor(d); }), button(d.atomic_context?.length ? 'Extract again' : 'Extract key facts', () => runPreview(d.id, d.atomic_context?.length ? 're-atomize' : 'atomize')));
+    topActions.append(button('Edit evidence', async () => { if (await canLeaveContext()) evidenceEditor(d); }, 'secondary'), button(d.atomic_context?.length ? 'Extract again' : 'Extract key facts', () => runPreview(d.id, d.atomic_context?.length ? 're-atomize' : 'atomize'), 'primary'));
     root.append(topActions);
     if (d.sources && Object.keys(d.sources).length) renderSourcesList(root, Object.values(d.sources));
     const raw = node('details', '', 'context-evidence'); raw.append(node('summary', `Full evidence · ~${Number(d.token_estimate) || 0} tokens${d.raw_evicted ? ' · excluded' : ''}`));
@@ -187,8 +193,8 @@ function fill(d) {
     root.append(node('h4', `Key facts · ~${Number(d.atomic_tokens) || 0} tokens`));
     const atoms = node('div', '', 'context-atoms'); atoms.append(node('pre', d.atomic_context?.length ? d.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n') : 'No key facts extracted yet.', 'whitespace-pre-wrap break-words')); root.append(atoms);
     const bar = node('div', '', 'flex flex-wrap gap-2');
-    if (d.atomic_context?.length) bar.append(button('Edit key facts', async () => { if (await canLeaveContext()) { fill(d); factsEditor(d, d.atomic_context, false); } }), button('Delete key facts', () => mutate(d.id, 'delete_atoms')));
-    bar.append(button(d.raw_evicted ? 'Restore full evidence' : 'Exclude full evidence', () => mutate(d.id, d.raw_evicted ? 'restore' : 'evict_raw'))); root.append(bar);
+    if (d.atomic_context?.length) bar.append(button('Edit key facts', async () => { if (await canLeaveContext()) { fill(d); factsEditor(d, d.atomic_context, false); } }, 'secondary'), button('Delete key facts', () => mutate(d.id, 'delete_atoms'), 'danger'));
+    bar.append(button(d.raw_evicted ? 'Restore full evidence' : 'Exclude full evidence', () => mutate(d.id, d.raw_evicted ? 'restore' : 'evict_raw'), d.raw_evicted ? 'secondary' : 'danger')); root.append(bar);
 }
 let initialized = false;
 function updateExpandButton(expanded) {

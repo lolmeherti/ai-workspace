@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mount, fixture, json, settle } from './dom.mjs';
+import { mount, fixture, json, settle, deferred } from './dom.mjs';
 const dom = mount(fixture());
 const context = await import('../../src/js/chat/chatContextData.js');
 context.initContextDataPanel();
@@ -56,6 +56,22 @@ test('list extraction performs extraction directly without a separate View click
     row.querySelector('[data-action="atomize"]').dataset.id = 303;
     row.querySelector('[data-action="atomize"]').click(); await settle(); await settle();
     assert.equal(extracted, 1);
+});
+test('extraction exposes progress until the backend response arrives', async () => {
+    const extraction = deferred();
+    globalThis.fetch = async (url, options) => options?.method === 'POST' ? extraction.promise : json(source);
+    await context.viewContextItem(303);
+    const request = context.atomizeContextItem(303); await settle();
+    const progress = document.getElementById('context-extraction-progress');
+    assert.ok(progress);
+    assert.match(progress.textContent, /Extracting key facts/);
+    assert.ok(progress.querySelector('.ui-spinner'));
+    assert.equal(document.getElementById('context-detail-host').getAttribute('aria-busy'), 'true');
+    extraction.resolve(json({ status: 'preview', claims: [{ source_id: 'S1', claim: 'A fact' }] }));
+    await request;
+    assert.equal(document.getElementById('context-extraction-progress'), null);
+    assert.equal(document.getElementById('context-detail-host').hasAttribute('aria-busy'), false);
+    context.resetContextDetail();
 });
 test('context preview is not committed and unsaved edits are guarded', async () => {
     let commits = 0;

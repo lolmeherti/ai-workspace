@@ -108,7 +108,7 @@ function onBatchBarClick(e) {
 
 export async function performBatchAction(action) {
     if (pending || selected.size === 0) return;
-    if (action === 'delete' && !await confirmAction(`Delete ${selected.size} selected job(s)? This is permanent.`)) return;
+    if (action === 'delete' && !await confirmAction(`Delete ${selected.size} selected job(s)? This is permanent.`, { confirmLabel: 'Delete jobs', destructive: true })) return;
 
     pending = true;
     const uuids = [...selected.keys()];

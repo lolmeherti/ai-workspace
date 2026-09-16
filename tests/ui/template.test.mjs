@@ -10,5 +10,7 @@ test('PHP renders the real templates with unique IDs and labelled main controls'
     assert.equal(document.querySelector('script[src*="cdn.tailwindcss.com"]'), null);
     assert.ok(document.querySelector('link[href="css/utilities.css"]'));
     assert.equal(document.querySelectorAll('#job-categories').length, 1);
+    assert.ok(document.querySelector('.mailbox-header .mailbox-add-button'));
+    assert.ok(document.querySelector('.mailbox-controls .mailbox-read-toggle'));
     dom.window.close();
 });
