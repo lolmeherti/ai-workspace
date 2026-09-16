@@ -215,7 +215,7 @@ class ChatBriefingStreamAction extends BaseAction
             $response = $toolService->makeTodoistRequest('GET', '/tasks');
             return isset($response['results']) ? $response['results'] : (is_array($response) ? $response : []);
         } catch (\Throwable $e) {
-            \App\Logger::warning('Briefing calendar fetch failed: ' . $e->getMessage());
+            \App\Logger::warn('Briefing calendar fetch failed: ' . $e->getMessage());
             return [];
         }
     }
@@ -247,7 +247,7 @@ class ChatBriefingStreamAction extends BaseAction
                 'active'         => true,
             ]);
         } catch (\Throwable $e) {
-            \App\Logger::warning('Briefing persist failed: ' . $e->getMessage());
+            \App\Logger::warn('Briefing persist failed: ' . $e->getMessage());
         }
     }
 

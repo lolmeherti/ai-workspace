@@ -29,7 +29,7 @@ export function showProgress() { switchJobView('progress'); updateProgress(); }
 export function updateProgress(progress = {}) {
     const el = document.getElementById('job-progress-body'); if (!el) return;
     document.getElementById('job-run-status').textContent = 'Search running';
-    el.innerHTML = `<div class="job-progress-status" role="status"><span class="ui-spinner"></span><strong>Finding jobs…</strong></div>
+    el.innerHTML = `<div class="job-progress-status" role="status"><span class="ui-spinner"></span></div>
         <p class="ui-muted">You can keep browsing saved jobs. Results are kept as they are found.</p>
         ${progress.listing ? `<p class="break-all">${esc(progress.listing)}</p>` : ''}
         <p>${Number(progress.jobs_scraped) || 0} found · ${Number(progress.jobs_selected) || 0} selected${progress.sources_total ? ` · ${Number(progress.sources_done) || 0} of ${Number(progress.sources_total)} sources checked` : ''}${progress.sources_failed ? ` · ${Number(progress.sources_failed)} sources failed` : ''}</p>`;

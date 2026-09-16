@@ -51,144 +51,154 @@
             </div>
         </section>
     </div>
-    <dialog id="job-setup" class="ui-dialog jobs-setup-dialog" aria-labelledby="job-setup-title" data-feedback-region>
-        <header class="inspector-header"><div><h2 id="job-setup-title">Search setup</h2><p class="ui-muted">Your CV, preferences, and search sources together.</p></div><button type="button" id="job-setup-close" class="ui-button">Done</button></header>
+    <dialog id="job-setup" class="ui-dialog jobs-setup-modal" aria-labelledby="job-setup-title" data-feedback-region>
+        <header class="jobs-setup-header">
+            <div class="jobs-setup-heading">
+                <span class="jobs-setup-heading-icon"><uk-icon icon="settings"></uk-icon></span>
+                <div>
+                    <h2 id="job-setup-title">Search setup</h2>
+                    <p>Your CV, preferences, and search sources together.</p>
+                </div>
+            </div>
+            <button type="button" id="job-setup-close" class="job-btn job-btn--ghost">Done</button>
+        </header>
+
         <div id="job-setup-notices"></div>
-        <div class="jobs-setup-grid"><div id="job-view-cvs" class="job-setup-section">
-            <div class="p-6">
-                <div class="flex items-center justify-between mb-5">
-                    <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2">
-                        <uk-icon icon="file-text" class="w-4 h-4 text-cyan-400"></uk-icon> CV Management
-                    </h2>
+
+        <div class="jobs-setup-body">
+            <div class="jobs-setup-grid">
+                <section id="job-view-cvs" class="job-setup-card" aria-labelledby="job-cv-heading">
+                    <div class="job-setup-card-head">
+                        <h2 id="job-cv-heading" class="job-setup-card-title"><uk-icon icon="file-text"></uk-icon> CV &amp; Resume</h2>
+                        <span class="job-setup-pill">Your library</span>
+                    </div>
+
+                    <form id="cv-upload-form" class="job-setup-form">
+                        <span class="job-field-label">Upload New Resume</span>
+                        <input type="file" id="cv-file-input" name="cv" accept=".pdf,.docx,.txt,.md" class="sr-only">
+                        <label id="cv-dropzone" for="cv-file-input" class="job-dropzone">
+                            <span class="job-dropzone-icon"><uk-icon icon="cloud-upload"></uk-icon></span>
+                            <span class="job-dropzone-text">Drag &amp; drop file here, or <span class="job-dropzone-link">browse your files</span></span>
+                            <span class="job-dropzone-hint">PDF, DOCX, TXT, MD &middot; Max 15MB</span>
+                        </label>
+
+                        <div class="job-field-row">
+                            <div class="job-field">
+                                <label for="cv-designation" class="job-field-label">Designation / Role Title <span class="job-field-optional">(optional)</span></label>
+                                <input type="text" id="cv-designation" class="job-input" placeholder="e.g. Senior Backend Engineer">
+                            </div>
+                            <button type="submit" id="cv-upload-submit" class="job-btn job-btn--ghost" disabled><uk-icon icon="upload"></uk-icon><span id="cv-upload-label">Upload CV</span></button>
+                        </div>
+
+                        <div id="cv-file-chip" class="job-chip hidden">
+                            <uk-icon icon="file-text" class="job-chip-icon"></uk-icon>
+                            <div class="job-chip-meta">
+                                <div id="cv-file-name"></div>
+                                <div id="cv-file-size"></div>
+                            </div>
+                            <button type="button" id="cv-file-remove" class="job-chip-remove" title="Remove file"><uk-icon icon="close"></uk-icon></button>
+                        </div>
+
+                        <div id="cv-upload-error" class="job-form-error hidden"><uk-icon icon="warning"></uk-icon><span id="cv-upload-error-text"></span></div>
+                    </form>
+
+                    <div id="cv-list-container" class="job-cards-list"></div>
+                </section>
+
+                <section id="job-view-profile" class="job-setup-card" aria-labelledby="job-prefs-heading">
+                    <div class="job-setup-card-head">
+                        <h2 id="job-prefs-heading" class="job-setup-card-title"><uk-icon icon="user"></uk-icon> Search Preferences</h2>
+                        <span class="job-setup-pill job-setup-pill--muted">Global defaults</span>
+                    </div>
+
+                    <form id="profile-form" class="job-setup-form">
+                        <p class="job-setup-hint">These preferences apply to every CV. Save changes before starting a search.</p>
+
+                        <div class="job-field">
+                            <label for="profile-locations" class="job-field-label">Preferred Locations (comma separated)</label>
+                            <input type="text" id="profile-locations" class="job-input" placeholder="e.g. Vienna, Remote, Berlin">
+                        </div>
+
+                        <div class="job-field">
+                            <span class="job-field-label">Work Mode</span>
+                            <div id="profile-work-mode" class="job-check-group">
+                                <label class="job-check-pill"><input type="checkbox" value="remote"><span class="job-check-box"></span><span class="job-check-text">Remote</span></label>
+                                <label class="job-check-pill"><input type="checkbox" value="hybrid"><span class="job-check-box"></span><span class="job-check-text">Hybrid</span></label>
+                                <label class="job-check-pill"><input type="checkbox" value="on_site"><span class="job-check-box"></span><span class="job-check-text">On-site</span></label>
+                            </div>
+                        </div>
+
+                        <div class="job-field">
+                            <span class="job-field-label">Employment Type</span>
+                            <div id="profile-employment" class="job-check-group">
+                                <label class="job-check-pill"><input type="checkbox" value="full-time"><span class="job-check-box"></span><span class="job-check-text">Full-time</span></label>
+                                <label class="job-check-pill"><input type="checkbox" value="part-time"><span class="job-check-box"></span><span class="job-check-text">Part-time</span></label>
+                            </div>
+                        </div>
+
+                        <div class="job-field-row job-field-row--2">
+                            <div class="job-field">
+                                <label for="profile-salary-min" class="job-field-label">Minimum Base Salary</label>
+                                <div class="job-input-wrap">
+                                    <input type="text" id="profile-salary-min" class="job-input" placeholder="70000">
+                                    <span class="job-input-suffix">/yr</span>
+                                </div>
+                            </div>
+                            <div class="job-field">
+                                <label for="profile-salary-currency" class="job-field-label">Currency</label>
+                                <input type="text" id="profile-salary-currency" class="job-input" placeholder="EUR" maxlength="3">
+                            </div>
+                        </div>
+
+                        <div class="job-field">
+                            <label for="profile-free-text" class="job-field-label">Free-text preferences</label>
+                            <textarea id="profile-free-text" class="job-input job-textarea" rows="3" placeholder="Anything else you prefer, e.g. remote-first culture, modern CI/CD stacks, no legacy maintenance..."></textarea>
+                        </div>
+
+                        <div class="job-card-foot">
+                            <span id="profile-complete-badge" class="job-foot-status"></span>
+                            <div class="job-foot-actions">
+                                <button type="button" id="profile-discard" class="job-btn job-btn--ghost">Discard changes</button>
+                                <button type="submit" class="job-btn job-btn--outline">Save Profile</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+            </div>
+
+            <section id="job-view-registry" class="job-setup-card" aria-labelledby="job-sources-heading">
+                <div class="job-setup-card-head">
+                    <h2 id="job-sources-heading" class="job-setup-card-title"><uk-icon icon="database"></uk-icon> Sources</h2>
+                    <span class="job-setup-pill job-setup-pill--muted">Listing URL templates</span>
                 </div>
 
-                <form id="cv-upload-form" class="mb-6 p-5 rounded-2xl border border-slate-800 bg-[#0a0f1d]/70">
-                    <div class="flex items-center justify-between mb-1">
-                        <h3 class="flex items-center gap-2 text-xs font-bold normal-case tracking-normal text-slate-100">
-                            <uk-icon icon="cloud-upload" class="w-4 h-4 text-cyan-400"></uk-icon> Upload a CV
-                        </h3>
-                        <span class="text-xs font-bold normal-case tracking-normal text-slate-500">PDF &middot; DOCX &middot; TXT &middot; MD</span>
-                    </div>
-                    <p class="text-xs text-slate-500 mb-4 leading-relaxed">Add a resume to your library to run discovery against it. Uploading does not run AI extraction &mdash; use Extract Details afterwards.</p>
-
-                    <input type="file" id="cv-file-input" name="cv" accept=".pdf,.docx,.txt,.md" class="sr-only">
-
-                    <label id="cv-dropzone" for="cv-file-input" class="group flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-700 hover:border-cyan-500/50 hover:bg-cyan-500/[0.04] cursor-pointer transition-all px-6 py-9 text-center select-none">
-                        <uk-icon icon="cloud-upload" class="w-9 h-9 text-slate-600 group-hover:text-cyan-400 transition-colors"></uk-icon>
-                        <div>
-                            <div class="text-xs font-bold text-slate-300 group-hover:text-cyan-300 transition-colors">Drag &amp; drop your CV here</div>
-                            <div class="text-xs text-slate-500 mt-1">or <span class="text-cyan-400 font-bold underline underline-offset-2 decoration-cyan-500/50">browse your files</span></div>
+                <form id="registry-form" class="job-setup-form job-registry-form">
+                    <label class="job-field-label" for="reg-url">Add / Edit Source</label>
+                    <input type="text" id="reg-url" class="job-input job-input--mono" placeholder="https://www.karriere.at/jobs?keywords={job_title}&locations={location}">
+                    <div class="job-field-row job-field-row--2">
+                        <div class="job-field">
+                            <label for="reg-job-title" class="job-field-label">Job title values</label>
+                            <input type="text" id="reg-job-title" class="job-input job-input--mono" placeholder="php, go, cloud engineer">
                         </div>
-                    </label>
-
-                    <div id="cv-file-chip" class="hidden mt-3 flex items-center gap-3 p-3 rounded-lg border border-cyan-500/25 bg-cyan-500/[0.06]">
-                        <uk-icon icon="file-text" class="w-4 h-4 text-cyan-400 shrink-0"></uk-icon>
-                        <div class="min-w-0 flex-1">
-                            <div id="cv-file-name" class="text-xs font-bold text-slate-100 truncate"></div>
-                            <div id="cv-file-size" class="text-xs text-slate-500 font-mono mt-0.5"></div>
+                        <div class="job-field">
+                            <label for="reg-location" class="job-field-label">Location values</label>
+                            <input type="text" id="reg-location" class="job-input job-input--mono" placeholder="wien und umgebung, remote">
                         </div>
-                        <button type="button" id="cv-file-remove" title="Remove file" class="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/40 transition-all cursor-pointer outline-none"><uk-icon icon="close" class="w-3.5 h-3.5"></uk-icon></button>
                     </div>
-
-                    <div class="mt-4">
-                        <label for="cv-designation" class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Designation <span class="text-slate-600 font-normal normal-case tracking-normal">(optional &mdash; defaults to the filename)</span></label>
-                        <input type="text" id="cv-designation" placeholder="e.g. Senior Backend Engineer" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2.5 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors placeholder:text-slate-600">
+                    <div class="job-foot-actions">
+                        <button type="submit" class="job-btn job-btn--outline"><span id="reg-save-label">Add source</span></button>
+                        <button type="button" id="reg-cancel" class="job-btn job-btn--ghost">Cancel edit</button>
                     </div>
-
-                    <div id="cv-upload-error" class="hidden mt-3 flex items-center gap-2 text-xs font-bold text-rose-400">
-                        <uk-icon icon="warning" class="w-3.5 h-3.5 shrink-0"></uk-icon>
-                        <span id="cv-upload-error-text"></span>
-                    </div>
-
-                    <div class="mt-5 flex items-center justify-end">
-                        <button type="submit" id="cv-upload-submit" disabled class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none disabled:opacity-40 disabled:pointer-events-none">
-                            <uk-icon icon="upload" class="w-3.5 h-3.5"></uk-icon>
-                            <span id="cv-upload-label">Upload CV</span>
-                        </button>
-                    </div>
+                    <p class="job-setup-hint">Use <code>{job_title}</code> and <code>{location}</code> in the URL where you want values substituted. Separate values with commas.</p>
                 </form>
 
-                <div id="cv-list-container" class="space-y-3"></div>
-            </div>
-        </div><div id="job-view-profile" class="job-setup-section">
-            <div class="p-6">
-                <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2 mb-5">
-                    <uk-icon icon="user" class="w-4 h-4 text-cyan-400"></uk-icon> Search preferences
-                </h2>
+                <div id="registry-list-container" class="job-cards-list"></div>
+            </section>
+        </div>
 
-                <p class="ui-muted mb-4">These preferences apply to every CV. Save changes before starting a search.</p><form id="profile-form" class="space-y-5 max-w-xl">
-                    <div>
-                        <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Preferred locations (comma separated)</label>
-                        <input type="text" id="profile-locations" placeholder="Vienna, remote" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors">
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-2">Work mode</label>
-                        <div id="profile-work-mode" class="flex gap-2">
-                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="remote" class="accent-cyan-500"> Remote</label>
-                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="hybrid" class="accent-cyan-500"> Hybrid</label>
-                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="on_site" class="accent-cyan-500"> On-site</label>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-2">Employment type</label>
-                        <div id="profile-employment" class="flex gap-2">
-                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="full-time" class="accent-cyan-500"> Full-time</label>
-                            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" value="part-time" class="accent-cyan-500"> Part-time</label>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Salary min</label>
-                            <input type="text" id="profile-salary-min" placeholder="70000" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Currency</label>
-                            <input type="text" id="profile-salary-currency" placeholder="EUR" maxlength="3" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Free-text preferences</label>
-                        <textarea id="profile-free-text" rows="4" placeholder="Anything else you prefer..." class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2.5 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors"></textarea>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-4 pt-2">
-                        <span id="profile-complete-badge" class="text-xs font-bold normal-case tracking-normal text-slate-500"></span>
-                        <button type="button" id="profile-discard" class="ui-button">Discard changes</button><button type="submit" class="px-5 py-2 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none">Save Profile</button>
-                    </div>
-                </form>
-            </div>
-        </div></div>
-        <details id="job-source-settings"><summary>Search sources</summary><div id="job-view-registry" class="job-setup-section">
-            <div class="p-6">
-                <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2 mb-5">
-                    <uk-icon icon="database" class="w-4 h-4 text-cyan-400"></uk-icon> Sources
-                </h2>
-
-                <form id="registry-form" class="mb-6 p-4 border border-slate-850 rounded-xl bg-[#0a0f1d]/60 space-y-3">
-                    <label class="block text-xs font-bold normal-case tracking-normal text-slate-400">Add / Edit Source</label>
-                    <input type="text" id="reg-url" placeholder="https://www.karriere.at/jobs?keywords={job_title}&locations={location}" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors font-mono text-xs">
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold normal-case tracking-normal text-slate-500 mb-1">Job title values</label>
-                            <input type="text" id="reg-job-title" placeholder="php, go, cloud engineer" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold normal-case tracking-normal text-slate-500 mb-1">Location values</label>
-                            <input type="text" id="reg-location" placeholder="wien und umgebung, remote" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/30 transition-colors">
-                        </div>
-                    </div>
-                    <div class="flex gap-3 items-center">
-                        <button type="submit" class="px-4 py-2 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none"><span id="reg-save-label">Add source</span></button><button type="button" id="reg-cancel" class="ui-button">Cancel edit</button>
-                    </div>
-                    <p class="text-xs text-slate-500 leading-relaxed">Use {job_title} and {location} in the URL where you want values substituted. Separate values with commas.</p>
-                </form>
-
-                <div id="registry-list-container" class="space-y-3"></div>
-            </div>
-        </div></details>
+        <footer class="jobs-setup-footer">
+            <span class="jobs-setup-sync"><span class="jobs-setup-sync-dot"></span> Saves apply per section</span>
+            <button type="button" id="job-setup-footer-close" class="job-btn job-btn--primary">Done</button>
+        </footer>
     </dialog>
 </div>

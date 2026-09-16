@@ -287,13 +287,15 @@ function showReadView() {
     const container = document.getElementById('job-details-container');
     const fields = [['Location', j.location], ['Work mode', j.work_mode?.replaceAll('_', ' ')], ['Employment', j.employment_type], ['Salary', j.salary], ['Posted', fmtDate(j.posted_at)], ['Applicants', j.applicant_count], ['Source', j.source_domain], ['Applied', fmtDate(j.applied_at)], ['Interviews', j.interview_timestamps?.join(', ')], ['Offer compensation', j.offer_compensation], ['Offer deadline', fmtDate(j.offer_deadline)], ['Offer notes', j.offer_notes]];
     const listing = /^https?:\/\//i.test(j.url || '') ? `<a class="ui-button" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open listing ↗</a>` : '';
+    const stateHistory = stateHistoryHtml(j);
+    const metadata = metadataHtml(j);
     container.innerHTML = `<article class="job-read-view">
         <div class="job-detail-heading"><div><span class="context-badge">${esc(STATE_LABELS[j.state] || j.state)}${j.history_reason ? ' · ' + esc(j.history_reason.replaceAll('_', ' ')) : ''}</span><h2>${esc(j.title)}</h2><p>${esc(j.company)}</p></div><button type="button" class="ui-button" data-job-edit>Edit details</button></div>
         <div class="flex flex-wrap gap-2 mb-5">${listing}${actionButtonsHtml(j)}</div>
         <dl class="job-facts">${fields.filter(([,v]) => v !== null && v !== undefined && v !== '').map(([k,v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
         <section><h3>Why the AI selected this job</h3><div class="job-md markdown-content" data-md="${esc(j.ai_selection_comment)}" data-empty="No selection comment available."></div></section>
         <section><h3>Job description</h3><div class="job-md markdown-content" data-md="${esc(j.description)}" data-empty="No description available."></div></section>
-        <details><summary>Activity and source data</summary>${stateHistoryHtml(j)}${metadataHtml(j)}</details>
+        ${stateHistory || metadata ? `<details><summary>Activity and source data</summary>${stateHistory}${metadata}</details>` : ''}
         <button type="button" class="job-delete-btn ui-button ui-button--danger" data-uuid="${esc(j.uuid)}">Delete job</button>
     </article>`;
     renderJobMarkdown(container); document.dispatchEvent(new Event('workspace-content-ready'));

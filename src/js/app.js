@@ -101,4 +101,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore the draft for review; sending remains an explicit action.
         }
     }
+
+    // Auto-start the daily briefing after landing on a fresh conversation. The
+    // briefing trigger navigates here via new_chat=1 and stashes this flag.
+    const briefingAutoStart = sessionStorage.getItem('briefing_autostart');
+    if (briefingAutoStart !== null) {
+        sessionStorage.removeItem('briefing_autostart');
+        window.startBriefing?.(briefingAutoStart === '1');
+    }
 });
