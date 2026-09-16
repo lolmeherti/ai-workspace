@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         galleryLoader.classList.remove('opacity-0', 'pointer-events-none');
         galleryLoader.style.display = 'flex';
 
-        const url = `index.php?api_action=search_files&source=gallery&query=${encodeURIComponent(currentQuery)}&page=${currentPage}&limit=${limitPerPage}`;
+        const url = `index.php?api_action=search_files&source=gallery&query=${encodeURIComponent(currentQuery)}&page=${currentPage}&limit=${limitPerPage}&category=${currentFilter}`;
 
         fetch(url)
             .then(res => res.json())
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `Found ${totalFiles} matching files for "${currentQuery}"` 
                         : `Displaying ${allFiles.length} of ${totalFiles} uploaded files`;
 
-                    if (currentQuery) {
+                    if (currentQuery || currentFilter !== 'all') {
                         clearFiltersBtn.classList.remove('hidden');
                     } else {
                         clearFiltersBtn.classList.add('hidden');
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Update sidebar statistics globally
                     const sidebarCount = document.getElementById('sidebar-total-files');
-                    if (sidebarCount) sidebarCount.textContent = totalFiles;
+                    if (sidebarCount && !currentQuery && currentFilter === 'all') sidebarCount.textContent = totalFiles;
 
                     renderGrid();
                     updatePaginationUI();
@@ -143,13 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return type.startsWith('image/') || type === 'image' || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
         };
         
-        // Filter elements locally based on selected tab button
-        const filtered = allFiles.filter(file => {
-            const isImg = isImageFile(file);
-            if (currentFilter === 'images') return isImg;
-            if (currentFilter === 'docs') return !isImg;
-            return true;
-        });
+        const filtered = allFiles; // Server filters the complete dataset before pagination.
 
         if (filtered.length === 0) {
             galleryGrid.innerHTML = `
@@ -265,6 +259,8 @@ document.addEventListener('DOMContentLoaded', () => {
      * Updates previous/next button disabled state and textual info
      */
     function updatePaginationUI() {
+        pagerPrev.disabled = (currentPage === 1);
+        pagerNext.disabled = (currentPage >= totalPages);
         if (totalPages <= 1) {
             paginationContainer.classList.add('hidden');
             return;
@@ -273,8 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
         paginationContainer.classList.remove('hidden');
         pagerInfo.textContent = `Page ${currentPage} of ${totalPages}`;
         
-        pagerPrev.disabled = (currentPage === 1);
-        pagerNext.disabled = (currentPage === totalPages);
     }
 
     /**
@@ -474,10 +468,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (clearFiltersBtn) {
         clearFiltersBtn.addEventListener('click', () => {
+            clearTimeout(searchTimeout);
             searchInput.value = '';
             currentQuery = '';
-            currentPage = 1;
-            fetchGalleryFiles();
+            filterBtnAll.click();
         });
     }
 
@@ -490,13 +484,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (b) {
                     b.classList.remove('bg-slate-900', 'text-cyan-400');
                     b.classList.add('text-slate-400');
+                    b.setAttribute('aria-pressed', 'false');
                 }
             });
             btn.classList.add('bg-slate-900', 'text-cyan-400');
             btn.classList.remove('text-slate-400');
+            btn.setAttribute('aria-pressed', 'true');
 
             currentFilter = filterName;
-            renderGrid();
+            currentPage = 1;
+            clearTimeout(searchTimeout);
+            currentQuery = searchInput?.value || '';
+            fetchGalleryFiles();
         });
     };
 

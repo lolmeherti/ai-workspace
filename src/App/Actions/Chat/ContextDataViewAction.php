@@ -68,7 +68,7 @@ class ContextDataViewAction extends BaseAction
      *
      * @return array<int, array{id: string, title: string, domain: string, chunks: string[]}>
      */
-    private static function parseSources(string $message): array
+    public static function parseSources(string $message): array
     {
         $sources = [];
         if (!preg_match_all('/<source id="([^"]+)">(.*?)<\/source>/s', $message, $src, PREG_SET_ORDER)) {

@@ -35,9 +35,9 @@
         <details class="system-health">
             <summary><uk-icon icon="activity" class="w-4 h-4" aria-hidden="true"></uk-icon><span>System health</span></summary>
             <dl>
-                <div><dt>Database</dt><dd><?php echo $status->database ? 'Online' : 'Offline'; ?></dd></div>
-                <div><dt>Redis</dt><dd><?php echo $status->redis ? 'Online' : 'Offline'; ?></dd></div>
-                <div><dt><?php echo htmlspecialchars($status->model_name ?: 'AI service'); ?></dt><dd><?php echo $status->ai ? 'Online' : 'Offline'; ?></dd></div>
+                <div><dt>Database</dt><dd class="<?php echo $status->database ? 'health-online' : 'health-offline'; ?>"><?php echo $status->database ? 'Online' : 'Offline'; ?></dd></div>
+                <div><dt>Redis</dt><dd class="<?php echo $status->redis ? 'health-online' : 'health-offline'; ?>"><?php echo $status->redis ? 'Online' : 'Offline'; ?></dd></div>
+                <div><dt><?php echo htmlspecialchars($status->model_name ?: 'AI service'); ?></dt><dd class="<?php echo $status->ai ? 'health-online' : 'health-offline'; ?>"><?php echo $status->ai ? 'Online' : 'Offline'; ?></dd></div>
             </dl>
             <form method="POST" action="index.php" data-confirm="Delete all conversations and their messages? This cannot be undone.">
                 <input type="hidden" name="clear_all" value="1">

@@ -64,19 +64,10 @@
                             <span class="context-meta text-xs text-slate-500 font-mono"><?php echo htmlspecialchars($item['meta']); ?></span>
                         </div>
                         <span class="context-badge text-xs px-1.5 py-0.5 rounded-full border <?php echo $item['badgeCls']; ?>"<?php if ($item['state'] === 'evicted'): ?> title="This raw data is not part of the chat anymore. Restore loads the full data back in."<?php endif; ?>><?php echo $item['badgeText']; ?></span>
-                        <div class="context-btns flex items-center gap-1.5">
-                            <button type="button" data-action="view" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">View</button>
-                            <?php if ($item['state'] === 'raw'): ?>
-                                <button type="button" data-action="atomize" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Atomize</button>
-                            <?php elseif ($item['state'] === 'raw_atoms' || $item['state'] === 'atomized'): ?>
-                                <button type="button" data-action="reatomize" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Re-atomize</button>
-                                <button type="button" data-action="delete_atoms" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 transition-colors cursor-pointer">Delete atoms</button>
-                            <?php endif; ?>
-                            <?php if ($item['state'] === 'raw' || $item['state'] === 'raw_atoms'): ?>
-                                <button type="button" data-action="evict_raw" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 transition-colors cursor-pointer">Evict raw</button>
-                            <?php else: ?>
-                                <button type="button" data-action="restore" data-id="<?php echo $item['id']; ?>" class="text-xs px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Restore</button>
-                            <?php endif; ?>
+                        <div class="context-btns">
+                            <button type="button" data-action="view" data-id="<?php echo $item['id']; ?>" class="ui-button">View</button>
+                            <button type="button" data-action="edit_raw" data-id="<?php echo $item['id']; ?>" class="ui-button">Edit evidence</button>
+                            <button type="button" data-action="<?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'reatomize' : 'atomize'; ?>" data-id="<?php echo $item['id']; ?>" class="ui-button"><?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'Extract again' : 'Extract key facts'; ?></button>
                         </div>
                     </div>
                 <?php endforeach; ?>

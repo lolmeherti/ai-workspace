@@ -72,8 +72,18 @@ class FileSearchAction extends BaseAction
     {
         $page = max(1, (int)($_GET['page'] ?? 1));
         $limit = max(1, min(100, (int)($_GET['limit'] ?? 12)));
-        $offset = ($page - 1) * $limit;
+        $category = (string)($_GET['category'] ?? 'all');
+        $files = array_values(array_filter($files, static function (array $file) use ($category): bool {
+            $type = strtolower($file['file_type'] ?? '');
+            $ext = strtolower(pathinfo($file['original_name'] ?? '', PATHINFO_EXTENSION));
+            $image = str_starts_with($type, 'image/') || $type === 'image'
+                || in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true);
+            return $category === 'images' ? $image : ($category === 'docs' ? !$image : true);
+        }));
         $total = count($files);
+        $pages = max(1, (int)ceil($total / $limit));
+        $page = min($page, $pages);
+        $offset = ($page - 1) * $limit;
 
         $pageFiles = array_slice($files, $offset, $limit);
         foreach ($pageFiles as &$file) {
@@ -89,7 +99,7 @@ class FileSearchAction extends BaseAction
                 'total' => $total,
                 'page' => $page,
                 'limit' => $limit,
-                'pages' => (int)ceil($total / $limit),
+                'pages' => $pages,
             ],
         ]);
     }
