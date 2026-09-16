@@ -19,7 +19,7 @@ export function paintJobSelection() {
 async function canLeaveJob() {
     const container = document.getElementById('job-details-container');
     if (container.querySelector('[aria-busy="true"]')) return false;
-    return !container.querySelector('form[data-dirty="true"]') || await confirmAction('Discard unsaved changes to this job?', { confirmLabel: 'Discard changes' });
+    return !container.querySelector('form[data-dirty="true"]') || await confirmAction('Discard unsaved changes to this job?', { confirmLabel: 'Discard changes', destructive: true });
 }
 
 const inputCls = 'w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors';

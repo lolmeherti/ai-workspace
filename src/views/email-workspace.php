@@ -77,7 +77,7 @@
                         </div>
                         <div class="flex justify-end gap-2.5 pt-3 border-t border-slate-850">
                             <button type="button" onclick="window.toggleReplyForm()" class="px-4 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg text-slate-300 font-bold transition-all cursor-pointer outline-none">Cancel</button>
-                            <button type="submit" id="reply-submit-btn" class="ui-button--primary px-4 py-2 bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 rounded-lg text-white font-bold transition-all cursor-pointer outline-none">Send reply</button>
+                            <button type="submit" id="reply-submit-btn" class="ui-button ui-button--primary">Send reply</button>
                         </div>
                     </form>
                 </div>

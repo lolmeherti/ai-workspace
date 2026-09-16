@@ -1,32 +1,26 @@
 <div id="panel-emails" class="hidden h-full flex flex-col bg-[#070b14]/40">
-    <div class="p-4 border-b border-slate-800/50 flex justify-between items-center bg-[#0d1321]/30">
-        <h3 class="text-xs font-bold normal-case tracking-normal text-slate-400 flex items-center gap-1.5 m-0">
-            <uk-icon icon="mail" class="w-3.5 h-3.5 text-cyan-400"></uk-icon> Linked Mailboxes
-        </h3>
-        <button uk-toggle="target: #add-email-modal" type="button" class="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-cyan-400 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 rounded transition-colors cursor-pointer outline-none">
-            <uk-icon icon="plus" class="w-3 h-3"></uk-icon> Add Account
+    <header class="mailbox-header">
+        <div class="mailbox-heading">
+            <span class="mailbox-heading-icon"><uk-icon icon="mail" aria-hidden="true"></uk-icon></span>
+            <div><h3>Mailboxes</h3><p>Connected accounts</p></div>
+        </div>
+        <button uk-toggle="target: #add-email-modal" type="button" class="ui-button ui-button--secondary mailbox-add-button">
+            <uk-icon icon="plus" aria-hidden="true"></uk-icon><span>Add account</span>
         </button>
-    </div>
+    </header>
 
-    <div class="p-4 border-b border-slate-800/30 space-y-3">
-        <button onclick="window.triggerUnifiedBriefing()" type="button" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-xs bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-950/20 border border-cyan-500/30 cursor-pointer outline-none transition-all">
-            <uk-icon icon="sparkles" class="w-3.5 h-3.5"></uk-icon> Generate Daily Briefing
+    <div class="mailbox-controls">
+        <button onclick="window.triggerUnifiedBriefing()" type="button" class="ui-button ui-button--primary mailbox-briefing-button">
+            <uk-icon icon="sparkles" aria-hidden="true"></uk-icon> Generate daily briefing
         </button>
 
-        <!-- Redesigned Parameter Toggle -->
-        <label for="briefing-include-read" class="flex items-center justify-between px-3 py-2 bg-[#0b101c]/30 border border-slate-800/60 hover:border-cyan-500/20 rounded-lg cursor-pointer transition-all select-none group">
-            <input type="checkbox" id="briefing-include-read" class="sr-only peer">
-            
-            <div class="flex items-center gap-2 text-slate-500 peer-checked:text-cyan-400 transition-colors duration-200">
-                <uk-icon icon="history" class="w-3.5 h-3.5"></uk-icon>
-                <div class="flex flex-col">
-                    <span class="text-xs font-bold tracking-normal normal-case">Include Already-Read Mail</span>
-                    <span class="text-xs text-slate-500/85 font-medium normal-case tracking-tight peer-checked:text-cyan-600/70 transition-colors duration-200">Within the last 24 hours</span>
-                </div>
-            </div>
-
-            <!-- Custom Switch Track & Indicator -->
-            <div class="relative w-8 h-4 bg-slate-900 border border-slate-800 rounded-full transition-all peer-checked:bg-cyan-950/40 peer-checked:border-cyan-500/30 after:content-[''] after:absolute after:top-[2.5px] after:left-[2.5px] after:bg-slate-600 peer-checked:after:bg-cyan-400 after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:after:translate-x-4"></div>
+        <label for="briefing-include-read" class="mailbox-read-toggle">
+            <input type="checkbox" id="briefing-include-read" class="sr-only">
+            <span class="mailbox-read-copy">
+                <uk-icon icon="history" aria-hidden="true"></uk-icon>
+                <span><strong>Include read mail</strong><small>From the last 24 hours</small></span>
+            </span>
+            <span class="mailbox-switch" aria-hidden="true"></span>
         </label>
     </div>
 

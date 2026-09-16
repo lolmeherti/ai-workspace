@@ -66,8 +66,8 @@
                         <span class="context-badge text-xs px-1.5 py-0.5 rounded-full border <?php echo $item['badgeCls']; ?>"<?php if ($item['state'] === 'evicted'): ?> title="This raw data is not part of the chat anymore. Restore loads the full data back in."<?php endif; ?>><?php echo $item['badgeText']; ?></span>
                         <div class="context-btns">
                             <button type="button" data-action="view" data-id="<?php echo $item['id']; ?>" class="ui-button">View</button>
-                            <button type="button" data-action="edit_raw" data-id="<?php echo $item['id']; ?>" class="ui-button">Edit evidence</button>
-                            <button type="button" data-action="<?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'reatomize' : 'atomize'; ?>" data-id="<?php echo $item['id']; ?>" class="ui-button"><?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'Extract again' : 'Extract key facts'; ?></button>
+                            <button type="button" data-action="edit_raw" data-id="<?php echo $item['id']; ?>" class="ui-button ui-button--secondary">Edit evidence</button>
+                            <button type="button" data-action="<?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'reatomize' : 'atomize'; ?>" data-id="<?php echo $item['id']; ?>" class="ui-button ui-button--primary"><?php echo in_array($item['state'], ['raw_atoms', 'atomized']) ? 'Extract again' : 'Extract key facts'; ?></button>
                         </div>
                     </div>
                 <?php endforeach; ?>
