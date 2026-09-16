@@ -183,6 +183,7 @@ TEXT;
         $data = \App\JsonParser::extractAndDecode($response);
 
         if (is_array($data)) {
+            $memoriesCommitted = false;
             try {
                 $this->db->query("START TRANSACTION");
 
@@ -229,15 +230,21 @@ TEXT;
                 }
 
                 $this->db->query("COMMIT");
+                $memoriesCommitted = true;
                 
                 // After successful memory update, distill the current state into a Stable Profile Anchor
                 $this->updateUserProfile();
             } catch (Exception $e) {
-                $this->db->query("ROLLBACK");
+                if (!$memoriesCommitted) $this->db->query("ROLLBACK");
                 error_log("MemoryExtractor: Failed to write consolidated memories: " . $e->getMessage());
+                if ($isManual) {
+                    if ($memoriesCommitted) throw new \RuntimeException("Memories were saved, but the profile refresh could not be confirmed.", 0, $e);
+                    throw $e;
+                }
             }
         } else {
             error_log("MemoryExtractor: Invalid JSON response received from LLM during consolidation. Raw response: " . $response);
+            if ($isManual) throw new \RuntimeException("The model returned an invalid consolidation response.");
         }
     }
 

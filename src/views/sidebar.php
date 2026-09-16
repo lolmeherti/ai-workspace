@@ -18,6 +18,8 @@
     </nav>
     <div class="sidebar-content">
         <?php include __DIR__ . '/tab-chats.php'; ?>
+        <?php include __DIR__ . '/tab-memories.php'; ?>
+        <?php include __DIR__ . '/tab-jobs.php'; ?>
         <?php include __DIR__ . '/tab-uploads.php'; ?>
         <?php include __DIR__ . '/tab-emails.php'; ?>
     </div>

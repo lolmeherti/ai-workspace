@@ -10,13 +10,17 @@ import { streamResponse } from './streamer/streamResponse.js';
 
 export function enableMemoryEdit(id) {
     document.getElementById(`memory-view-${id}`).classList.add('hidden');
-    document.getElementById(`memory-edit-${id}`).classList.remove('hidden');
+    const form = document.getElementById(`memory-edit-${id}`);
+    form.classList.remove('hidden');
+    form.querySelector('textarea')?.focus();
 }
 
 export function disableMemoryEdit(id) {
-    document.getElementById(`memory-view-${id}`).getBoundingClientRect();
+    const form = document.getElementById(`memory-edit-${id}`);
+    form.reset();
+    delete form.dataset.dirty;
     document.getElementById(`memory-view-${id}`).classList.remove('hidden');
-    document.getElementById(`memory-edit-${id}`).classList.add('hidden');
+    form.classList.add('hidden');
 }
 
 export function showCondensationModal(formData, originalMessage) {
@@ -125,6 +129,7 @@ export async function confirmCondensation() {
             modalLoading.classList.add('hidden');
             
             state.condensationSummary = result.summary;
+            document.getElementById('condensation-summary-text').textContent = result.summary || 'No summary was returned.';
             state.condensationMemories = result.memories || [];
             
             const memoriesListContainer = document.getElementById('condensation-memories-list');

@@ -30,6 +30,7 @@ export function initDetails() {
     container.addEventListener('click', onDetailsClick);
     container.addEventListener('submit', onDetailsSubmit);
     container.addEventListener('input', e => { const form = e.target.closest('form'); if (form) form.dataset.dirty = 'true'; });
+    document.getElementById('job-details-back')?.addEventListener('click', async () => { if (await canLeaveJob()) clearDetails(); });
     window.paintJobSelection = paintJobSelection;
     window.selectJob = selectJob;
     window.cancelApply = cancelApply;
@@ -45,6 +46,7 @@ export async function selectJob(uuid) {
 
 export function clearDetails() {
     currentJobUuid = null; currentJob = null; requestSequence++; paintJobSelection();
+    document.querySelector('.jobs-results')?.classList.remove('has-activity', 'has-selection');
     const container = document.getElementById('job-details-container');
     if (container) container.innerHTML = placeholder('Select a job to view its details.');
 }
@@ -286,7 +288,6 @@ function showReadView() {
     const fields = [['Location', j.location], ['Work mode', j.work_mode?.replaceAll('_', ' ')], ['Employment', j.employment_type], ['Salary', j.salary], ['Posted', fmtDate(j.posted_at)], ['Applicants', j.applicant_count], ['Source', j.source_domain], ['Applied', fmtDate(j.applied_at)], ['Interviews', j.interview_timestamps?.join(', ')], ['Offer compensation', j.offer_compensation], ['Offer deadline', fmtDate(j.offer_deadline)], ['Offer notes', j.offer_notes]];
     const listing = /^https?:\/\//i.test(j.url || '') ? `<a class="ui-button" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open listing ↗</a>` : '';
     container.innerHTML = `<article class="job-read-view">
-        <button type="button" class="ui-button jobs-back" data-job-back>← Jobs</button>
         <div class="job-detail-heading"><div><span class="context-badge">${esc(STATE_LABELS[j.state] || j.state)}${j.history_reason ? ' · ' + esc(j.history_reason.replaceAll('_', ' ')) : ''}</span><h2>${esc(j.title)}</h2><p>${esc(j.company)}</p></div><button type="button" class="ui-button" data-job-edit>Edit details</button></div>
         <div class="flex flex-wrap gap-2 mb-5">${listing}${actionButtonsHtml(j)}</div>
         <dl class="job-facts">${fields.filter(([,v]) => v !== null && v !== undefined && v !== '').map(([k,v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>

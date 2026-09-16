@@ -3,7 +3,7 @@
  * @description Sidebar category cards -> workspace job list. Pagination + blocks readout.
  */
 
-import { esc, getJson, STATE_LABELS, STATE_ORDER, dateOnly } from './jobUtil.js';
+import { esc, getJson, STATE_LABELS, STATE_ORDER, dateOnly, spinner } from './jobUtil.js';
 
 const PER_PAGE = 10;
 let activeCategory = 'unread';
@@ -21,6 +21,7 @@ const CATEGORY_META = {
 };
 
 export function initInbox() {
+    document.getElementById('job-stage-select')?.addEventListener('change', e => openCategory(e.target.value));
     const categoriesContainer = document.getElementById('job-categories');
     if (categoriesContainer) {
         categoriesContainer.addEventListener('click', (e) => {
@@ -94,11 +95,16 @@ async function loadCategory(state, page) {
     if (!state) return;
 
     const request = ++requestSequence;
-    document.getElementById('job-cards')?.setAttribute('aria-busy', 'true');
+    const cards = document.getElementById('job-cards');
+    cards?.setAttribute('aria-busy', 'true');
+    if (cards) cards.innerHTML = spinner();
+    const title = document.getElementById('job-category-title');
+    if (title) title.textContent = STATE_LABELS[state] ?? state;
     let data;
     try {
         data = await getJson('list_jobs', { state, page, per_page: PER_PAGE });
     } catch (e) {
+        if (request !== requestSequence) return;
         renderJobsError();
         return;
     }
@@ -137,17 +143,27 @@ function renderCategories() {
     const el = document.getElementById('job-categories');
     if (!el) return;
     el.innerHTML = STATE_ORDER.map(state => categoryCardHtml(state, categoryCounts[state] ?? 0)).join('');
+    const picker = document.getElementById('job-stage-select');
+    if (picker) {
+        picker.replaceChildren(...STATE_ORDER.map(state => new Option(`${STATE_LABELS[state]} (${categoryCounts[state] ?? 0})`, state)));
+        picker.value = activeCategory;
+    }
 }
 
 function renderCategoriesError() {
     const el = document.getElementById('job-categories');
     if (!el) return;
-    el.innerHTML = '<p class="text-rose-400 text-xs normal-case font-bold text-center py-8">Failed to load categories.</p>';
+    el.innerHTML = '<p class="jobs-empty">Application stages could not be loaded.</p><button type="button" class="ui-button">Retry</button>';
+    el.querySelector('button')?.addEventListener('click', refreshCounts);
 }
 
 function renderJobsError() {
     const cardsEl = document.getElementById('job-cards');
-    if (cardsEl) cardsEl.innerHTML = '<div class="text-center py-10 text-rose-400 text-xs normal-case tracking-normal font-bold select-none">Failed to load jobs.</div>';
+    if (cardsEl) {
+        cardsEl.removeAttribute('aria-busy');
+        cardsEl.innerHTML = '<p class="jobs-empty">Jobs could not be loaded. Your saved jobs are kept.</p><button type="button" class="ui-button">Retry</button>';
+        cardsEl.querySelector('button')?.addEventListener('click', () => loadCategory(activeCategory, currentPage));
+    }
 }
 
 function categoryCardHtml(state, count) {
@@ -164,35 +180,13 @@ function categoryCardHtml(state, count) {
         </button>`;
 }
 
-const STATE_ACCENT = {
-    unread: 'bg-slate-500/60',
-    interested: 'bg-cyan-500/70',
-    applied: 'bg-blue-500/70',
-    interview: 'bg-amber-500/70',
-    offer: 'bg-emerald-500/70',
-    history: 'bg-slate-600/60',
-};
-
 function cardHtml(job) {
-    const accent = STATE_ACCENT[job.state] ?? 'bg-cyan-500/60';
     const meta = job.location ? `${esc(job.company)} · ${esc(job.location)}` : esc(job.company);
     return `
-        <div role="button" tabindex="0" aria-label="${esc(job.title)} at ${esc(job.company)}" class="job-card group relative flex items-center gap-2.5 pl-4 pr-2.5 py-2.5 rounded-xl border border-slate-800/70 bg-gradient-to-r from-[#0d1424]/80 to-[#0a0f1d]/80 hover:border-cyan-500/30 hover:bg-[#0e1728]/60 cursor-pointer transition-all overflow-hidden" data-uuid="${esc(job.uuid)}">
-            <span class="absolute left-0 top-0 h-full w-[3px] ${accent}"></span>
-            <label class="job-select-label relative inline-flex items-center justify-center w-5 h-5 rounded-full cursor-pointer shrink-0 select-none">
-                <input type="checkbox" aria-label="Select ${esc(job.title)}" class="job-select peer sr-only" data-uuid="${esc(job.uuid)}" data-state="${esc(job.state)}">
-                <span class="absolute inset-0 rounded-full border border-slate-700 bg-slate-900/40 group-hover:border-cyan-500/40 transition-all duration-200 peer-checked:border-cyan-400 peer-checked:bg-cyan-500/15 peer-checked:shadow-[0_0_12px_rgba(6,182,212,0.45)]"></span>
-                <svg class="relative w-3 h-3 text-cyan-300 opacity-0 scale-50 transition-all duration-200 peer-checked:opacity-100 peer-checked:scale-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            </label>
-            <div class="min-w-0 flex-1">
-                <div class="text-xs font-semibold text-slate-100 leading-snug truncate">${esc(job.title)}</div>
-                <div class="text-xs text-slate-400 mt-0.5 truncate">${meta}</div>
-                <div class="flex items-center gap-1.5 mt-1">
-                    <span class="text-xs text-slate-500 font-mono shrink-0">${dateOnly(job.posted_at)}</span>
-                    ${job.salary ? `<span class="text-slate-600 shrink-0">·</span><span class="text-xs font-medium text-emerald-400/80 min-w-0 truncate">${esc(job.salary)}</span>` : ''}
-                </div>
-            </div>
-            <span class="text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0">›</span>
+        <div role="button" tabindex="0" aria-label="${esc(job.title)} at ${esc(job.company)}" class="job-card" data-uuid="${esc(job.uuid)}">
+            <label class="job-select-label"><input type="checkbox" aria-label="Select ${esc(job.title)}" class="job-select" data-uuid="${esc(job.uuid)}" data-state="${esc(job.state)}"></label>
+            <div class="min-w-0"><h3 class="job-card-title">${esc(job.title)}</h3><p class="job-card-meta">${meta}</p><div class="job-card-footer"><span>${dateOnly(job.posted_at)}</span>${job.salary ? `<span>${esc(job.salary)}</span>` : ''}</div></div>
+            <span aria-hidden="true" class="ui-muted">›</span>
         </div>`;
 }
 

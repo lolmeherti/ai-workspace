@@ -7,7 +7,7 @@ import { state } from './state.js';
 
 export function initTabs() {
     window.addEventListener('beforeunload', function (e) {
-        if (state.isGenerating || state.jobRun || window.hasUnsavedEditor?.() || document.getElementById('q')?.value || document.querySelector('form[data-dirty="true"]')) {
+        if (state.isGenerating || state.jobRun || state.memoryConsolidating || window.hasUnsavedEditor?.() || document.getElementById('q')?.value || document.querySelector('form[data-dirty="true"]')) {
             e.preventDefault();
             e.returnValue = '';
         }
@@ -49,7 +49,7 @@ export function switchSidebarTab(tabId) {
         }
     });
 
-    const workspaceForTab = { chats: 'chat-workspace', uploads: 'gallery-workspace', emails: 'email-workspace', jobs: 'job-workspace', memories: 'memory-workspace' };
+    const workspaceForTab = { chats: 'chat-workspace', uploads: 'gallery-workspace', emails: 'email-workspace', jobs: 'job-workspace', memories: 'chat-workspace' };
     state.activeTab = workspaceForTab[tabId] ? tabId : 'chats';
     const activeWorkspace = workspaceForTab[state.activeTab];
     Object.values(workspaceForTab).forEach(id => document.getElementById(id)?.classList.toggle('hidden', id !== activeWorkspace));
@@ -59,8 +59,13 @@ export function switchSidebarTab(tabId) {
     });
     if (state.activeTab === 'uploads') document.dispatchEvent(new CustomEvent('gallery-opened'));
     if (state.activeTab === 'jobs') document.dispatchEvent(new CustomEvent('jobs-opened'));
-    if (matchMedia('(max-width: 760px)').matches) {
+    if (state.activeTab === 'memories') {
+        document.body.classList.remove('sidebar-collapsed');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-expanded', 'true');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-label', 'Collapse sidebar');
+    } else if (matchMedia('(max-width: 760px)').matches) {
         document.body.classList.add('sidebar-collapsed');
         document.getElementById('sidebar-toggle')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-label', 'Expand sidebar');
     }
 }
