@@ -11,6 +11,31 @@ import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
 import { extractThinking, createThinkingAccordion, addCodeCopyButtons } from '../markdown.js';
 
+// Lazy file-choice restoration: a historical message that triggered a file
+// search re-fetches its results only when scrolled into view, so page load no
+// longer fires one search_files request per such message (the load-time N+1).
+function fetchFileChoices(el, query) {
+    fetch(`index.php?api_action=search_files&query=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.files && data.files.length > 0 && typeof window.renderFileChoices === 'function') {
+                window.renderFileChoices(data, el, document.getElementById('chatWindow'));
+            }
+        })
+        .catch(() => {});
+}
+const fileChoiceIO = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const el = entry.target;
+            fileChoiceIO.unobserve(el);
+            const query = el.dataset.fileChoiceQuery;
+            if (query) fetchFileChoices(el, query);
+        });
+    }, { rootMargin: '200px' })
+    : null;
+
 export function initChatDom() {
     document.addEventListener('DOMContentLoaded', () => {
         const parseAllCurrentMessages = () => {
@@ -57,16 +82,9 @@ export function initChatDom() {
                         </div>
                     `);
 
-                    fetch(`index.php?api_action=search_files&query=${encodeURIComponent(toolQuery)}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.status === 'success' && data.files && data.files.length > 0) {
-                                if (typeof window.renderFileChoices === 'function') {
-                                    window.renderFileChoices(data, el, document.getElementById('chatWindow'));
-                                }
-                            }
-                        })
-                        .catch(err => console.error("Error restoring file choices UI:", err));
+                    el.dataset.fileChoiceQuery = toolQuery;
+                    if (fileChoiceIO) fileChoiceIO.observe(el);
+                    else fetchFileChoices(el, toolQuery);
                 }
             });
 

@@ -297,6 +297,7 @@ class AISettingsController extends BaseController
             // "offline" until the TTL expires.
             try {
                 \App\Cache::delete('system_health_status');
+                \App\Cache::delete('models_list');
             } catch (\Exception $e) {
             }
         }

@@ -249,11 +249,16 @@ export function initChatNavigation() {
     paintSelection();
     document.addEventListener('click', e => {
         if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || state.isChatEditMode) return;
-        const link = e.target.closest('.session-link, #new-chat-link');
+        // Only SPA-navigate existing sessions. "#new-chat-link" must NOT be
+        // intercepted: it is a plain href to index.php?new_chat=1, and the
+        // server is what creates (or reuses the single empty) "New Conversation"
+        // row — intercepting it here and navigating to session 0 skipped that
+        // and left the composer stuck on a non-existent session id.
+        const link = e.target.closest('.session-link');
         if (!link) return;
         e.preventDefault();
         clearNotice('conversation-error');
-        const id = link.id === 'new-chat-link' ? 0 : Number(link.closest('.chat-session-item').dataset.sessionId);
+        const id = Number(link.closest('.chat-session-item').dataset.sessionId);
         navigateConversation(id);
     });
     window.addEventListener('popstate', () => {

@@ -82,7 +82,7 @@ export async function refreshAvailability() {
         } finally {
             pending = null;
             paintAvailability();
-            if (!document.hidden) timer = setTimeout(refreshAvailability, availability().state === 'busy' ? 2500 : 15000);
+            if (!document.hidden) timer = setTimeout(refreshAvailability, availability().state === 'busy' ? 2500 : 30000);
         }
     })();
     return pending;
