@@ -11,4 +11,5 @@ foreach (['RateReplyActionTest', 'JobStateMachineTest'] as $suite) {
     $class = 'App\\Tests\\' . $suite;
     $ok = (new $class())->run() && $ok;
 }
+require __DIR__ . '/context-files-backend.php';
 exit($ok ? 0 : 1);

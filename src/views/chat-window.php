@@ -90,8 +90,8 @@
                         <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                         
                         <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
-                            <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
-                                <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
+                            <button type="button" class="chat-attach-button shrink-0" onclick="document.getElementById('fileInput').click()" title="Attach file" aria-label="Attach file">
+                                <uk-icon icon="paperclip" aria-hidden="true"></uk-icon>
                             </button>
                             
                             <label class="sr-only" for="q">Message</label>

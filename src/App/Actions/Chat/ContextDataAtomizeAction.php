@@ -7,6 +7,8 @@ use App\AgentManager;
 use App\ChatManager;
 use App\Search\SourceCondenser;
 use App\Search\TokenCounter;
+use App\Search\EvidenceBuilder;
+use App\Search\WebChunk;
 use App\Services\PromptAssemblyService;
 
 /**
@@ -18,6 +20,7 @@ use App\Services\PromptAssemblyService;
  *   - atomize     — LLM-condense the raw chunks, return a PREVIEW (no commit).
  *   - re-atomize  — same as atomize (re-run from persisted raw, works even when raw is evicted).
  *   - commit      — write previewed/hand-edited atoms + set raw_evicted = 1.
+ *   - edit_raw    — replace retained evidence, clear stale facts, preserve inclusion.
  *   - edit_atoms  — write hand-edited atoms verbatim (no LLM), raw_evicted untouched.
  *   - delete_atoms — null out atoms, raw_evicted untouched.
  *   - evict_raw   — set raw_evicted = 1 (raw kept in DB, atoms untouched).
@@ -40,6 +43,9 @@ class ContextDataAtomizeAction extends BaseAction
         }
 
         switch ($op) {
+            case 'edit_raw':
+                $this->editEvidence($id);
+                return;
             case 'atomize':
             case 're-atomize':
                 $this->previewAtomize($id);
@@ -75,12 +81,79 @@ class ContextDataAtomizeAction extends BaseAction
     {
         $rows = $this->db->query(
             "SELECT id, message, token_estimate, search_query, selected_chunks, backing_chunks,
-                    raw_evicted, atomic_context, atomic_tokens
+                    raw_evicted, atomic_context, atomic_tokens, source_map
              FROM chat_history
              WHERE id = :id AND message_type = 'data_fetching'",
             [':id' => $id]
         );
         return empty($rows) ? null : $rows[0];
+    }
+
+    /** Manual edits replace both snapshots: deleted text must not return on extraction. */
+    private function editEvidence(int $id): void
+    {
+        $row = $this->loadRow($id);
+        if ($row === null) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Context item not found.'], 404);
+            return;
+        }
+        if (!isset($_POST['base_message']) || $_POST['base_message'] !== ($row['message'] ?? '')) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'Evidence changed since you opened it. Copy your edits, then reopen the evidence before saving.'], 409);
+            return;
+        }
+        try {
+            $edits = json_decode((string)($_POST['evidence'] ?? ''), true, 512, JSON_THROW_ON_ERROR);
+            if (!is_array($edits) || !array_is_list($edits)) throw new \InvalidArgumentException('Expected a list of evidence sources.');
+            $fields = self::editedEvidence($row, $edits);
+        } catch (\JsonException | \InvalidArgumentException $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => $e->getMessage()], 422);
+            return;
+        }
+        $this->db->update('chat_history', $fields, ['id' => $id, 'message_type' => 'data_fetching']);
+        $this->jsonResponse(['status' => 'success', 'id' => $id]);
+    }
+
+    /** Build a coherent evidence snapshot without sending manual edits to an LLM. */
+    public static function editedEvidence(array $row, array $edits): array
+    {
+        $parsed = ContextDataViewAction::parseSources($row['message'] ?? '');
+        $plain = $parsed === [];
+        if ($plain) $parsed = [['id' => 'manual', 'title' => 'Evidence', 'domain' => '']];
+        $sources = array_column($parsed, null, 'id');
+        $sourceMap = json_decode($row['source_map'] ?? '{}', true) ?: [];
+        $templates = [];
+        foreach (ChatManager::decodeChunks($row['selected_chunks'] ?? '') as $chunk) {
+            $templates[$chunk->sourceId] ??= $chunk;
+        }
+        $chunks = [];
+        $seen = [];
+        foreach ($edits as $edit) {
+            $id = $edit['id'] ?? null;
+            if (!is_string($id) || !isset($sources[$id]) || isset($seen[$id]) || !is_string($edit['text'] ?? null)) {
+                throw new \InvalidArgumentException('Invalid evidence source. Reopen the evidence and try again.');
+            }
+            $seen[$id] = true;
+            if (trim($edit['text']) === '') continue;
+            $chunk = isset($templates[$id]) ? clone $templates[$id] : WebChunk::fromArray([
+                'sourceId' => $id, 'title' => $sources[$id]['title'], 'domain' => $sources[$id]['domain'],
+                'url' => $sourceMap[$id]['url'] ?? '', 'finalUrl' => $sourceMap[$id]['url'] ?? '',
+            ]);
+            $chunk->chunkId = $id . '-C1';
+            $chunk->text = $edit['text'];
+            $chunks[] = $chunk;
+        }
+        if (count($seen) !== count($sources)) throw new \InvalidArgumentException('Include every source; clear its text to remove it.');
+        $builder = new EvidenceBuilder();
+        $message = $plain ? ($edits[0]['text'] ?? '') : $builder->build($chunks);
+        $encoded = json_encode($chunks, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        return [
+            'message' => $message,
+            'selected_chunks' => $encoded,
+            'backing_chunks' => $encoded,
+            'token_estimate' => $builder->estimateTokens($message),
+            'atomic_context' => null,
+            'atomic_tokens' => null,
+        ];
     }
 
     /** LLM-condense the row's raw chunks and return a preview (no DB write). */

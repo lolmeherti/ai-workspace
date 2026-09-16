@@ -11,7 +11,7 @@
 .jobs-cv-field label, .job-stage-picker label { font-size: .8125rem; color: var(--muted); }
 .jobs-cv-field select, .job-stage-picker select { width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); }
 .jobs-primary-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.jobs-primary-actions .ui-button { flex: 1; white-space: nowrap; padding: 9px 12px; }
+.jobs-primary-actions .ui-button { flex: 1; min-width: 0; white-space: nowrap; padding: 9px 12px; }
 .jobs-primary-actions uk-icon { width: 16px; height: 16px; }
 .job-stage-picker { display: none; }
 .sidebar-collapsed .job-stage-picker { display: grid; }
@@ -115,7 +115,7 @@
 .memory-add-form label, .memory-edit-form label { font-size: .75rem; color: var(--muted); }
 .memory-add-field { display: grid; grid-template-columns: minmax(0, 1fr) 38px; gap: 8px; }
 .memory-add-field input { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid var(--line); font-size: .8125rem; }
-.memory-add-field .ui-button { padding: 8px; }
+.memory-add-field .ui-button { display: inline-flex; align-items: center; justify-content: center; padding: 8px; }
 .memory-limit { font-size: .75rem; color: var(--warning); }
 #memory-notices:not(:empty) { margin-top: 12px; }
 .memory-selection { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 16px; padding: 10px 0; border-block: 1px solid var(--line-soft); font-size: .75rem; }
