@@ -1,8 +1,8 @@
 # UI modernization: implementation and validation
 
-Review branch: `codex/ui-modernization`, based on `a7c9da1b82737fa3b4fd10a7fba2691ccfb7ab90`.
+Review branch: `codex/ui-modernization`, based on the latest user commit `7b26b50624934dd2ac143aea0b843568691a91d3`.
 
-**Status, 15 September 2026:** implementation and automated checks are ready for draft review. Visual browser validation, before/after screenshots, performance measurements, and live service integration are outstanding. This is not a claim that every state in the [UI inventory](ui-modernization-plan.md) has been exercised.
+**Status, 15 September 2026:** the corrective Jobs and Memories work is implemented with a disposable PHP fixture and automated interaction checks. Visual browser validation, before/after screenshots, performance measurements, and live service integration are still outstanding. This is not a claim that every state in the [UI inventory](ui-modernization-plan.md) has been exercised.
 
 **What changed**
 
@@ -14,7 +14,8 @@ Review branch: `codex/ui-modernization`, based on `a7c9da1b82737fa3b4fd10a7fba26
 | Reply feedback | Helpful/unhelpful states, required downvote reasons, tool-specific reason filtering, cancellation, saved reason labels, duplicate-submit protection, and read-back after ambiguous failures. |
 | Context Data | A coordinated evidence inspector, source links, clear full-evidence/key-facts/excluded labels, editable extraction previews, explicit commit/cancel, restore/exclude controls, and guards for pending or unsaved work. Background warnings stay associated with their conversation. |
 | Document editor | Resume/discard/save actions, ordered draft writes, retained failed edits, file ownership checks, and confirmed suggestion application. An older failed edit cannot overwrite a newer queued edit on retry. |
-| Jobs | Results and readable job details stay in one workspace. Search setup combines CVs, preferences, and sources; progress and history appear in Search activity. Selection, drafts, pending operations, cancellation, lost connections, and application recording have explicit states. |
+| Jobs | Results and readable job details stay in one padded workspace with stage navigation, a searchable list pane, and an independently scrollable detail/activity pane. Search setup combines CVs, preferences, and sources; progress and history appear in Search activity. Selection, drafts, pending operations, cancellation, lost connections, and application recording have explicit states. |
+| Memories and consolidation | Memories stay beside the chat in a readable vertical inspector with visible edit/delete actions, selection counts, bulk delete, and add-memory controls. Consolidation uses a review dialog, preserves dirty drafts, prevents duplicate submissions, distinguishes a busy model from an ambiguous write, and offers an explicit read-back before retrying. |
 | Other workspaces | Consistent styling and clearer actions across files, memories, email, settings, onboarding, model statistics, and event logs. Email suggestions preserve the draft and require an explicit send. File deletion retains failed selections when only some files were deleted. |
 | Supporting PHP | Read-only availability, conversation, and rating endpoints; atomic lock/status lookup using the existing ModelLock service; typed busy responses; confirmed deleted file IDs. Existing persistence, inference, and job transition rules are reused. |
 
@@ -24,7 +25,7 @@ The detailed element-by-element scope remains in [ui-modernization-plan.md](ui-m
 
 | Check | Result and limit |
 | --- | --- |
-| `npm run test:ui` | 20 passing DOM/state tests with the actual ES modules and PHP template fixture. Covers rapid chat/job navigation, per-chat drafts, background output/evidence/ratings, background context warnings, partial stream errors, busy cleanup, Stop ownership, offline versus unknown, rating reasons and ambiguous saves, CV selection, Jobs setup/activity, context previews, and serialized document edits. |
+| `npm run test:ui` | 24 passing DOM/state tests with the actual ES modules and PHP template fixture. Covers rapid chat/job navigation, per-chat drafts, background output/evidence/ratings, background context warnings, partial stream errors, busy cleanup, Stop ownership, offline versus unknown, rating reasons and ambiguous saves, CV selection, Jobs setup/activity, context previews, serialized document edits, and the Memories/consolidation running, draft-guard, selection, and read-back states. |
 | `php tests/ui/backend.php` | 43 existing deterministic assertions pass: 16 reply-rating cases and 27 job-state cases. Does not exercise the new endpoints against MySQL or Redis. |
 | `npm run check:ui` | JavaScript module syntax, PHP source/fixture syntax, and rendered inline JavaScript pass. The template test also checks unique IDs, primary control labels, and the compiled stylesheet reference. |
 | `npx esbuild tests/ui/entry.js --bundle --format=esm --outfile=/tmp/localsy-ui-check.js` | All application entry-point imports resolve. This temporary bundle is a check, not a production asset. |
@@ -51,11 +52,13 @@ If PHP is not on PATH, set `LOCALSY_PHP` to its executable for `check:ui` and `t
 
 Node is only needed for development/build checks. The current Dockerfile copies `src`, including the compiled CSS; the development compose bind mount serves the same file. Rebuild and commit `src/css/utilities.css` after changing utility classes in PHP or JavaScript. No Node process is added to the application runtime.
 
-For a fixture-only browser review in an environment that permits local previews:
+For a fixture-only browser review in an environment that permits local previews, the real shell and templates can be exercised with synthetic Jobs and Memories data:
 
 ```sh
 php -S 127.0.0.1:8081 -t src tests/ui/preview.php
 ```
+
+Open `/?session_id=3&tab=jobs&fixture=populated` for the populated Jobs workspace, `/?session_id=3&tab=memories&fixture=populated` for the Memories inspector, or use `fixture=empty`, `fixture=busy`, and `fixture=error` to review empty, model-busy, and failed-service states. Add `reset_fixture=1` when you want to reset the disposable session data. The fixture is review-only and is not included in the production bootstrap.
 
 The optional `tests/ui/capture.mjs` helper captures chat and Jobs fixtures with Playwright. It was not successfully run here. Fixtures do not simulate the complete application or every write endpoint; exercise those actions in the normal development stack with disposable test data.
 

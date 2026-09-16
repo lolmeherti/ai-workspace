@@ -123,30 +123,34 @@
                 <h3 class="text-xl font-bold text-white mb-2">Context Limit Approaching</h3>
                 <p class="text-sm text-slate-400 mb-6">This conversation is getting very long. Would you like me to condense older messages into a summary and extract facts into your long-term memory? This keeps the session fast and light.</p>
                 <div class="flex gap-3 justify-center">
+                    <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium">Close</button>
                     <button type="button" id="condensation-bypass" onclick="bypassCondensation()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium">Send without condensing</button>
                     <button type="button" onclick="confirmCondensation()" class="btn-futuristic px-5 py-2 rounded-lg bg-cyan-600 text-white font-bold cursor-pointer text-sm">Review condensation</button>
                 </div>
             </div>
 
             <div id="condensation-modal-review" class="hidden text-left flex flex-col items-stretch max-h-[85vh]">
-                <div class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-3">
+                <header class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-3">
                     <uk-icon icon="brain" class="w-6 h-6 text-cyan-400 animate-pulse"></uk-icon>
                     <h3 class="text-lg font-bold text-white normal-case tracking-normal">Review extracted memories</h3>
-                </div>
+                </header>
                 
                 <p class="text-xs text-slate-400 mb-4">
                     The AI has extracted the following insights. Deselect any entries that are redundant, inaccurate, or that you do not wish to store permanently.
                 </p>
 
-                <div class="flex-1 overflow-y-auto pr-1 space-y-3 mb-6 max-h-[350px]" id="condensation-memories-list"></div>
+                <div class="condensation-review-scroll">
+                    <details id="condensation-summary"><summary>Condensed conversation</summary><div id="condensation-summary-text"></div></details>
+                    <div id="condensation-memories-list"></div>
+                </div>
 
-                <div class="flex justify-between items-center border-t border-cyan-500/20 pt-4">
+                <footer class="flex justify-between items-center border-t border-cyan-500/20 pt-4">
                     <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs normal-case font-bold tracking-normal">Cancel</button>
                     <button type="button" onclick="applyCondensation()" class="btn-futuristic px-5 py-2.5 rounded-lg text-white font-bold cursor-pointer text-xs normal-case tracking-normal flex items-center gap-2">
                         <uk-icon icon="check" class="w-4 h-4 text-cyan-400"></uk-icon>
                         Save selected memories & condense
                     </button>
-                </div>
+                </footer>
             </div>
             
             <div id="condensation-modal-loading" class="hidden flex flex-col items-center gap-4 py-4">

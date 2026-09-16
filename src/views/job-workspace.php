@@ -1,70 +1,56 @@
 <div class="jobs-layout" data-feedback-region>
-    <header class="jobs-header">
-        <div><h1>Jobs</h1><p class="ui-muted">Discover opportunities and track your applications.</p></div>
-        <div class="jobs-search-controls">
-            <label for="job-cv-select">CV for this search</label>
-            <select id="job-cv-select"><option value="">Select a CV</option></select>
-            <button type="button" class="ui-button" id="job-setup-open">Search setup</button>
-            <button type="button" class="ui-button ui-button--primary" id="job-find-btn" data-ai-action onclick="window.jobFindJobs()">Find jobs</button>
-        </div>
-    </header>
     <div id="job-notices" aria-live="polite"></div>
-    <div id="job-categories" class="job-stage-filters jobs-filters" role="group" aria-label="Application stage"></div>
-    <details id="job-run-activity" class="job-run-activity">
-        <summary>Search activity <span id="job-run-status" class="ui-muted">and run history</span></summary>
-        <div id="job-run-summary"></div>
-        <div id="job-view-progress" class="job-view hidden h-full overflow-y-auto">
-            <div class="p-6">
-                <div class="flex items-center justify-between mb-5">
-                    <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2">
-                        <uk-icon icon="search" class="w-4 h-4 text-cyan-400"></uk-icon> Finding Jobs
-                    </h2>
-                    <button id="job-run-cancel" class="px-4 py-2 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-rose-900/40 text-rose-400 border border-rose-500/30 hover:border-rose-400/50 transition-all cursor-pointer outline-none">Cancel</button>
+    <div class="jobs-results">
+        <section class="jobs-list-pane" aria-label="Saved jobs">
+            <header class="jobs-header">
+                <div class="jobs-heading"><h1>Jobs</h1><p>Discover opportunities and track your applications.</p></div>
+                <div class="jobs-cv-field"><label for="job-cv-select">CV for this search</label><select id="job-cv-select"><option value="">Select a CV</option></select></div>
+                <div class="jobs-primary-actions">
+                    <button type="button" class="ui-button ui-button--primary" id="job-find-btn" data-ai-action onclick="window.jobFindJobs()"><uk-icon icon="search" aria-hidden="true"></uk-icon> Find jobs</button>
+                    <button type="button" class="ui-button" id="job-setup-open">Search setup</button>
                 </div>
-                <div id="job-progress-body"></div>
+                <div class="job-stage-picker"><label for="job-stage-select">Application stage</label><select id="job-stage-select"><option value="unread">Unread</option></select></div>
+            </header>
+            <div id="job-list-view">
+                <div class="jobs-list-heading"><h2 id="job-category-title">Unread</h2><span id="job-list-count" class="ui-muted"></span></div>
+                <div id="job-cards" aria-label="Job list"><p class="jobs-empty">Loading saved jobs…</p></div>
+                <div id="job-pagination"></div>
             </div>
-        </div>
-        <button type="button" class="ui-button" onclick="window.openRunLogs()">Load run history</button>
-        <div id="job-view-logs" class="job-view hidden h-full overflow-y-auto">
-            <div class="p-6">
-                <div class="flex items-center justify-between mb-5">
-                    <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2">
-                        <uk-icon icon="activity" class="w-4 h-4 text-cyan-400"></uk-icon> Run Logs
-                    </h2>
-
-                </div>
-                <div id="job-logs-container">
-                    <div class="text-center py-20 text-slate-600 flex flex-col items-center justify-center gap-3 select-none">
-                        <uk-icon icon="activity" class="w-10 h-12 text-slate-700 opacity-30"></uk-icon>
-                        <p class="text-xs tracking-normal normal-case font-bold">No job runs yet</p>
+            <div id="job-batch-bar" class="hidden"></div>
+            <details class="job-management"><summary>Manage saved jobs and blocks</summary>
+                <div id="job-blocks-readout" class="hidden"></div>
+                <p class="ui-muted">Clear all saved jobs, discovery results, and run logs. Your CVs, preferences, sources, and blocks stay saved.</p>
+                <button id="job-prune-btn" type="button" class="ui-button ui-button--danger" onclick="window.pruneJobs()">Clear all saved jobs</button>
+            </details>
+        </section>
+        <section class="jobs-detail" aria-label="Job details and search activity">
+            <details id="job-run-activity" class="job-run-activity">
+                <summary>Search activity <span id="job-run-status" class="ui-muted">and run history</span></summary>
+                <button type="button" class="ui-button jobs-back" id="job-activity-back">← Back to jobs</button>
+                <div id="job-run-summary"></div>
+                <div id="job-view-progress" class="job-view hidden h-full overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-5">
+                            <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2"><uk-icon icon="search" class="w-4 h-4 text-cyan-400"></uk-icon> Finding Jobs</h2>
+                            <button id="job-run-cancel" class="ui-button ui-button--danger">Cancel</button>
+                        </div>
+                        <div id="job-progress-body"></div>
                     </div>
                 </div>
+                <button type="button" class="ui-button" onclick="window.openRunLogs()">Load run history</button>
+                <div id="job-view-logs" class="job-view hidden h-full overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-5"><h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2"><uk-icon icon="activity" class="w-4 h-4 text-cyan-400"></uk-icon> Run Logs</h2></div>
+                        <div id="job-logs-container"><div class="jobs-empty">No job runs yet</div></div>
+                    </div>
+                </div>
+            </details>
+            <div id="job-view-details" class="job-view">
+                <button type="button" class="ui-button jobs-back" id="job-details-back">← Back to jobs</button>
+                <div id="job-details-container"></div>
             </div>
-        </div>
-    </details>
-    <div class="jobs-results">
-        <section class="jobs-list-pane jobs-list" aria-label="Jobs in selected stage">
-            <div id="job-list-view" class="flex-1 flex flex-col min-h-0 border-t border-slate-850">
-            <div class="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 border-b border-slate-850">
-                <span id="job-category-title" class="text-xs font-bold normal-case tracking-normal text-cyan-400 truncate">Jobs</span>
-                <span id="job-list-count" class="text-xs font-bold text-slate-500 shrink-0"></span>
-            </div>
-            <div id="job-cards" class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
-                <div class="text-center py-10 text-slate-600 text-xs normal-case tracking-normal font-bold select-none">Select a category to view jobs</div>
-            </div>
-            <div id="job-pagination" class="shrink-0 px-3 py-1 border-t border-slate-850"></div>
-        </div>
-            <div id="job-batch-bar" class="hidden"></div>
         </section>
-        <div id="job-view-details" class="jobs-detail job-view h-full overflow-y-auto">
-            <div id="job-details-container" class="p-6 h-full"></div>
-        </div>
     </div>
-    <details class="job-management"><summary>Manage saved jobs and blocks</summary>
-        <div id="job-blocks-readout" class="hidden"></div>
-        <p class="ui-muted">Clear all saved jobs, discovery results, and run logs. Your CVs, preferences, sources, and blocks stay saved.</p>
-        <button id="job-prune-btn" type="button" class="ui-button ui-button--danger" onclick="window.pruneJobs()">Clear all saved jobs</button>
-    </details>
     <dialog id="job-setup" class="ui-dialog jobs-setup-dialog" aria-labelledby="job-setup-title" data-feedback-region>
         <header class="inspector-header"><div><h2 id="job-setup-title">Search setup</h2><p class="ui-muted">Your CV, preferences, and search sources together.</p></div><button type="button" id="job-setup-close" class="ui-button">Done</button></header>
         <div id="job-setup-notices"></div>

@@ -128,6 +128,7 @@ try {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="stylesheet" href="css/utilities.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/workspaces.css">
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased selection:bg-cyan-500/30">
     <div id="app-shell" class="h-full w-full flex">
@@ -136,10 +137,6 @@ try {
         
         <div id="chat-workspace" class="flex-1 flex flex-col h-full min-w-0">
             <?php include __DIR__ . '/views/chat-window.php'; ?>
-        </div>
-
-        <div id="memory-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">
-            <?php include __DIR__ . '/views/tab-memories.php'; ?>
         </div>
 
         <div id="gallery-workspace" class="flex-1 flex flex-col h-full min-w-0 hidden">
@@ -156,6 +153,7 @@ try {
     </div>
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
+    <?php include __DIR__ . '/views/memory-consolidation.php'; ?>
 
     <script>
         const currentActiveTab = '<?php echo $activeTab; ?>';

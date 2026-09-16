@@ -10,6 +10,7 @@ export function availability() {
     if (state.generation) {
         return { state: 'busy', message: 'Working in ' + (state.generation.title || 'another conversation'), local: true };
     }
+    if (state.memoryConsolidating) return { state: 'busy', message: 'Consolidating your saved memories', local: true };
     if (state.jobRun?.unknown) return { state: 'unknown', message: 'Job search status is unavailable. Check Search activity.' };
     if (state.jobRun) return { state: 'busy', message: 'Working on your job search', local: true };
     return current;
@@ -26,7 +27,7 @@ export function paintAvailability() {
         const detail = status.querySelector('[data-ai-detail]');
         if (detail && detail.textContent !== value.message) detail.textContent = value.message;
         const link = status.querySelector('[data-return-to-task]');
-        if (link) link.hidden = !state.generation && !state.jobRun;
+        if (link) link.hidden = !state.generation && !state.jobRun && !state.memoryConsolidating;
     }
     const blocked = value.state === 'busy' || value.state === 'offline';
     document.querySelectorAll('[data-ai-action]').forEach(button => {
@@ -57,8 +58,8 @@ export function ensureAIAvailable(target) {
     if (value.state !== 'busy' && value.state !== 'offline') return true;
     notify(value.message + (value.state === 'busy' ? ' Your draft is kept; nothing has been queued.' : ''), {
         target, id: 'ai-unavailable', kind: value.state === 'busy' ? 'warning' : 'error',
-        action: state.generation || state.jobRun ? 'View task' : undefined,
-        onAction: () => state.generation ? window.navigateConversation?.(state.generation.sessionId) : window.switchSidebarTab?.('jobs')
+        action: state.generation || state.jobRun || state.memoryConsolidating ? 'View task' : undefined,
+        onAction: viewCurrentTask
     });
     return false;
 }
@@ -97,8 +98,7 @@ export function initAvailability() {
             e.stopImmediatePropagation();
         }
         if (e.target.closest('[data-return-to-task]')) {
-            if (state.generation) window.navigateConversation?.(state.generation.sessionId);
-            else if (state.jobRun) window.switchSidebarTab?.('jobs');
+            viewCurrentTask();
         }
     }, true);
     document.addEventListener('visibilitychange', () => {
@@ -107,4 +107,10 @@ export function initAvailability() {
     });
     window.addEventListener('focus', () => { if (!document.hidden) refreshAvailability(); });
     refreshAvailability();
+}
+
+function viewCurrentTask() {
+    if (state.generation) window.navigateConversation?.(state.generation.sessionId);
+    else if (state.memoryConsolidating) { window.switchSidebarTab?.('memories'); window.openMemoryConsolidation?.(); }
+    else if (state.jobRun) window.switchSidebarTab?.('jobs');
 }

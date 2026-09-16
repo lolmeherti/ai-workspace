@@ -1,12 +1,14 @@
 import { getJson, flash } from './jobUtil.js';
 import { confirmAction } from '../workspace/feedback.js';
 export function switchJobView(viewName) {
+    if (viewName === 'details') document.querySelector('.jobs-results')?.classList.remove('has-activity');
     if (['cvs', 'profile', 'registry'].includes(viewName)) {
         const dialog = document.getElementById('job-setup');
         if (!dialog.open) { dialog.showModal(); document.dispatchEvent(new Event('job-setup-opened')); }
         if (viewName === 'registry') document.getElementById('job-source-settings').open = true;
         document.getElementById('job-view-' + viewName)?.scrollIntoView({ block: 'nearest' });
     } else if (['progress', 'logs'].includes(viewName)) {
+        document.querySelector('.jobs-results')?.classList.add('has-activity');
         document.getElementById('job-run-activity').open = true;
         document.getElementById('job-view-' + viewName)?.classList.remove('hidden');
     }

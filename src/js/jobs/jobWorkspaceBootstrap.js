@@ -35,3 +35,4 @@ document.getElementById('job-setup-open')?.addEventListener('click', () => switc
 document.getElementById('job-setup-close')?.addEventListener('click', closeJobSetup);
 document.getElementById('job-setup')?.addEventListener('cancel', e => { e.preventDefault(); closeJobSetup(); });
 document.getElementById('job-setup')?.addEventListener('input', e => { const form = e.target.closest('form'); if (form) form.dataset.dirty = 'true'; });
+document.getElementById('job-activity-back')?.addEventListener('click', clearDetails);
