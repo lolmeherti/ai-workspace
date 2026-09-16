@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { execFileSync } from 'node:child_process';
-export const root = new URL('../../', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+export const root = fileURLToPath(new URL('../../', import.meta.url));
 export function fixture(query = 'session_id=3&tab=chats') {
     return execFileSync(process.env.LOCALSY_PHP || 'php', ['tests/ui/preview.php', query], { cwd: root, encoding: 'utf8', maxBuffer: 4000000 });
 }

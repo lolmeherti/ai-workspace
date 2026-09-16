@@ -263,6 +263,16 @@ class AISettingsController extends BaseController
 
         $status = json_decode($response, true) ?: [];
 
+        // The Go switch-status only carries runtime_policy/sampling during an
+        // active model switch; on a cold start it is empty. Fall back to the
+        // persisted policy the launcher wrote at boot (LLM_RUNTIME_POLICY) so
+        // the reasoning control sees the current model's effort_map even when
+        // no switch is running. Gated on !active so an in-flight switch keeps
+        // the Go-resolved value for the incoming model.
+        if (empty($status['active']) && empty($status['runtime_policy'])) {
+            $status['runtime_policy'] = (string) \App\Config::get('LLM_RUNTIME_POLICY', '{}');
+        }
+
         // Persist the model identity to the PHP .env once the switch lands,
         // so the UI reflects the new model after the page reloads.
         if (empty($status['active']) && ($status['stage'] ?? '') === 'loaded' && !empty($status['model_id'])) {

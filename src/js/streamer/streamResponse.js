@@ -459,7 +459,7 @@ export async function streamResponse(formData, originalMessage) {
             <div class="px-3 pb-3 pt-2 border-t border-emerald-500/10 bg-[#070b14]/40">
                 <div class="trace-active-task hidden mb-2 px-2 py-1.5 rounded-md bg-emerald-500/5 border border-emerald-500/20 font-mono text-[0.7rem] relative overflow-hidden flex items-center">
                     <div class="trace-scan-overlay absolute inset-0 pointer-events-none"></div>
-                    <span class="ui-spinner trace-spinner" aria-hidden="true"></span>
+                    <span class="ui-spinner trace-spinner mr-1.5" aria-hidden="true"></span>
                     <span class="trace-active-check mr-1.5 text-emerald-400 hidden">\u2713</span>
                     <span class="trace-active-label text-emerald-300/90"></span>
                     <span class="trace-cursor text-emerald-400 ml-0.5">\u2588</span>

@@ -29,12 +29,11 @@
                     </svg>
                     <span>CONDENSE CHAT</span>
                 </button>
+                <button type="button" id="context-toggle" aria-controls="context-data-panel" aria-expanded="false" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-xs tracking-normal transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Toggle Context Data">
+                    <uk-icon icon="database" class="w-3.5 h-3.5" aria-hidden="true"></uk-icon>
+                    <span>Context Data</span> <span id="context-data-count" class="ui-count"><?php echo count(array_filter($history ?? [], fn($m) => ($m['message_type'] ?? '') === 'data_fetching')); ?></span>
+                </button>
             </div>
-
-            <button type="button" id="context-toggle" class="ui-button" aria-controls="context-data-panel" aria-expanded="false">
-                <uk-icon icon="database" class="w-4 h-4" aria-hidden="true"></uk-icon>
-                Context Data <span id="context-data-count" class="ui-count"><?php echo count(array_filter($history ?? [], fn($m) => ($m['message_type'] ?? '') === 'data_fetching')); ?></span>
-            </button>
         </div>
     </header>
 
@@ -71,22 +70,28 @@
                         .effort-btn { transition: all .15s ease; }
                         .effort-btn.effort-active { background: rgba(34,211,238,0.14); color: #67e8f9; border-color: rgba(34,211,238,0.45); }
                     </style>
+<?php
+$grad = $reasoningGraduated ?? false;
+$eff  = $reasoningEffort ?? 'medium';
+$effBtn = 'effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent';
+$effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : '';
+?>
                     <div id="effort-control" class="flex items-center justify-end gap-2 mb-2">
                         <span class="text-xs normal-case tracking-normal text-slate-500 font-semibold">Reasoning</span>
-                        <div id="effort-graduated" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
-                            <button type="button" data-effort="low" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Low</button>
-                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Medium</button>
-                            <button type="button" data-effort="high" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">High</button>
+                        <div id="effort-graduated" style="<?php echo $grad ? 'display:flex' : 'display:none'; ?>" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="low" class="<?php echo $effBtn . $effActive('low'); ?>" aria-pressed="<?php echo $eff === 'low' ? 'true' : 'false'; ?>">Low</button>
+                            <button type="button" data-effort="medium" class="<?php echo $effBtn . $effActive('medium'); ?>" aria-pressed="<?php echo $eff === 'medium' ? 'true' : 'false'; ?>">Medium</button>
+                            <button type="button" data-effort="high" class="<?php echo $effBtn . $effActive('high'); ?>" aria-pressed="<?php echo $eff === 'high' ? 'true' : 'false'; ?>">High</button>
                         </div>
-                        <div id="effort-binary" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
-                            <button type="button" data-effort="off" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Off</button>
-                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">On</button>
+                        <div id="effort-binary" style="<?php echo $grad ? 'display:none' : 'display:flex'; ?>" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="off" class="<?php echo $effBtn . $effActive('off'); ?>" aria-pressed="<?php echo $eff === 'off' ? 'true' : 'false'; ?>">Off</button>
+                            <button type="button" data-effort="medium" class="<?php echo $effBtn . $effActive('medium'); ?>" aria-pressed="<?php echo $eff === 'medium' ? 'true' : 'false'; ?>">On</button>
                         </div>
                     </div>
                     <div id="composer-notices" class="composer-notices"></div>
                     <form id="chatForm" class="relative">
                         <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
-                        <input type="hidden" name="effort" id="effort-input" value="medium">
+                        <input type="hidden" name="effort" id="effort-input" value="<?php echo htmlspecialchars($eff); ?>">
                         <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                         
                         <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>

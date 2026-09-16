@@ -1,33 +1,59 @@
-/** Context inspector. Detached conversation nodes remain isolated while a stream runs. */
+/** Context inspector. Full-height drawer: query, actions, sources, facts and apply workflow. */
 import { requestJson, notify, confirmAction, withPending } from '../workspace/feedback.js';
 import { ensureAIAvailable, reportBusy, paintAvailability } from '../workspace/availability.js';
+import { updateConversation } from './chatNavigation.js';
 import { state } from '../state.js';
-import { renderSourcesList } from './sourceCards.js';
 
 let epoch = 0;
 let dirty = false;
 let pending = false;
 let currentData = null;
 let returnFocus = null;
+let editMode = null;   // null | 'evidence' | 'facts'
+let factsPreview = false;
+
 const labels = { raw: 'Full evidence', raw_atoms: 'Evidence + key facts', atomized: 'Key facts only', evicted: 'Excluded' };
 const panel = () => document.getElementById('context-data-panel');
 const host = () => document.getElementById('context-detail-host');
 const list = () => document.getElementById('context-data-items');
 function stateOf(d) { return d.raw_evicted ? d.atomic_context?.length ? 'atomized' : 'evicted' : d.atomic_context?.length ? 'raw_atoms' : 'raw'; }
-function node(tag, text, cls = '') { const el = document.createElement(tag); el.textContent = text; el.className = cls; return el; }
-function button(text, fn, variant = '') { const el = node('button', text, `ui-button${variant ? ` ui-button--${variant}` : ''}`); el.type = 'button'; el.addEventListener('click', () => withPending(el, fn, { target: host() })); return el; }
+function el(tag, cls = '', text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+const ICON = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+const ICONS = {
+    search: ICON('<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>'),
+    copy: ICON('<path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>'),
+    bolt: ICON('<path d="M13 10V3L4 14h7v7l9-11h-7z"/>'),
+    edit: ICON('<path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'),
+    globe: ICON('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>'),
+    external: ICON('<path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
+    arrow: ICON('<path d="M10 19l-7-7m0 0l7-7m-7 7h18"/>'),
+};
+function icon(name, cls = '') {
+    const s = document.createElement('span');
+    s.className = 'inline-flex flex-shrink-0';
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = ICONS[name].replace('<svg ', `<svg class="${cls}" `);
+    return s;
+}
+
 const fetchView = id => requestJson(`index.php?view_context=${encodeURIComponent(id)}&ajax=1`);
 const post = (op, id, claims) => {
     const body = new URLSearchParams({ action: 'atomize_context', op, id: String(id) });
     if (claims !== undefined) body.set('claims', JSON.stringify(claims));
     return requestJson('index.php', { method: 'POST', body });
 };
+function applyContextTokens(res) {
+    if (res && typeof res.total_session_tokens === 'number') {
+        updateConversation(state.sessionId, { tokens: res.total_session_tokens });
+    }
+}
 export async function canLeaveContext() {
     if (pending) { notify('Context is being updated. Wait for this operation to finish.', { target: host() }); return false; }
     return !dirty || await confirmAction({ title: 'Discard unsaved context changes?', message: 'Your edits or extracted preview have not been saved.', confirmLabel: 'Discard changes', destructive: true });
 }
 export function resetContextDetail() {
-    epoch++; dirty = false; currentData = null;
+    epoch++; dirty = false; currentData = null; editMode = null; factsPreview = false;
     if (host()) { host().replaceChildren(); host().hidden = true; }
     if (list()) list().hidden = false;
 }
@@ -82,7 +108,7 @@ export async function viewContextItem(id) {
     if (!await canLeaveContext()) return;
     resetContextDetail(); openContextPanel();
     const version = ++epoch;
-    host().hidden = false; list().hidden = true; host().replaceChildren(node('p', 'Loading evidence…', 'text-slate-400'));
+    host().hidden = false; list().hidden = true; host().replaceChildren(renderLoadingEvidence());
     try { const d = await fetchView(id); if (version === epoch) fill(d); }
     catch (e) { if (version === epoch) notify(e.message, { target: host(), action: 'Retry', onAction: () => viewContextItem(id) }); }
 }
@@ -93,53 +119,352 @@ export function parseAtomLines(text) {
         return { source_id: m[1], claim: m[2] };
     });
 }
-function factsEditor(d, claims, preview) {
-    const area = host().querySelector('.context-atoms'); area.replaceChildren(); dirty = preview;
-    const label = node('label', preview ? 'Preview — review before applying' : 'Edit key facts'); label.htmlFor = 'context-fact-editor';
-    const ta = node('textarea', ''); ta.id = 'context-fact-editor'; ta.rows = 9;
-    ta.value = claims.map(c => `[${c.source_id}] ${c.claim}`).join('\n'); ta.addEventListener('input', () => { dirty = true; });
-    const actions = node('div', '', 'flex flex-wrap gap-2');
-    actions.append(button(preview ? 'Use key facts instead of full evidence' : 'Save key facts', async () => {
-        const parsed = parseAtomLines(ta.value);
-        if (!parsed.length) throw new Error('Add at least one key fact, or cancel.');
-        pending = true;
-        try { await post(preview ? 'commit' : 'edit_atoms', d.id, parsed); dirty = false; await refreshContextItem(d.id); unlock(); }
-        finally { pending = false; }
-    }, 'primary'), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
-    area.append(label, ta, node('p', 'One [source_id] fact per line. Applying a preview removes the full evidence from the active context; you can restore it later.', 'text-xs text-slate-400'), actions);
-    ta.focus();
+
+/* ----------------------------------------------------------------------------
+ * Drawer detail view (matches plans/concepts/context-data.html context-drawer)
+ * ------------------------------------------------------------------------- */
+
+function activeTokens(d) {
+    const raw = d.raw_evicted ? 0 : (Number(d.token_estimate) || 0);
+    const atoms = d.atomic_context?.length ? (Number(d.atomic_tokens) || 0) : 0;
+    return raw + atoms;
 }
+function queryText(d) { return d.search_query || d.tool_name || 'Context source'; }
+function estimateTokens(text) { return Math.max(1, Math.round(String(text || '').length / 4)); }
+function validUrl(url) { try { const u = new URL(url); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
+
+/** Render markdown via the global `marked`. Escapes raw HTML first (evidence is scraped text, never trusted markup), then returns HTML or null when `marked` is unavailable. */
+function renderMd(text) {
+    const src = text == null ? '' : String(text);
+    if (typeof marked !== 'undefined') {
+        try {
+            const escaped = src.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return marked.parse(escaped);
+        } catch (e) { /* fall through to null */ }
+    }
+    return null;
+}
+
+/** Display cards: parsed sources first, source_map fallback, plain manual last. */
+function sourceFeed(d) {
+    const map = (d.sources && typeof d.sources === 'object') ? d.sources : {};
+    if (d.parsed?.length) {
+        return d.parsed.map(s => {
+            const meta = map[s.id] || {};
+            const text = (s.chunks || []).join('\n').trim();
+            return { id: s.id, title: s.title || meta.title || s.id, domain: s.domain || meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
+        });
+    }
+    const ids = Object.keys(map);
+    if (ids.length) {
+        return ids.map(id => {
+            const meta = map[id] || {};
+            const text = d.message || '';
+            return { id, title: meta.title || meta.domain || id, domain: meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
+        });
+    }
+    return [{ id: 'manual', title: d.tool_name || 'Evidence', domain: '', url: '', text: d.message || '', tokens: estimateTokens(d.message) }];
+}
+
+/** Edit contract: source ids must match ContextDataViewAction::parseSources (or 'manual'). */
+function editorSources(d) {
+    if (d.parsed?.length) return d.parsed.map(s => ({ id: s.id, title: s.title || s.id, text: (s.chunks || []).join('\n') }));
+    return [{ id: 'manual', title: 'Evidence', text: d.message || '' }];
+}
+
+async function copyQuery(d) {
+    try { await navigator.clipboard.writeText(queryText(d)); notify('Query copied.', { target: host(), kind: 'info' }); }
+    catch { notify('Could not copy the query.', { target: host() }); }
+}
+
+function renderBreadcrumb() {
+    const wrap = el('div', 'flex items-center justify-between text-[11px] px-1 shrink-0');
+    const back = el('button', 'context-link-btn text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium transition-colors');
+    back.type = 'button';
+    back.append(icon('arrow', 'w-3 h-3'), document.createTextNode('All context'));
+    back.addEventListener('click', () => { withPending(back, async () => { if (await canLeaveContext()) resetContextDetail(); }, { target: host() }); });
+    wrap.append(back, el('span', 'text-slate-500 text-[10px]', 'Evidence & extracted facts'));
+    return wrap;
+}
+
+function renderLoadingEvidence() {
+    const wrap = el('div', 'context-loading');
+    wrap.setAttribute('role', 'status'); wrap.setAttribute('aria-live', 'polite');
+    const row = el('div', 'context-skeleton-row');
+    row.append(el('div', 'context-skeleton'), el('div', 'context-skeleton'));
+    wrap.append(el('div', 'context-skeleton h-lg'), row, el('div', 'context-skeleton h-md'), el('div', 'context-skeleton h-md'));
+    return wrap;
+}
+
+function renderQueryBox(d) {
+    const box = el('div', 'context-query-box bg-[#0c1625] border border-[#172d47] rounded-lg p-2.5 text-xs space-y-1.5');
+    const head = el('div', 'flex items-center justify-between');
+    const label = el('span', 'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400');
+    label.append(icon('search', 'w-3 h-3 text-cyan-400'), el('span', '', 'Search Query'));
+    const copy = el('button', 'context-icon-btn text-slate-400 hover:text-cyan-400 transition-colors');
+    copy.type = 'button'; copy.title = 'Copy query';
+    copy.append(icon('copy', 'w-3 h-3'));
+    copy.addEventListener('click', () => copyQuery(d));
+    head.append(label, copy);
+    box.append(head, el('p', 'font-mono text-[11px] text-slate-200 truncate select-text', queryText(d)));
+    return box;
+}
+
+async function toggleContextInclude(id) {
+    if (pending || !await canLeaveContext()) return;
+    const op = currentData?.raw_evicted ? 'restore' : 'evict_raw';
+    pending = true;
+    try {
+        const res = await post(op, id); dirty = false;
+        if (op === 'evict_raw') unlock();
+        applyContextTokens(res);
+        await refreshContextItem(id);
+    } finally { pending = false; }
+}
+
+function renderToggle(d) {
+    const wrap = el('div', 'flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#0a1422] border border-[#172c46] text-xs');
+    const info = el('div', 'min-w-0');
+    info.append(el('div', 'text-[11px] text-slate-300', 'Include in model context'));
+    const sub = d.raw_evicted
+        ? 'Disabled: context excluded from next prompt'
+        : `Active: feeds ${activeTokens(d)} tokens into chat answers`;
+    info.append(el('div', `text-[10px] ${d.raw_evicted ? 'text-slate-500' : 'text-slate-400'}`, sub));
+    const sw = el('button', 'context-switch');
+    sw.type = 'button'; sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', String(!d.raw_evicted));
+    sw.setAttribute('aria-label', 'Include in model context');
+    sw.append(el('span', 'context-switch-knob'));
+    sw.addEventListener('click', () => { withPending(sw, () => toggleContextInclude(d.id), { target: host() }); });
+    wrap.append(info, sw);
+    return wrap;
+}
+
+function renderActions(d) {
+    const wrap = el('div', 'context-actions space-y-2');
+    const grid = el('div', 'grid grid-cols-2 gap-2');
+    const extract = el('button', 'py-1.5 px-2 rounded-md bg-cyan-400 hover:bg-cyan-300 text-[#07131e] font-semibold text-xs transition-colors flex items-center justify-center gap-1');
+    extract.type = 'button'; extract.append(icon('bolt', 'w-3.5 h-3.5'), document.createTextNode('Extract key facts'));
+    extract.addEventListener('click', () => { withPending(extract, () => d.atomic_context?.length ? reAtomizeContextItem(d.id) : atomizeContextItem(d.id), { target: host() }); });
+    const editAll = el('button', 'py-1.5 px-2 rounded-md bg-[#112238] hover:bg-[#162d4a] border border-[#1e3b61] text-slate-200 text-xs font-medium transition-colors flex items-center justify-center gap-1');
+    editAll.type = 'button'; editAll.append(icon('edit', 'w-3.5 h-3.5 text-slate-400'), document.createTextNode('Edit all evidence'));
+    editAll.addEventListener('click', () => { withPending(editAll, async () => { if (await canLeaveContext()) { if (currentData?.id === d.id) startEvidenceEdit(d); else await editEvidenceContextItem(d.id); } }, { target: host() }); });
+    grid.append(extract, editAll);
+    wrap.append(grid, renderToggle(d));
+    return wrap;
+}
+
+function renderSourceCard(src) {
+    const card = el('div', 'context-source-card bg-[#0e1a2b] border border-[#172c46] rounded-lg p-2.5 space-y-2');
+    const top = el('div', 'flex items-start justify-between gap-1.5');
+    const meta = el('div', 'flex items-start gap-1.5 min-w-0 flex-1');
+    meta.append(icon('globe', 'w-3.5 h-3.5 text-cyan-400 mt-0.5 flex-shrink-0'));
+    const info = el('div', 'min-w-0 flex-1');
+    const titleRow = el('div', 'flex items-center gap-1.5');
+    titleRow.append(el('h4', 'text-xs font-semibold text-slate-100 truncate', src.title || src.id));
+    titleRow.append(el('span', 'text-[10px] font-mono text-cyan-300 bg-[#102035] px-1 rounded flex-shrink-0', `~${src.tokens} tok`));
+    info.append(titleRow);
+    if (src.domain) info.append(el('span', 'text-[10px] text-slate-400 font-mono block truncate', src.domain));
+    meta.append(info);
+    top.append(meta);
+    if (validUrl(src.url)) {
+        const a = el('a', 'context-icon-btn text-slate-400 hover:text-white');
+        a.href = validUrl(src.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = 'Open link';
+        a.append(icon('external', 'w-3 h-3'));
+        top.append(a);
+    }
+    const snippet = el('div', 'context-evidence-text p-3 rounded bg-[#070d17] border border-[#142337] overflow-y-auto text-xs text-slate-300 leading-relaxed max-h-48 select-text markdown-content');
+    const snippetHtml = renderMd(src.text || 'No source text available.');
+    if (snippetHtml !== null) snippet.innerHTML = snippetHtml; else snippet.textContent = src.text || 'No source text available.';
+    card.append(top, snippet);
+    return card;
+}
+
+function renderSources(d) {
+    const wrap = el('div', 'context-sources space-y-2');
+    const feed = sourceFeed(d);
+    const head = el('div', 'flex items-center justify-between text-xs text-slate-300 font-medium px-1');
+    const left = el('div', 'flex items-center gap-1.5');
+    left.append(icon('globe', 'w-3.5 h-3.5 text-cyan-400'), el('span', '', 'Sources & Evidence'));
+    left.append(el('span', 'px-1.5 py-0.2 rounded-full bg-[#10233b] text-cyan-300 text-[10px] font-mono border border-cyan-500/20', String(feed.length)));
+    head.append(left, el('span', 'text-[10px] text-slate-400', `${feed.length} source${feed.length === 1 ? '' : 's'} linked`));
+    wrap.append(head);
+    for (const src of feed) wrap.append(renderSourceCard(src));
+    return wrap;
+}
+
+function renderFacts(d) {
+    const wrap = el('div', 'context-facts p-2.5 rounded-lg bg-[#0a1422] border border-[#172c46] space-y-1.5');
+    const head = el('div', 'flex items-center justify-between text-xs');
+    const left = el('span', 'font-semibold text-slate-300 flex items-center gap-1.5');
+    left.append(el('span', 'w-1.5 h-1.5 rounded-full bg-slate-500 flex-shrink-0'), el('span', '', 'Extracted Facts'));
+    const right = el('div', 'flex items-center gap-2');
+    right.append(el('span', 'font-mono text-[10px] text-slate-500', `${Number(d.atomic_tokens) || 0} tokens`));
+    if (d.atomic_context?.length) {
+        const edit = el('button', 'context-link-btn text-cyan-400 hover:text-cyan-300');
+        edit.type = 'button'; edit.textContent = 'Edit';
+        edit.addEventListener('click', () => { withPending(edit, async () => { if (await canLeaveContext()) startFactsEdit(d, d.atomic_context, false); }, { target: host() }); });
+        const del = el('button', 'context-link-btn text-slate-400 hover:text-rose-300');
+        del.type = 'button'; del.textContent = 'Delete';
+        del.addEventListener('click', () => { withPending(del, () => deleteAtomsContextItem(d.id), { target: host() }); });
+        right.append(edit, del);
+    }
+    head.append(left, right);
+    wrap.append(head);
+    const body = el('div', 'context-atoms');
+    if (d.atomic_context?.length) {
+        const raw = d.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
+        const html = renderMd(d.atomic_context.map(c => `- **${c.source_id}** ${c.claim}`).join('\n'));
+        const md = el('div', 'markdown-content context-atoms-list');
+        if (html !== null) md.innerHTML = html; else md.textContent = raw;
+        body.append(md);
+    } else {
+        body.append(el('p', 'text-[11px] text-slate-500 italic leading-relaxed', 'No facts extracted yet. Click “Extract key facts” to distill evidence into verified bullet points.'));
+    }
+    wrap.append(body);
+    return wrap;
+}
+
+function renderBody(d) {
+    const body = el('div', 'context-detail-body');
+    body.append(renderQueryBox(d), renderActions(d), renderSources(d), renderFacts(d));
+    return body;
+}
+
+function renderFooter(d) {
+    const f = el('div', 'context-footer p-3 border-t border-[#15253b] bg-[#070d17] space-y-2 shrink-0');
+    const status = el('div', 'flex items-center justify-between text-[10px] font-mono');
+    status.append(el('span', 'text-slate-400', `● ${activeTokens(d)} tokens in active chat`));
+    status.append(el('span', dirty ? 'text-slate-400' : 'text-slate-500', dirty ? 'Unapplied changes staged' : 'Up to date'));
+    const actions = el('div', 'flex items-center gap-2');
+    if (editMode) {
+        const cancel = el('button', 'flex-1 py-1.5 px-3 rounded-lg bg-[#112238] hover:bg-[#162d4a] border border-[#1e3b61] text-slate-200 text-xs font-medium transition-colors', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', () => { withPending(cancel, async () => { if (await canLeaveContext()) fill(d); }, { target: host() }); });
+        const save = el('button', 'py-1.5 px-3 rounded-lg bg-cyan-300 hover:bg-cyan-200 text-[#07131e] font-semibold text-xs transition-colors', 'Save & Apply');
+        save.type = 'button';
+        save.addEventListener('click', () => { withPending(save, () => applyEdits(d), { target: host() }); });
+        actions.append(cancel, save);
+    } else {
+        const exclude = el('button', 'flex-1 py-1.5 px-3 rounded-lg bg-[#3a1b24] hover:bg-[#48202c] border border-rose-900/50 text-rose-300 font-medium text-xs transition-colors', d.raw_evicted ? 'Restore evidence' : 'Exclude context');
+        exclude.type = 'button';
+        exclude.addEventListener('click', () => { withPending(exclude, () => d.raw_evicted ? restoreContextItem(d.id) : evictRawContextItem(d.id), { target: host() }); });
+        const applied = el('button', 'py-1.5 px-3 rounded-lg bg-[#102338] text-slate-400 border border-[#1d3759] text-xs cursor-default', '✓ Applied to Chat');
+        applied.type = 'button'; applied.disabled = true;
+        actions.append(exclude, applied);
+    }
+    f.append(status, actions);
+    return f;
+}
+function rerenderFooter(d) { const old = host().querySelector('.context-footer'); if (old) old.replaceWith(renderFooter(d)); }
+
+function fill(d) {
+    currentData = d; dirty = false; editMode = null; factsPreview = false;
+    const root = host(); root.hidden = false; list().hidden = true; root.replaceChildren();
+    root.append(renderBreadcrumb(), renderBody(d), renderFooter(d));
+}
+
 function unlock() {
     state.contextLocked = false;
     const q = document.getElementById('q'); if (q) { q.disabled = false; q.placeholder = 'Message Localsy…'; }
     paintAvailability();
 }
+
+async function applyEdits(d) {
+    if (pending) return;
+    if (editMode === 'evidence') return saveEvidence(d);
+    if (editMode === 'facts') return saveFacts(d);
+}
+
+function startEvidenceEdit(d) {
+    editMode = 'evidence'; dirty = true;
+    const area = host().querySelector('.context-sources'); if (!area) return;
+    area.replaceChildren();
+    const sources = editorSources(d);
+    sources.forEach((s, i) => {
+        const label = el('label', 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1', s.title);
+        label.htmlFor = `context-evidence-${i}`;
+        const ta = el('textarea', 'context-evidence-editor w-full min-h-24 p-2 rounded bg-[#070d17] border border-[#142337] font-mono text-[11px] text-slate-300 leading-relaxed resize-y');
+        ta.id = label.htmlFor; ta.rows = 8; ta.value = s.text;
+        ta.addEventListener('input', () => { dirty = true; });
+        area.append(label, ta);
+    });
+    area.append(el('p', 'text-[11px] text-slate-500 italic', 'Editing replaces the retained evidence and clears existing key facts so removed text is not reused.'));
+    rerenderFooter(d);
+    area.querySelector('textarea')?.focus();
+}
+
+async function saveEvidence(d) {
+    if (pending) return;
+    const editors = [...host().querySelectorAll('.context-evidence-editor')];
+    const sources = editorSources(d);
+    const evidence = sources.map((s, i) => ({ id: s.id, text: editors[i]?.value ?? '' }));
+    pending = true;
+    try {
+        const body = new URLSearchParams({ action: 'atomize_context', op: 'edit_raw', id: String(d.id), base_message: d.message || '', evidence: JSON.stringify(evidence) });
+        const res = await requestJson('index.php', { method: 'POST', body });
+        dirty = false; editMode = null;
+        applyContextTokens(res);
+        await refreshContextItem(d.id);
+        notify('Evidence saved. Extract key facts when you are ready.', { target: host(), kind: 'info' });
+    } finally { pending = false; }
+}
+
 async function runPreview(id, op) {
     if (pending || !ensureAIAvailable(host()) || !await canLeaveContext()) return;
     if (currentData?.id != id) await viewContextItem(id);
     if (currentData?.id != id) return;
     const d = currentData; const version = epoch; pending = true;
-    const progress = node('div', '', 'context-progress'); progress.id = 'context-extraction-progress';
-    const spinner = node('span', '', 'ui-spinner'); spinner.setAttribute('aria-hidden', 'true');
-    const copy = node('span', ''); copy.append(node('strong', 'Extracting key facts…'), node('span', 'The AI is reviewing the retained evidence. This can take a moment.'));
+    const progress = el('div', 'context-progress'); progress.id = 'context-extraction-progress';
+    const spinner = el('span', 'ui-spinner'); spinner.setAttribute('aria-hidden', 'true');
+    const copy = el('span'); copy.append(el('strong', '', 'Extracting key facts…'), el('span', '', 'The AI is reviewing the retained evidence. This can take a moment.'));
     progress.append(spinner, copy); progress.setAttribute('role', 'status'); progress.setAttribute('aria-live', 'polite');
-    host().prepend(progress); host().setAttribute('aria-busy', 'true'); host().scrollTop = 0;
-    const area = host().querySelector('.context-atoms'); area.replaceChildren(node('p', 'Extracting key facts… Your saved evidence is unchanged.', 'text-slate-400')); area.setAttribute('aria-busy', 'true');
+    host().prepend(progress); host().setAttribute('aria-busy', 'true');
+    const area = host().querySelector('.context-atoms'); area.replaceChildren(el('p', 'text-slate-400', 'Extracting key facts… Your saved evidence is unchanged.')); area.setAttribute('aria-busy', 'true');
     try {
         const res = await post(op, id);
         if (version !== epoch) return;
         progress.remove();
-        if (res.status === 'preview') factsEditor(d, res.claims || [], true);
+        if (res.status === 'preview') startFactsEdit(d, res.claims || [], true);
         else { fill(d); notify(res.message || 'No key facts were found.', { target: host(), kind: 'info' }); }
     } catch (e) { if (version === epoch) { fill(d); notify(e.message, { target: host() }); if (e.code === 'model_busy') reportBusy(e.message); } }
     finally { pending = false; progress.remove(); host()?.removeAttribute('aria-busy'); area.removeAttribute('aria-busy'); }
 }
+
+function startFactsEdit(d, claims, preview) {
+    editMode = 'facts'; factsPreview = preview; dirty = true;
+    const area = host().querySelector('.context-facts'); if (!area) return;
+    area.replaceChildren();
+    const ta = el('textarea', 'context-fact-editor w-full min-h-28 p-2 rounded bg-[#070d17] border border-[#142337] font-mono text-[11px] text-slate-300 leading-relaxed resize-y');
+    ta.id = 'context-fact-editor'; ta.rows = 7;
+    ta.value = claims.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
+    ta.addEventListener('input', () => { dirty = true; });
+    area.append(ta, el('p', 'text-[11px] text-slate-500 italic', preview ? 'Preview — review before applying. Saving replaces the full evidence with these facts.' : 'One [source_id] fact per line.'));
+    rerenderFooter(d);
+    ta.focus();
+}
+
+async function saveFacts(d) {
+    const ta = host().querySelector('#context-fact-editor'); if (!ta) return;
+    const parsed = parseAtomLines(ta.value);
+    if (!parsed.length) throw new Error('Add at least one key fact, or cancel.');
+    pending = true;
+    try {
+        const res = await post(factsPreview ? 'commit' : 'edit_atoms', d.id, parsed);
+        dirty = false; editMode = null;
+        applyContextTokens(res);
+        await refreshContextItem(d.id);
+        unlock();
+    } finally { pending = false; }
+}
+
 async function mutate(id, op) {
     if (pending || !await canLeaveContext()) return;
     if (['delete_atoms', 'evict_raw'].includes(op) && !await confirmAction({ title: op === 'delete_atoms' ? 'Delete these key facts?' : 'Exclude full evidence?', message: op === 'delete_atoms' ? 'The extracted key facts will be deleted. Original evidence remains available to restore.' : 'The full source text will stop being sent to the AI. Saved key facts remain active. You can restore the evidence later.', confirmLabel: op === 'delete_atoms' ? 'Delete key facts' : 'Exclude evidence', destructive: true })) return;
     pending = true;
     try {
-        await post(op, id); dirty = false; await refreshContextItem(id);
+        const res = await post(op, id); dirty = false;
+        applyContextTokens(res);
+        await refreshContextItem(id);
         if (op !== 'restore') unlock();
     }
     finally { pending = false; }
@@ -150,52 +475,13 @@ export const evictRawContextItem = id => mutate(id, 'evict_raw');
 export const restoreContextItem = id => mutate(id, 'restore');
 export const deleteAtomsContextItem = id => mutate(id, 'delete_atoms');
 export async function editAtomsContextItem(id, claims) { await post('edit_atoms', id, claims); dirty = false; return refreshContextItem(id); }
-function evidenceEditor(d) {
-    fill(d);
-    const area = host().querySelector('.context-evidence'); area.open = true; area.replaceChildren(node('summary', 'Edit full evidence'));
-    area.append(node('p', 'Edit or paste text below. Saving replaces the retained evidence and clears existing key facts so removed text is not reused. Inclusion in the AI context stays unchanged.', 'ui-muted'));
-    const sources = d.parsed?.length ? d.parsed : [{ id: 'manual', title: 'Evidence', chunks: [d.message || ''] }];
-    const editors = sources.map((source, index) => {
-        const label = node('label', source.title || source.id); label.htmlFor = `context-evidence-${index}`;
-        const ta = node('textarea', '', 'context-evidence-editor'); ta.id = label.htmlFor; ta.value = source.chunks.join('\n\n'); ta.rows = 10;
-        ta.addEventListener('input', () => { dirty = true; }); area.append(label, ta);
-        return { source, ta };
-    });
-    const actions = node('div', '', 'context-actions');
-    actions.append(button('Save evidence', async () => {
-        if (pending) return;
-        pending = true;
-        editors.forEach(({ta}) => { ta.disabled = true; });
-        const body = new URLSearchParams({ action: 'atomize_context', op: 'edit_raw', id: String(d.id), base_message: d.message || '', evidence: JSON.stringify(editors.map(({source, ta}) => ({ id: source.id, text: ta.value }))) });
-        try {
-            await requestJson('index.php', { method: 'POST', body }); dirty = false;
-            await refreshContextItem(d.id);
-            notify('Evidence saved. Extract key facts when you are ready.', { target: host(), kind: 'info' });
-        } finally { pending = false; editors.forEach(({ta}) => { ta.disabled = false; }); }
-    }, 'primary'), button('Cancel', async () => { if (await canLeaveContext()) fill(d); }));
-    area.append(actions); editors[0]?.ta.focus();
-}
 export async function editEvidenceContextItem(id) {
     await viewContextItem(id);
-    if (currentData?.id == id && !dirty && !pending) evidenceEditor(currentData);
+    if (currentData?.id == id && !dirty && !pending) startEvidenceEdit(currentData);
 }
-function fill(d) {
-    currentData = d; dirty = false; const root = host(); root.hidden = false; list().hidden = true; root.replaceChildren();
-    root.append(button('← All context', async () => { if (await canLeaveContext()) resetContextDetail(); }), node('h3', d.search_query || d.tool_name || 'Context source'), node('p', labels[stateOf(d)], 'context-badge'));
-    const topActions = node('div', '', 'context-actions');
-    topActions.append(button('Edit evidence', async () => { if (await canLeaveContext()) evidenceEditor(d); }, 'secondary'), button(d.atomic_context?.length ? 'Extract again' : 'Extract key facts', () => runPreview(d.id, d.atomic_context?.length ? 're-atomize' : 'atomize'), 'primary'));
-    root.append(topActions);
-    if (d.sources && Object.keys(d.sources).length) renderSourcesList(root, Object.values(d.sources));
-    const raw = node('details', '', 'context-evidence'); raw.append(node('summary', `Full evidence · ~${Number(d.token_estimate) || 0} tokens${d.raw_evicted ? ' · excluded' : ''}`));
-    // Evidence is untrusted retrieved text; render it as text, preserving line breaks.
-    const text = d.parsed?.length ? d.parsed.map(s => [s.title || s.id, ...(s.chunks || [])].join('\n')).join('\n\n') : d.message;
-    raw.append(node('pre', text || 'No source text available.', 'whitespace-pre-wrap break-words')); root.append(raw);
-    root.append(node('h4', `Key facts · ~${Number(d.atomic_tokens) || 0} tokens`));
-    const atoms = node('div', '', 'context-atoms'); atoms.append(node('pre', d.atomic_context?.length ? d.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n') : 'No key facts extracted yet.', 'whitespace-pre-wrap break-words')); root.append(atoms);
-    const bar = node('div', '', 'flex flex-wrap gap-2');
-    if (d.atomic_context?.length) bar.append(button('Edit key facts', async () => { if (await canLeaveContext()) { fill(d); factsEditor(d, d.atomic_context, false); } }, 'secondary'), button('Delete key facts', () => mutate(d.id, 'delete_atoms'), 'danger'));
-    bar.append(button(d.raw_evicted ? 'Restore full evidence' : 'Exclude full evidence', () => mutate(d.id, d.raw_evicted ? 'restore' : 'evict_raw'), d.raw_evicted ? 'secondary' : 'danger')); root.append(bar);
-}
+
+function node(tag, text, cls = '') { const e = document.createElement(tag); e.textContent = text; e.className = cls; return e; }
+
 let initialized = false;
 function updateExpandButton(expanded) {
     const btn = document.getElementById('context-expand'); if (!btn) return;

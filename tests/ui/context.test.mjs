@@ -31,7 +31,7 @@ test('evidence editor preserves unsaved text on failure and saves the full snaps
     const ta = document.querySelector('.context-evidence-editor');
     assert.equal(ta.value, source.message);
     ta.value = 'Pasted replacement'; ta.dispatchEvent(new Event('input'));
-    const save = [...document.querySelectorAll('#context-detail-host button')].find(b => b.textContent === 'Save evidence');
+    const save = [...document.querySelectorAll('#context-detail-host button')].find(b => b.textContent === 'Save & Apply');
     save.click(); await settle(); await settle();
     assert.equal(document.querySelector('.context-evidence-editor').value, 'Pasted replacement');
     assert.equal(save.disabled, false);
@@ -40,7 +40,7 @@ test('evidence editor preserves unsaved text on failure and saves the full snaps
     assert.equal(saved.get('base_message'), source.message);
     assert.deepEqual(JSON.parse(saved.get('evidence')), [{ id: 'manual', text: 'Pasted replacement' }]);
     assert.equal(document.querySelector('.context-evidence-editor'), null);
-    assert.ok(document.querySelector('#context-detail-host .sources-panel a'));
+    assert.ok(document.querySelector('#context-detail-host .context-source-card a'));
     assert.equal(document.querySelector('#context-detail-host script'), null);
 });
 test('list extraction performs extraction directly without a separate View click', async () => {

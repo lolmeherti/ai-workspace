@@ -31,34 +31,11 @@ async function initReasoningEffort() {
     const binaryEl = document.getElementById('effort-binary');
     if (!hidden || !graduatedEl || !binaryEl) return;
 
-    // 1. Control type comes from the runtime policy's effort_map (graduated iff non-empty).
-    let graduated = false;
-    try {
-        const r = await fetch('index.php?api_action=get_switch_status', { headers: { 'Accept': 'application/json' } });
-        const st = await r.json();
-        const policy = typeof st.runtime_policy === 'string' ? JSON.parse(st.runtime_policy) : (st.runtime_policy || {});
-        const em = (policy.reasoning && policy.reasoning.effort_map) || {};
-        graduated = Object.keys(em).length > 0;
-    } catch (e) {
-        graduated = false;
-    }
-
-    // 2. Load the saved choice (DB-backed, survives refresh).
-    let effort = 'medium';
-    try {
-        const r = await fetch('index.php?api_action=get_reasoning_effort', { headers: { 'Accept': 'application/json' } });
-        const j = await r.json();
-        if (j.status === 'ok' && VALID.includes(j.effort)) effort = j.effort;
-    } catch (e) {
-        /* keep default */
-    }
-
-    // 3. Normalize to a value the visible control can express (model may have changed).
-    if (graduated) {
-        if (!['low', 'medium', 'high'].includes(effort)) effort = 'medium';
-    } else {
-        effort = effort === 'off' ? 'off' : 'medium';
-    }
+    // Control type and selected value are rendered server-side: the active
+    // control is already visible and #effort-input already holds the saved
+    // value. No async fetch — the control is correct on first paint.
+    const graduated = typeof reasoningEffortGraduated !== 'undefined' ? reasoningEffortGraduated : false;
+    let effort = VALID.includes(hidden.value) ? hidden.value : 'medium';
 
     const control = graduated ? graduatedEl : binaryEl;
     control.style.display = 'flex';
