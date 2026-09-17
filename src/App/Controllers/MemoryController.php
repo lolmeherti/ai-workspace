@@ -57,7 +57,14 @@ class MemoryController extends BaseController
 
     private function manualConsolidate(int $sessionId): void
     {
+        $json = str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
         if (!$this->db) {
+            if ($json) {
+                http_response_code(503);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['status' => 'error', 'code' => 'database_unavailable', 'message' => 'Memories are temporarily unavailable. Your draft is kept.']);
+                exit;
+            }
             $this->redirect($this->buildUrl($sessionId, Tab::MEMORIES));
             return;
         }
@@ -72,7 +79,33 @@ class MemoryController extends BaseController
             }
         }
 
-        $this->memoryExtractor->extractAndSave($chatText, true);
+        try {
+            $this->memoryExtractor->extractAndSave($chatText, true);
+        } catch (\Throwable $error) {
+            if (!$json) {
+                error_log('MemoryController: manual consolidation failed: ' . $error->getMessage());
+                $this->redirect($this->buildUrl($sessionId, Tab::MEMORIES));
+                return;
+            }
+            $busy = $error instanceof \App\Services\ModelBusyException;
+            http_response_code($busy ? 409 : 503);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['status' => 'error', 'code' => $busy ? 'model_busy' : 'consolidation_failed',
+                'message' => $busy ? $error->getMessage() : 'Consolidation could not be confirmed. Reload memories to check their current state.']);
+            exit;
+        }
+        if ($json) {
+            $memories = $this->memoryRepository->getAllLimit500();
+            $memoryCount = $this->memoryRepository->getCount();
+            ob_start();
+            include dirname(__DIR__, 2) . '/views/tab-memories.php';
+            $html = ob_get_clean();
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo json_encode(['status' => 'success', 'html' => $html, 'count' => $memoryCount,
+                'message' => 'Memory list refreshed. ' . $memoryCount . ' saved memories.'], JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
         $this->redirect($this->buildUrl($sessionId, Tab::MEMORIES));
     }
 

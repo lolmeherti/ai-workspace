@@ -1,3 +1,5 @@
+import { notify, requestJson } from './workspace/feedback.js';
+import { ensureAIAvailable, paintAvailability } from './workspace/availability.js';
 /**
  * @file js/ui.js
  * @description UI Components. Handles memory editing transitions, token budget indicators, and user warning modals.
@@ -8,16 +10,24 @@ import { streamResponse } from './streamer/streamResponse.js';
 
 export function enableMemoryEdit(id) {
     document.getElementById(`memory-view-${id}`).classList.add('hidden');
-    document.getElementById(`memory-edit-${id}`).classList.remove('hidden');
+    const form = document.getElementById(`memory-edit-${id}`);
+    form.classList.remove('hidden');
+    form.querySelector('textarea')?.focus();
 }
 
 export function disableMemoryEdit(id) {
-    document.getElementById(`memory-view-${id}`).getBoundingClientRect();
+    const form = document.getElementById(`memory-edit-${id}`);
+    form.reset();
+    delete form.dataset.dirty;
     document.getElementById(`memory-view-${id}`).classList.remove('hidden');
-    document.getElementById(`memory-edit-${id}`).classList.add('hidden');
+    form.classList.add('hidden');
 }
 
 export function showCondensationModal(formData, originalMessage) {
+    document.getElementById('condensation-bypass').textContent = 'Send without condensing';
+    const content = document.getElementById('condensation-modal-content');
+    content.querySelector('h3').textContent = 'This conversation is getting full';
+    content.querySelector('p').textContent = 'Review a condensed summary and choose which extracted memories to keep. Your draft is preserved.';
     state.pendingFormData = formData;
     state.pendingMessage = originalMessage;
     
@@ -28,6 +38,7 @@ export function showCondensationModal(formData, originalMessage) {
 }
 
 export function closeCondensationModal() {
+    if (state.condensationBusy) return;
     document.getElementById('condensation-modal').classList.add('hidden');
     const inputField = document.getElementById('q');
     if (inputField) inputField.disabled = false;
@@ -47,19 +58,20 @@ export function closeCondensationModal() {
 }
 
 export async function bypassCondensation() {
+    if (state.condensationBusy) return;
     closeCondensationModal();
-    if (state.pendingFormData) {
-        state.pendingFormData.set('bypass_warning', '1');
-        await streamResponse(state.pendingFormData, state.pendingMessage);
-    }
+    if (state.pendingFormData?.get('manual') === '1') return;
+    state.bypassWarning = true;
+    document.getElementById('chatForm').requestSubmit();
 }
 
 export function triggerManualCondensation() {
     const sessionIdInput = document.querySelector('#chatForm input[name="session_id"]');
     const sessionId = sessionIdInput ? parseInt(sessionIdInput.value, 10) : 0;
     
+    if (!ensureAIAvailable(document.getElementById('composer-notices'))) return;
     if (sessionId <= 0) {
-        alert("Please start a conversation first before condensing history.");
+        notify("Please start a conversation first before condensing history.");
         return;
     }
 
@@ -67,6 +79,7 @@ export function triggerManualCondensation() {
     dummyFormData.append('session_id', sessionId);
     dummyFormData.append('manual', '1');
 
+    document.getElementById('condensation-bypass').textContent = 'Cancel';
     state.pendingFormData = dummyFormData;
     state.pendingMessage = ""; 
 
@@ -80,6 +93,8 @@ export function triggerManualCondensation() {
 }
 
 export async function confirmCondensation() {
+    if (state.condensationBusy || !state.pendingFormData || !ensureAIAvailable(document.getElementById('condensation-modal-card'))) return;
+    state.condensationBusy = true;
     const modalContent = document.getElementById('condensation-modal-content');
     const modalLoading = document.getElementById('condensation-modal-loading');
     const modalReview = document.getElementById('condensation-modal-review');
@@ -102,18 +117,19 @@ export async function confirmCondensation() {
             formData.append('manual', '1');
         }
         
-        const response = await fetch('index.php', {
+        const response = await requestJson('index.php', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
             body: formData
         });
         
-        const result = await response.json();
+        const result = response;
         
         if (result.status === 'success') {
             modalLoading.classList.add('hidden');
             
             state.condensationSummary = result.summary;
+            document.getElementById('condensation-summary-text').textContent = result.summary || 'No summary was returned.';
             state.condensationMemories = result.memories || [];
             
             const memoriesListContainer = document.getElementById('condensation-memories-list');
@@ -131,8 +147,9 @@ export async function confirmCondensation() {
                         item.className = "flex items-start gap-3 bg-[#0a1122]/80 border border-cyan-500/10 hover:border-cyan-500/35 hover:shadow-[0_0_12px_rgba(6,182,212,0.08)] rounded-xl p-3.5 cursor-pointer transition-all duration-150 select-none border-l-2 border-l-cyan-500/40";
                         item.innerHTML = `
                             <input type="checkbox" checked value="${idx}" class="mt-0.5 rounded border-cyan-500/30 text-cyan-500 focus:ring-cyan-500/40 focus:ring-offset-0 focus:outline-none h-4.5 w-4.5 bg-[#0f172a] cursor-pointer" />
-                            <span class="text-xs text-slate-200 font-medium leading-relaxed">${memory}</span>
+                            <span class="text-xs text-slate-200 font-medium leading-relaxed"></span>
                         `;
+                        item.querySelector('span').textContent = memory;
                         memoriesListContainer.appendChild(item);
                     });
                 }
@@ -149,12 +166,15 @@ export async function confirmCondensation() {
             throw new Error(result.message || 'Failed to condense');
         }
     } catch (e) {
-        alert("Something went wrong during condensation analysis: " + e.message);
-        closeCondensationModal();
-    }
+        notify("Something went wrong during condensation analysis: " + e.message);
+        modalLoading.classList.add('hidden');
+        modalContent.classList.remove('hidden');
+    } finally { state.condensationBusy = false; }
 }
 
 export async function applyCondensation() {
+    if (state.condensationBusy || !state.pendingFormData) return;
+    state.condensationBusy = true;
     const modalReview = document.getElementById('condensation-modal-review');
     const modalLoading = document.getElementById('condensation-modal-loading');
     const loadingText = document.getElementById('condensation-loading-text');
@@ -190,32 +210,33 @@ export async function applyCondensation() {
             formData.append('selected_memories[]', memory);
         });
 
-        const response = await fetch('index.php', {
+        const response = await requestJson('index.php', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
             body: formData
         });
         
-        const result = await response.json();
+        const result = response;
         
         if (result.status === 'success') {
+            state.condensationBusy = false;
             closeCondensationModal();
-            
-            if (state.pendingMessage) {
-                sessionStorage.setItem('pending_chat_prompt', state.pendingMessage);
-            }
-            window.location.reload();
+            state.contextLocked = false;
+            await window.navigateConversation?.(Number(state.pendingFormData.get('session_id')), { refresh: true });
+            paintAvailability();
+            notify('Conversation condensed. Review your draft, then send when ready.', { target: document.getElementById('composer-notices'), kind: 'success' });
         } else {
             throw new Error(result.message || 'Failed to write data');
         }
     } catch (e) {
-        alert("Memory write operation failed: " + e.message);
+        notify("Memory write operation failed: " + e.message);
         modalReview.classList.remove('hidden');
         modalLoading.classList.add('hidden');
-    }
+    } finally { state.condensationBusy = false; }
 }
 
 export function lockChatContext() {
+    state.contextLocked = true;
     const textarea = document.getElementById('q');
     const submitBtn = document.querySelector('#chatForm button[type="submit"]');
     if (textarea) {
@@ -255,3 +276,4 @@ export function updateTokenCounter(current, max) {
         counterText.className = "text-slate-200 font-bold";
     }
 }
+window.closeCondensationModal = closeCondensationModal;

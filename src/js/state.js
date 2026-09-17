@@ -5,6 +5,11 @@
  */
 export const state = {
     activeTab: 'chats',
+    sessionId: 0,
+    generation: null,
+    jobRun: null,
+    memoryConsolidating: false,
+    contextLocked: false,
     isGenerating: false,
     pastedImageFile: null,
     pendingFormData: null,

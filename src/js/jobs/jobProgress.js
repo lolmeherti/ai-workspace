@@ -1,165 +1,117 @@
-/**
- * @file js/jobs/jobProgress.js
- * @description Find Jobs run: SSE runner, progress view, cancel, summary, run logs.
- */
-
 import { flash, esc, getJson, postJson, fmtDate } from './jobUtil.js';
 import { switchJobView } from './jobViews.js';
 import { refreshInbox } from './jobInbox.js';
 import { clearDetails } from './jobDetails.js';
-
+import { state } from '../state.js';
+import { ensureAIAvailable, paintAvailability, refreshAvailability } from '../workspace/availability.js';
+import { confirmAction, notify, withPending } from '../workspace/feedback.js';
 let activeRunUuid = null;
-
+let streaming = false;
+let reconciling = false;
+let terminal = false;
+let statusTimer;
+function setRun(run) {
+    activeRunUuid = run?.uuid || null;
+    state.jobRun = run;
+    document.getElementById('job-find-btn').disabled = !!run || streaming;
+    const cancel = document.getElementById('job-run-cancel');
+    cancel.disabled = !activeRunUuid;
+    if (!run) cancel.textContent = 'Cancel search';
+    paintAvailability();
+}
 export function initProgress() {
-    window.jobFindJobs = runJobSearch;
-    window.openRunLogs = openRunLogs;
-    window.pruneJobs = pruneJobs;
-    const cancelBtn = document.getElementById('job-run-cancel');
-    if (cancelBtn) cancelBtn.addEventListener('click', cancelRun);
+    window.jobFindJobs = runJobSearch; window.openRunLogs = openRunLogs; window.pruneJobs = pruneJobs;
+    document.getElementById('job-run-cancel')?.addEventListener('click', e => withPending(e.currentTarget, cancelRun));
+    document.addEventListener('jobs-opened', () => { if (!streaming) reconcileRun(); });
+    document.addEventListener('visibilitychange', () => { clearTimeout(statusTimer); if (!document.hidden && !streaming && state.jobRun) reconcileRun(); });
 }
-
-export function showProgress() {
-    switchJobView('progress');
-    updateProgress({});
+export function showProgress() { switchJobView('progress'); updateProgress(); }
+export function updateProgress(progress = {}) {
+    const el = document.getElementById('job-progress-body'); if (!el) return;
+    document.getElementById('job-run-status').textContent = 'Search running';
+    el.innerHTML = `<div class="job-progress-status" role="status"><span class="ui-spinner"></span></div>
+        <p class="ui-muted">You can keep browsing saved jobs. Results are kept as they are found.</p>
+        ${progress.listing ? `<p class="break-all">${esc(progress.listing)}</p>` : ''}
+        <p>${Number(progress.jobs_scraped) || 0} found · ${Number(progress.jobs_selected) || 0} selected${progress.sources_total ? ` · ${Number(progress.sources_done) || 0} of ${Number(progress.sources_total)} sources checked` : ''}${progress.sources_failed ? ` · ${Number(progress.sources_failed)} sources failed` : ''}</p>`;
 }
-
-export function updateProgress(state = {}) {
-    const el = document.getElementById('job-progress-body');
-    if (!el) return;
-    const listing = state.listing || '';
-    const scraped = state.jobs_scraped ?? 0;
-    const selected = state.jobs_selected ?? 0;
-    const done = state.sources_done ?? 0;
-    const total = state.sources_total ?? 0;
-    const failed = state.sources_failed ?? 0;
-
-    el.innerHTML = `
-        <div class="text-center text-cyan-400 flex items-center justify-center gap-2 py-6 select-none">
-            <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-            <span class="text-[10px] font-bold tracking-widest uppercase animate-pulse">Finding jobs...</span>
-        </div>
-        <div class="text-[9px] text-slate-500 font-mono space-y-1">
-            ${listing ? `<div class="break-all">Listing: ${esc(listing)}</div>` : ''}
-            <div>Jobs scraped: ${scraped}</div>
-            <div>Jobs selected: ${selected}</div>
-            ${total ? `<div>Listings: ${done} / ${total}${failed ? ` (${failed} failed)` : ''}</div>` : ''}
-        </div>`;
-}
-
-export function hideProgress() {
-    switchJobView('details');
-}
-
-async function runJobSearch() {
-    const select = document.getElementById('job-cv-select');
-    const cvUuid = select ? select.value : '';
-    if (!cvUuid) {
-        flash('Select a CV first.', false);
-        return;
-    }
-
-    showProgress();
+export function hideProgress() { document.getElementById('job-view-progress').classList.add('hidden'); }
+export async function reconcileRun() {
+    if (streaming || reconciling) return; reconciling = true; clearTimeout(statusTimer);
     try {
-        const res = await fetch('index.php?api_action=run_job_search', {
-            method: 'POST',
-            headers: { 'Accept': 'text/event-stream', 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ cv_uuid: cvUuid }).toString(),
-        });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => null);
-            flash(err?.message || `Search failed (HTTP ${res.status}).`, false);
-            hideProgress();
+        const data = await getJson('get_run_status');
+        if (data.status !== 'success') {
+            setRun({ uuid: activeRunUuid, unknown: true });
+            notify('Search status is unavailable. Check again before starting another search.', { target: document.getElementById('job-run-summary'), action: 'Check status', onAction: reconcileRun });
             return;
         }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+        const wasRunning = !!state.jobRun;
+        setRun(data.run);
+        if (data.run) {
+            showProgress(); updateProgress(data.run);
+            document.getElementById('job-run-status').textContent = 'Search still running';
+            if (!document.hidden) statusTimer = setTimeout(reconcileRun, 5000);
+        } else {
+            hideProgress(); document.getElementById('job-run-status').textContent = 'No active search';
+            if (wasRunning) { await loadRunLogs(); await refreshInbox(); }
+        }
+    } finally { reconciling = false; }
+}
+export async function runJobSearch() {
+    if (streaming || state.jobRun || !ensureAIAvailable(document.getElementById('job-notices'))) return;
+    const cv = document.getElementById('job-cv-select').value;
+    if (!cv) { flash('Select a CV in Search setup first.', false); switchJobView('cvs'); return; }
+    if (document.querySelector('#job-setup form[data-dirty="true"]')) { flash('Save or discard your Search setup edits before finding jobs.', false); switchJobView('profile'); return; }
+    streaming = true; terminal = false; setRun({ uuid: null }); showProgress();
+    document.getElementById('job-run-summary').replaceChildren();
+    try {
+        const res = await fetch('index.php?api_action=run_job_search', { method: 'POST', headers: { Accept: 'text/event-stream', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ cv_uuid: cv }) });
+        if (!res.ok) { const data = await res.json(); throw new Error(data.message || 'Search could not start.'); }
+        const reader = res.body.getReader(), decoder = new TextDecoder(); let buffer = '';
         while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop();
+            const { done, value } = await reader.read(); if (done) break;
+            buffer += decoder.decode(value, { stream: true }).replaceAll('\r\n', '\n');
+            const parts = buffer.split('\n\n'); buffer = parts.pop();
             for (const part of parts) {
-                const line = part.trim();
-                if (!line.startsWith('data: ')) continue;
-                try {
-                    const payload = JSON.parse(line.substring(6));
-                    handleEvent(payload.event, payload.data);
-                } catch (e) {}
+                const text = part.trim(); if (!text.startsWith('data:')) continue;
+                const event = JSON.parse(text.slice(5).trim());
+                if (event.event === 'run_start') { activeRunUuid = event.data.run_uuid; setRun({ uuid: activeRunUuid }); }
+                else if (event.event === 'progress') updateProgress(event.data);
+                else if (event.event === 'run_log') appendLogLine(event.data);
+                else if (event.event === 'error') throw new Error(event.data.message || 'Search failed.');
+                else if (event.event === 'run_complete') {
+                    terminal = true; const summary = event.data.summary || {};
+                    document.getElementById('job-run-status').textContent = summary.cancelled ? 'Cancelled' : 'Complete';
+                    showSummaryBanner(`${summary.cancelled ? 'Search cancelled' : 'Search complete'} · ${summary.jobs_selected || 0} selected of ${summary.jobs_scraped || 0} found · ${summary.sources_failed || 0} sources failed.`);
+                }
             }
         }
+        if (!terminal) throw new Error('The connection ended before the search result was confirmed.');
     } catch (e) {
-        flash('Search interrupted.', false);
-        hideProgress();
-        await refreshInbox();
+        hideProgress(); document.getElementById('job-run-status').textContent = 'Checking search status';
+        notify(e.message + ' Saved results are kept. No new search has been started.', { target: document.getElementById('job-run-summary'), action: 'Check status', onAction: reconcileRun });
+    } finally {
+        streaming = false;
+        if (terminal) { setRun(null); hideProgress(); } else await reconcileRun();
+        await refreshInbox(); refreshAvailability();
     }
 }
-
-function handleEvent(event, data) {
-    switch (event) {
-        case 'run_start':
-            activeRunUuid = data.run_uuid;
-            break;
-        case 'progress':
-            updateProgress(data);
-            break;
-        case 'run_log':
-            appendLogLine(data);
-            break;
-        case 'error':
-            activeRunUuid = null;
-            flash(data.message || 'Search failed.', false);
-            hideProgress();
-            refreshInbox();
-            break;
-        case 'run_complete':
-            finishRun(data.summary);
-            break;
-        case 'done':
-            break;
-    }
-}
-
-async function finishRun(summary) {
-    activeRunUuid = null;
-    hideProgress();
-    await refreshInbox();
-    clearDetails();
-    const msg = summary.cancelled
-        ? `Search cancelled — ${summary.jobs_selected} kept of ${summary.jobs_scraped} scraped.`
-        : `Search complete — ${summary.jobs_scraped} scraped, ${summary.jobs_selected} selected, ${summary.sources_failed} listings failed.`;
-    showSummaryBanner(msg);
-}
-
 async function cancelRun() {
-    await postJson('cancel_job_search', { run_uuid: activeRunUuid || '' });
+    if (!activeRunUuid) return;
+    const data = await postJson('cancel_job_search', { run_uuid: activeRunUuid });
+    if (data.status === 'success') { document.getElementById('job-run-cancel').textContent = 'Cancellation requested'; document.getElementById('job-run-status').textContent = 'Stopping after the current step'; }
 }
-
-async function openRunLogs() {
-    switchJobView('logs');
-    await loadRunLogs();
-}
-
+async function openRunLogs() { switchJobView('logs'); await loadRunLogs(); }
 async function pruneJobs() {
-    if (!confirm('Delete all jobs, job searches, and run logs? This cannot be undone.')) return;
-    try {
+    if (state.jobRun) { flash('Wait for the active search to finish before clearing jobs.', false); return; }
+    if (!await confirmAction('Delete all saved jobs, job searches, and run logs? CVs, preferences, sources and blocks remain saved. This cannot be undone.', { title: 'Clear all saved jobs?', confirmLabel: 'Clear saved jobs', destructive: true })) return;
+    await withPending(document.getElementById('job-prune-btn'), async () => {
         const data = await postJson('prune_jobs', {});
-        if (data.status === 'success') {
-            flash(`Pruned ${data.jobs_deleted ?? 0} jobs, ${data.runs_deleted ?? 0} searches, ${data.logs_deleted ?? 0} log entries.`);
-            await refreshInbox();
-            clearDetails();
-            await loadRunLogs();
-        } else {
-            flash(data.message || 'Prune failed.', false);
-        }
-    } catch (e) {
-        flash('Prune failed.', false);
-    }
+        if (data.status === 'success') { flash(`Cleared ${data.jobs_deleted || 0} jobs and ${data.runs_deleted || 0} searches.`); await refreshInbox(); clearDetails(); await loadRunLogs(); }
+    });
 }
-
+function showSummaryBanner(message) {
+    notify(message, { target: document.getElementById('job-run-summary'), kind: 'success', action: 'View run history', onAction: openRunLogs });
+}
 async function loadRunLogs() {
     const container = document.getElementById('job-logs-container');
     if (!container) return;
@@ -168,7 +120,7 @@ async function loadRunLogs() {
 
     if (!data.run) {
         delete container.dataset.runUuid;
-        container.innerHTML = '<div class="text-center py-20 text-slate-600 flex flex-col items-center justify-center gap-3 select-none"><uk-icon icon="activity" class="w-10 h-12 text-slate-700 opacity-30"></uk-icon><p class="text-[10px] tracking-widest uppercase font-bold">No job runs yet</p></div>';
+        container.innerHTML = '<div class="text-center py-20 text-slate-600 flex flex-col items-center justify-center gap-3 select-none"><uk-icon icon="activity" class="w-10 h-12 text-slate-700 opacity-30"></uk-icon><p class="text-xs tracking-normal normal-case font-bold">No job runs yet</p></div>';
         return;
     }
 
@@ -180,15 +132,15 @@ async function loadRunLogs() {
     container.innerHTML = `
         <div class="mb-4 p-4 rounded-xl border border-slate-850 bg-[#0a0f1d]/60">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-[10px] font-bold uppercase tracking-widest text-slate-300">Latest run</span>
-                <span class="text-[9px] font-bold uppercase ${status === 'complete' ? 'text-emerald-400' : 'text-amber-400'}">${esc(status)}</span>
+                <span class="text-xs font-bold normal-case tracking-normal text-slate-300">Latest run</span>
+                <span class="text-xs font-bold normal-case ${status === 'complete' ? 'text-emerald-400' : 'text-amber-400'}">${esc(status)}</span>
             </div>
-            <div class="text-[10px] text-slate-400 font-mono space-y-0.5">
+            <div class="text-xs text-slate-400 font-mono space-y-0.5">
                 <div>Started: ${esc(fmtDate(run.started_at))}</div>
                 <div>Scraped ${run.jobs_scraped ?? 0} · Selected ${run.jobs_selected ?? 0} · Listings ${run.sources_attempted ?? 0} (${run.sources_failed ?? 0} failed)</div>
             </div>
         </div>
-        <div id="job-logs-rows" class="space-y-0.5">${logRows || '<div class="text-center py-8 text-slate-600 text-[9px] uppercase">No log entries</div>'}</div>`;
+        <div id="job-logs-rows" class="space-y-0.5">${logRows || '<div class="text-center py-8 text-slate-600 text-xs normal-case">No log entries</div>'}</div>`;
 
     scrollLogsToBottom();
 }
@@ -197,7 +149,7 @@ function logRow(l) {
     return `
         <div class="flex gap-2 py-1 border-b border-slate-900">
             <span class="shrink-0 font-mono text-slate-600">${esc(fmtDate(l.created_at))}</span>
-            <span class="shrink-0 w-12 font-bold uppercase ${levelColor(l.level)}">${esc(l.level)}</span>
+            <span class="shrink-0 w-12 font-bold normal-case ${levelColor(l.level)}">${esc(l.level)}</span>
             <span class="${levelColor(l.level)} break-all">${esc(l.message)}</span>
         </div>`;
 }
@@ -228,17 +180,4 @@ function levelColor(level) {
         list: 'text-cyan-400',
         info: 'text-slate-500',
     }[level] || 'text-slate-500';
-}
-
-function showSummaryBanner(msg) {
-    const existing = document.getElementById('job-summary');
-    if (existing) existing.remove();
-    const el = document.createElement('div');
-    el.id = 'job-summary';
-    el.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg border border-emerald-500/40 bg-emerald-950/80 text-emerald-300 text-[10px] font-bold uppercase tracking-widest shadow-lg z-50 flex items-center gap-3';
-    el.innerHTML = `
-        <span>${esc(msg)}</span>
-        <button onclick="window.openRunLogs()" class="px-2 py-1 rounded-md text-[9px] uppercase tracking-wider border border-emerald-500/40 hover:bg-emerald-900/40 cursor-pointer outline-none">View logs</button>
-        <button onclick="document.getElementById('job-summary').remove()" class="px-1.5 text-slate-400 hover:text-slate-200 cursor-pointer outline-none">×</button>`;
-    document.body.appendChild(el);
 }

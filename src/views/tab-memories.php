@@ -1,92 +1,65 @@
-<div id="panel-memories" class="h-full overflow-y-auto p-4 space-y-3 hidden">
-    <div class="flex justify-between items-center bg-[#070b14] p-2.5 border border-slate-800 rounded-lg">
-        <span class="text-xs font-semibold text-slate-400">Memory Count</span>
-        <span class="text-xs font-bold text-cyan-400 px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30">
-            <?php echo $memoryCount; ?> / 500
-        </span>
-    </div>
-
-    <form id="consolidate-form" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories">
-        <input type="hidden" name="manual_consolidate" value="1">
-        <button id="consolidate-btn" type="submit" class="w-full bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold py-2.5 transition-colors flex items-center justify-center gap-2 cursor-pointer">
-            <uk-icon id="consolidate-icon" icon="brain" class="w-4 h-4"></uk-icon>
-            <span id="consolidate-text">Consolidate & Clean Memories</span>
-        </button>
-    </form>
-
-    <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="space-y-2">
-        <input type="hidden" name="add_memory" value="1">
-        <div class="flex gap-1.5">
-            <input type="text" name="memory_text" placeholder="Add custom memory constraint..." required 
-                   class="input-futuristic flex-1 text-xs px-2.5 py-2 rounded-lg" 
-                   <?php echo $memoryCount >= 500 ? 'disabled' : ''; ?>>
-            <button type="submit" class="btn-futuristic px-3 rounded-lg flex items-center justify-center font-bold"
-                    <?php echo $memoryCount >= 500 ? 'disabled' : ''; ?> title="Add Memory">
-                <uk-icon icon="plus" class="w-4 h-4"></uk-icon>
+<?php $memoryFormAction = 'index.php?session_id=' . (int)$sessionId . '&amp;tab=memories'; ?>
+<section id="panel-memories" class="memory-panel hidden" aria-label="Saved memories">
+    <header class="memory-heading">
+        <div><h2>Memories</h2><span class="memory-count"><?php echo (int)$memoryCount; ?> / 500</span></div>
+        <p>Saved facts and preferences used in your conversations.</p>
+    </header>
+    <div class="memory-tools">
+        <form id="consolidate-form" method="POST" action="<?php echo $memoryFormAction; ?>">
+            <input type="hidden" name="manual_consolidate" value="1">
+            <button id="consolidate-btn" type="submit" class="ui-button memory-consolidate-button" data-ai-action>
+                <uk-icon id="consolidate-icon" icon="brain" aria-hidden="true"></uk-icon>
+                <span id="consolidate-text">Consolidate &amp; clean</span>
             </button>
-        </div>
-        <?php if ($memoryCount >= 500): ?>
-            <p class="text-[10px] text-rose-400 font-semibold tracking-wide">Memory bank capacity (500) reached.</p>
-        <?php endif; ?>
-    </form>
-
-    <?php if (!empty($memories)): ?>
-        <div class="flex justify-between items-center bg-[#070b14] px-3 py-2 rounded-lg border border-slate-800/80 text-xs">
-            <div class="flex items-center gap-2">
-                <input type="checkbox" id="select-all-memories" class="rounded border-slate-800 bg-slate-950 text-cyan-500 focus:ring-cyan-500/20 w-4 h-4 cursor-pointer">
-                <label id="select-all-label" for="select-all-memories" class="text-slate-400 font-medium cursor-pointer select-none">Select All</label>
+        </form>
+        <form id="add-memory-form" method="POST" action="<?php echo $memoryFormAction; ?>" class="memory-add-form">
+            <input type="hidden" name="add_memory" value="1">
+            <label for="new-memory-text">Add a memory</label>
+            <div class="memory-add-field">
+                <input id="new-memory-text" type="text" name="memory_text" placeholder="A fact or preference…" required <?php echo $memoryCount >= 500 ? 'disabled' : ''; ?>>
+                <button type="submit" class="ui-button ui-button--primary" aria-label="Add memory" <?php echo $memoryCount >= 500 ? 'disabled' : ''; ?>><uk-icon icon="plus" aria-hidden="true"></uk-icon></button>
             </div>
-            
-            <form id="bulk-delete-form" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" onsubmit="return confirm('Nuke selected memories permanently?');" class="hidden items-center">
-                <input type="hidden" name="delete_multiple_memories" value="1">
-                <button type="submit" class="text-rose-400 hover:text-rose-300 font-semibold transition-colors flex items-center gap-1.5">
-                    <uk-icon icon="trash" class="w-3.5 h-3.5"></uk-icon>
-                    Delete Selected (<span id="selected-count">0</span>)
-                </button>
-            </form>
-        </div>
-    <?php endif; ?>
-
-    <div class="space-y-2.5 pt-2">
-        <?php if (empty($memories)): ?>
-            <p class="text-xs text-slate-500 text-center py-4">No active memories stored.</p>
-        <?php else: ?>
-            <?php foreach ($memories as $m): ?>
-                <div class="bg-slate-900/40 border border-slate-800/80 rounded-lg p-3 text-xs relative group transition-all duration-200 hover:border-slate-700/60 shadow-sm flex gap-3">
-                    
-                    <div class="pt-0.5">
-                        <input type="checkbox" name="selected_memories[]" value="<?php echo $m['id']; ?>" form="bulk-delete-form" class="memory-checkbox rounded border-slate-800 bg-slate-950 text-cyan-500 focus:ring-cyan-500/20 w-4 h-4 cursor-pointer">
-                    </div>
-
-                    <div class="flex-1 min-w-0">
-                        <div id="memory-view-<?php echo $m['id']; ?>" class="space-y-2.5">
-                            <p class="m-0 text-slate-200 leading-relaxed break-words whitespace-pre-line"><?php echo htmlspecialchars($m['memory_text']); ?></p>
-                            <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-800/40">
-                                <span><?php echo date('M d, Y', strtotime($m['created_at'])); ?></span>
-                                <div class="flex gap-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                    <button onclick="enableMemoryEdit(<?php echo $m['id']; ?>)" class="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">Edit</button>
-                                    <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="inline" onsubmit="return confirm('Nuke this memory permanently?');">
-                                        <input type="hidden" name="delete_memory" value="1">
-                                        <input type="hidden" name="memory_id" value="<?php echo $m['id']; ?>">
-                                        <button type="submit" class="text-rose-400 hover:text-rose-300 font-semibold transition-colors">Delete</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-
-                        <form id="memory-edit-<?php echo $m['id']; ?>" method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=memories" class="hidden space-y-2">
-                            <input type="hidden" name="update_memory" value="1">
-                            <input type="hidden" name="memory_id" value="<?php echo $m['id']; ?>">
-                            <textarea name="memory_text" class="input-futuristic w-full rounded-lg p-2 text-xs h-20 leading-relaxed focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500" required><?php echo htmlspecialchars($m['memory_text']); ?></textarea>
-                            <div class="flex justify-end gap-1.5 text-[10px]">
-                                <button type="button" onclick="disableMemoryEdit(<?php echo $m['id']; ?>)" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">Cancel</button>
-                                <button type="submit" class="px-3 py-1 rounded btn-futuristic font-semibold">Save</button>
-                            </div>
-                        </form>
-                    </div>
-                    
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
+            <?php if ($memoryCount >= 500): ?><p class="memory-limit" role="status">Memory capacity reached. Remove an entry before adding another.</p><?php endif; ?>
+        </form>
     </div>
-</div>
+    <div id="memory-notices" aria-live="polite"></div>
+    <?php if (!empty($memories)): ?>
+    <div class="memory-selection">
+        <label for="select-all-memories"><input type="checkbox" id="select-all-memories">Select all</label>
+        <form id="bulk-delete-form" method="POST" action="<?php echo $memoryFormAction; ?>" data-confirm="Delete selected memories permanently?" class="hidden">
+            <input type="hidden" name="delete_multiple_memories" value="1">
+            <button type="submit" class="memory-delete">Delete <span id="selected-count">0</span> selected</button>
+        </form>
+    </div>
+    <?php endif; ?>
+    <div class="memory-list">
+        <?php if (empty($memories)): ?>
+        <div class="memory-empty"><uk-icon icon="brain" aria-hidden="true"></uk-icon><h3>No saved memories</h3><p>Add a fact or preference above to help Localsy remember it.</p></div>
+        <?php else: foreach ($memories as $m): $memoryId = (int)$m['id']; ?>
+        <article class="memory-card">
+            <input type="checkbox" name="selected_memories[]" value="<?php echo $memoryId; ?>" form="bulk-delete-form" class="memory-checkbox" aria-label="Select memory: <?php echo htmlspecialchars(function_exists('mb_substr') ? mb_substr($m['memory_text'], 0, 100) : substr($m['memory_text'], 0, 100), ENT_QUOTES); ?>">
+            <div class="memory-card-body">
+                <div id="memory-view-<?php echo $memoryId; ?>">
+                    <p class="memory-text"><?php echo htmlspecialchars($m['memory_text']); ?></p>
+                    <div class="memory-card-footer">
+                        <time datetime="<?php echo htmlspecialchars(date('Y-m-d', strtotime($m['created_at']))); ?>"><?php echo date('M j, Y', strtotime($m['created_at'])); ?></time>
+                        <div class="memory-card-actions">
+                            <button type="button" onclick="enableMemoryEdit(<?php echo $memoryId; ?>)">Edit</button>
+                            <form method="POST" action="<?php echo $memoryFormAction; ?>" data-confirm="Delete this memory permanently?">
+                                <input type="hidden" name="delete_memory" value="1"><input type="hidden" name="memory_id" value="<?php echo $memoryId; ?>">
+                                <button type="submit" class="memory-delete">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <form id="memory-edit-<?php echo $memoryId; ?>" method="POST" action="<?php echo $memoryFormAction; ?>" class="memory-edit-form hidden">
+                    <input type="hidden" name="update_memory" value="1"><input type="hidden" name="memory_id" value="<?php echo $memoryId; ?>">
+                    <label for="memory-text-<?php echo $memoryId; ?>">Edit memory</label>
+                    <textarea id="memory-text-<?php echo $memoryId; ?>" name="memory_text" rows="5" required><?php echo htmlspecialchars($m['memory_text']); ?></textarea>
+                    <div class="memory-card-actions"><button type="button" class="ui-button" onclick="disableMemoryEdit(<?php echo $memoryId; ?>)">Cancel</button><button type="submit" class="ui-button ui-button--primary">Save</button></div>
+                </form>
+            </div>
+        </article>
+        <?php endforeach; endif; ?>
+    </div>
+</section>

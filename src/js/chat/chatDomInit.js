@@ -1,3 +1,4 @@
+import { notify } from '../workspace/feedback.js';
 /**
  * @file js/chat/chatDomInit.js
  * @description DOMContentLoaded initialization for chat window message parsing and UI wiring.
@@ -10,11 +11,36 @@ import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
 import { extractThinking, createThinkingAccordion, addCodeCopyButtons } from '../markdown.js';
 
+// Lazy file-choice restoration: a historical message that triggered a file
+// search re-fetches its results only when scrolled into view, so page load no
+// longer fires one search_files request per such message (the load-time N+1).
+function fetchFileChoices(el, query) {
+    fetch(`index.php?api_action=search_files&query=${encodeURIComponent(query)}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' && data.files && data.files.length > 0 && typeof window.renderFileChoices === 'function') {
+                window.renderFileChoices(data, el, document.getElementById('chatWindow'));
+            }
+        })
+        .catch(() => {});
+}
+const fileChoiceIO = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const el = entry.target;
+            fileChoiceIO.unobserve(el);
+            const query = el.dataset.fileChoiceQuery;
+            if (query) fetchFileChoices(el, query);
+        });
+    }, { rootMargin: '200px' })
+    : null;
+
 export function initChatDom() {
     document.addEventListener('DOMContentLoaded', () => {
         const parseAllCurrentMessages = () => {
             hydrateBriefingCards();
-            document.querySelectorAll('.markdown-rendered').forEach(el => {
+            document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(el => {
                 const rawMarkdown = el.getAttribute('data-markdown') || el.textContent;
                 const { thinking, response } = extractThinking(rawMarkdown);
                 const displayText = thinking ? response : rawMarkdown;
@@ -50,30 +76,47 @@ export function initChatDom() {
                     el.innerHTML = el.innerHTML.replace(/Checking files\.\.\./gi, '');
 
                     el.insertAdjacentHTML('afterbegin', `
-                        <div class="text-[11px] text-cyan-400 bg-cyan-950/20 border border-cyan-500/20 px-3 py-2 rounded-lg italic mb-4 mt-1 flex items-center gap-2 max-w-sm shadow-sm select-none">
+                        <div class="text-xs text-cyan-400 bg-cyan-950/20 border border-cyan-500/20 px-3 py-2 rounded-lg italic mb-4 mt-1 flex items-center gap-2 max-w-sm shadow-sm select-none">
                             <uk-icon icon="search" class="w-3.5 h-3.5"></uk-icon>
                             System automatically searched files for: "${toolQuery}"
                         </div>
                     `);
 
-                    fetch(`index.php?api_action=search_files&query=${encodeURIComponent(toolQuery)}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.status === 'success' && data.files && data.files.length > 0) {
-                                if (typeof window.renderFileChoices === 'function') {
-                                    window.renderFileChoices(data, el, document.getElementById('chatWindow'));
-                                }
-                            }
-                        })
-                        .catch(err => console.error("Error restoring file choices UI:", err));
+                    el.dataset.fileChoiceQuery = toolQuery;
+                    if (fileChoiceIO) fileChoiceIO.observe(el);
+                    else fetchFileChoices(el, toolQuery);
                 }
             });
 
-            document.querySelectorAll('.chat-user').forEach(el => {
+            document.querySelectorAll('.chat-user:not([data-files-parsed])').forEach(el => {
                 el.innerHTML = parseInlineFiles(el.innerHTML);
+                el.dataset.filesParsed = 'true';
             });
         };
-        parseAllCurrentMessages();
+        const hydrateHighlights = () => {
+        document.querySelectorAll('.chat-user').forEach(el => {
+            const raw = el.getAttribute('data-raw') || '';
+            const match = raw.match(/^The user has highlighted these sections from '([^']+)'[\s\S]*?user prompt:\s*\n"([\s\S]*?)"\s*EDIT RULE:/);
+            if (match) {
+                const filename = match[1];
+                const actualPrompt = match[2];
+                const blockCount = (raw.match(/- \[b-(\d+)\]:/g) || []).length;
+
+                el.innerHTML = `
+                    <div class="flex items-center gap-2 mb-3">
+                        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold tracking-normal normal-case bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer shadow-md"
+                                onclick="window.openEditorDrawer('${filename.replace(/'/g, "\\'")}', this)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            ${blockCount} block${blockCount !== 1 ? 's' : ''} · ${filename}
+                        </button>
+                    </div>
+                    <span class="msg-text">${actualPrompt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+                `;
+            }
+        });
+        };
+        window.hydrateConversation = () => { parseAllCurrentMessages(); hydrateHighlights(); };
+        window.hydrateConversation();
 
         const syncBtn = document.getElementById('btn-sync-lmstudio');
         if (syncBtn) {
@@ -87,11 +130,11 @@ export function initChatDom() {
                         if (data.status === 'success') {
                             window.location.reload();
                         } else {
-                            alert(`Sync Failed: ${data.message}`);
+                            notify(`Sync Failed: ${data.message}`);
                         }
                     })
                     .catch(err => {
-                        alert(`Error connecting to server: ${err.message}`);
+                        notify(`Error connecting to server: ${err.message}`);
                     })
                     .finally(() => {
                         syncBtn.innerHTML = originalHTML;
@@ -130,7 +173,7 @@ export function initChatDom() {
 
         const chatWindow = document.getElementById('chatWindow');
         if (chatWindow) {
-            observer.observe(chatWindow, { childList: true, subtree: true, characterData: true });
+            observer.observe(document.getElementById('chat-pane'), { childList: true, subtree: true, characterData: true });
         }
 
         const savedActiveFile = sessionStorage.getItem('activeEditFile');
@@ -138,26 +181,6 @@ export function initChatDom() {
             openEditorDrawer(savedActiveFile);
         }
 
-        document.querySelectorAll('.chat-user').forEach(el => {
-            const raw = el.getAttribute('data-raw') || '';
-            const match = raw.match(/^The user has highlighted these sections from '([^']+)'[\s\S]*?user prompt:\s*\n"([\s\S]*?)"\s*EDIT RULE:/);
-            if (match) {
-                const filename = match[1];
-                const actualPrompt = match[2];
-                const blockCount = (raw.match(/- \[b-(\d+)\]:/g) || []).length;
-
-                el.innerHTML = `
-                    <div class="flex items-center gap-2 mb-3">
-                        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-extrabold tracking-wider uppercase bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 border border-indigo-500/30 hover:border-indigo-400/50 rounded-lg transition-all cursor-pointer shadow-md"
-                                onclick="window.openEditorDrawer('${filename.replace(/'/g, "\\'")}', this)">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-indigo-400"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            ${blockCount} block${blockCount !== 1 ? 's' : ''} · ${filename}
-                        </button>
-                    </div>
-                    <span class="msg-text">${actualPrompt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
-                `;
-            }
-        });
 
         const closeBtn = document.getElementById('editor-close-btn');
         if (closeBtn) {

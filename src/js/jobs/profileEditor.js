@@ -1,3 +1,5 @@
+import { withPending } from '../workspace/feedback.js';
+let savedProfile;
 /**
  * @file js/jobs/profileEditor.js
  * @description Global job profile load and save.
@@ -7,7 +9,8 @@ import { flash, postJson, getJson } from './jobUtil.js';
 
 export function initProfileEditor() {
     const form = document.getElementById('profile-form');
-    if (form) form.addEventListener('submit', saveProfile);
+    if (form) form.addEventListener('submit', e => { e.preventDefault(); withPending(e.submitter, () => saveProfile(e), { target: form, lockForm: true }); });
+    document.getElementById('profile-discard')?.addEventListener('click', () => { if (savedProfile) paintProfile(savedProfile); });
     window.loadProfile = loadProfile;
 }
 
@@ -15,6 +18,11 @@ export async function loadProfile() {
     const data = await getJson('get_profile');
     if (data.status !== 'success') return;
 
+    if (document.getElementById('profile-form').dataset.dirty === 'true') return;
+    savedProfile = data; paintProfile(data);
+}
+function paintProfile(data) {
+    document.getElementById('profile-form').dataset.dirty = 'false';
     const p = data.profile || {};
     document.getElementById('profile-locations').value = (p.locations || []).join(', ');
     setChecks('profile-work-mode', p.work_modes || []);
@@ -43,7 +51,7 @@ function updateCompleteBadge(complete) {
     const badge = document.getElementById('profile-complete-badge');
     if (!badge) return;
     badge.textContent = complete ? 'Profile complete' : 'Incomplete — add 1+ location and 1+ work mode';
-    badge.className = `text-[9px] font-bold uppercase tracking-widest ${complete ? 'text-emerald-400' : 'text-amber-400'}`;
+    badge.className = `text-xs font-bold normal-case tracking-normal ${complete ? 'text-emerald-400' : 'text-amber-400'}`;
 }
 
 async function saveProfile(e) {
@@ -61,7 +69,9 @@ async function saveProfile(e) {
     });
 
     if (data.status === 'success') {
-        flash('Profile saved.');
+        document.getElementById('profile-form').dataset.dirty = 'false';
+        await loadProfile();
+        flash('Search preferences saved.');
         updateCompleteBadge(data.complete);
     } else {
         flash(data.message || 'Save failed.', false);

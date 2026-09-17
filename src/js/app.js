@@ -1,3 +1,6 @@
+import { initAvailability } from './workspace/availability.js';
+import { initWorkspaceShell } from './workspace/shell.js';
+import { initChatNavigation } from './chat/chatNavigation.js';
 /**
  * @file js/app.js
  * @description Main application bootstrap. Initializes modular components, binds functions to global window scope, and coordinates event listeners.
@@ -44,6 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.activeTab = 'chats';
     }
     
+    initWorkspaceShell();
+    initChatNavigation();
+    initAvailability();
     initTabs();
     initFilePaste();
     parseMarkdownElements();
@@ -72,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const textareaInput = document.getElementById('q');
     if (textareaInput) {
         textareaInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
                 chatForm.dispatchEvent(new Event('submit'));
             }
@@ -92,9 +98,15 @@ document.addEventListener('DOMContentLoaded', () => {
             textarea.value = pendingPrompt;
             textarea.style.height = '';
             textarea.style.height = textarea.scrollHeight + 'px';
-            if (chatForm) {
-                chatForm.dispatchEvent(new Event('submit'));
-            }
+            // Restore the draft for review; sending remains an explicit action.
         }
+    }
+
+    // Auto-start the daily briefing after landing on a fresh conversation. The
+    // briefing trigger navigates here via new_chat=1 and stashes this flag.
+    const briefingAutoStart = sessionStorage.getItem('briefing_autostart');
+    if (briefingAutoStart !== null) {
+        sessionStorage.removeItem('briefing_autostart');
+        window.startBriefing?.(briefingAutoStart === '1');
     }
 });

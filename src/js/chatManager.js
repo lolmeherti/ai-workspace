@@ -1,9 +1,31 @@
+import { flushDraftChanges } from './chat/draftSync.js';
+import { captureDraft, recoverSubmittedDraft } from './chat/chatNavigation.js';
+import { ensureAIAvailable } from './workspace/availability.js';
+import { notify, confirmAction } from './workspace/feedback.js';
+import { showChatSkeleton } from './workspace/chatSkeleton.js';
 import { state } from './state.js';
 import { streamResponse } from './streamer/streamResponse.js';
 import { removeFile } from './fileHandler.js';
 
 export async function handleChatSubmit(e) {
     e.preventDefault();
+    if (state.navigationPending || state.pendingUploads) {
+        notify(state.pendingUploads ? 'Wait for attachments to finish uploading. Your draft is kept.' : 'Opening the selected conversation. Your draft is kept.', { id: 'chat-navigation', kind: 'info' });
+        return;
+    }
+    if (state.editorSaving) {
+        notify('Your document is being saved. Wait for it to finish before sending.', { target: document.getElementById('composer-notices'), kind: 'info' });
+        return;
+    }
+    if (!ensureAIAvailable(document.getElementById('composer-notices')) || state.isGenerating) return;
+    if (state.contextLocked) {
+        notify('Context is full. Review Context Data or condense this conversation before sending.', { id: 'context-full', kind: 'warning' });
+        return;
+    }
+    if (state.editorVisible) { try { await flushDraftChanges(); } catch { return; } }
+    if (state.isGenerating || state.navigationPending || state.editorSaving) return;
+    const submittedDraft = captureDraft();
+    const submittedSession = state.sessionId;
     
     const form = document.getElementById("chatForm");
     const inputField = document.getElementById("q");
@@ -28,19 +50,20 @@ export async function handleChatSubmit(e) {
     }
 
     const formData = new FormData(form);
+    if (state.bypassWarning) { formData.set('bypass_warning', '1'); state.bypassWarning = false; }
     if (state.pastedImageFile) {
         formData.set("file", state.pastedImageFile, "pasted_image.png");
     } else if (state.selectedFile) {
         formData.set("file", state.selectedFile, state.selectedFile.name);
     }
 
-    if (window.activeEditFile) {
+    if (state.editorVisible && window.activeEditFile) {
         formData.set("active_edit_file", window.activeEditFile);
     }
 
     let finalQueryText = message;
     
-    if (window.activeToggledBlocks && window.activeToggledBlocks.size > 0 && window.activeBlocks.length > 0) {
+    if (state.editorVisible && window.activeToggledBlocks && window.activeToggledBlocks.size > 0 && window.activeBlocks.length > 0) {
         const toggledArray = Array.from(window.activeToggledBlocks);
         
         let injectBefore = `The user has highlighted these sections from '${window.activeEditFile}':\n`;
@@ -109,18 +132,25 @@ export async function handleChatSubmit(e) {
         docWrapper.className = "flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3";
         docWrapper.innerHTML = `
             <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
-            <span class="text-xs text-slate-300 font-medium truncate">${file.name}</span>
+            <span class="text-xs text-slate-300 font-medium truncate"></span>
         `;
+        docWrapper.querySelector('span').textContent = file.name;
         userBubble.prepend(docWrapper);
     }
 
+    const submittedUser = userNode.querySelector('.chat-message-container') || userNode.firstElementChild;
     chatWindow.appendChild(userNode);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
     window.selectedFileReferences = [];
     window.updateFileReferencesUI();
 
-    await streamResponse(formData, displayMessage);
+    const outcome = await streamResponse(formData, displayMessage);
+    if (outcome?.recoverDraft) {
+        recoverSubmittedDraft(submittedSession, submittedDraft);
+        notify(outcome.message || 'The request could not start. Your draft is kept.', { target: state.sessionId === submittedSession ? document.getElementById('composer-notices') : undefined, kind: 'warning' });
+        if (!outcome.started) submittedUser?.remove();
+    }
 }
 
 export function toggleChatEditMode() {
@@ -134,14 +164,14 @@ export function toggleChatEditMode() {
     if (state.isChatEditMode) {
         chatsList.classList.add('in-edit-mode');
         manageBtn.innerHTML = '<uk-icon icon="close" class="w-3.5 h-3.5"></uk-icon> Cancel';
-        manageBtn.className = "text-xs text-rose-400 hover:text-rose-300 font-medium transition-colors cursor-pointer flex items-center gap-1";
+        manageBtn.className = "text-xs text-rose-400 hover:text-rose-300 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1";
         deleteBar.classList.remove('translate-y-full');
         state.selectedChatIds = [];
         updateSelectedChatsUI();
     } else {
         chatsList.classList.remove('in-edit-mode');
         manageBtn.innerHTML = '<uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage';
-        manageBtn.className = "text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1";
+        manageBtn.className = "text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1";
         deleteBar.classList.add('translate-y-full');
         
         document.querySelectorAll('.chat-session-item').forEach(item => {
@@ -199,11 +229,12 @@ export function handleChatSelection(e) {
     updateSelectedChatsUI();
 }
 
-export function submitMultiDelete() {
+export async function submitMultiDelete() {
     if (state.selectedChatIds.length === 0) return;
     
     const confirmMsg = `Are you sure you want to permanently delete these ${state.selectedChatIds.length} conversations?`;
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirmAction(confirmMsg, { title: 'Delete conversations', confirmLabel: 'Delete', destructive: true }))) return;
+    showChatSkeleton();
 
     const form = document.createElement('form');
     form.method = 'POST';

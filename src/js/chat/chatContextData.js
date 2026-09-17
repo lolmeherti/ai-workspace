@@ -1,581 +1,503 @@
-/**
- * @file js/chat/chatContextData.js
- * @description Context Data panel + viewer: per-source Raw / Atomized / Evicted
- * state machine with manual atomize, re-atomize, edit/delete atoms, evict raw,
- * and restore. Drives the raw -> atomized arrow in the viewer modal.
- */
+/** Context inspector. Full-height drawer: query, actions, sources, facts and apply workflow. */
+import { requestJson, notify, confirmAction, withPending } from '../workspace/feedback.js';
+import { ensureAIAvailable, reportBusy, paintAvailability } from '../workspace/availability.js';
+import { updateConversation } from './chatNavigation.js';
+import { state } from '../state.js';
 
-import { addCodeCopyButtons } from '../markdown.js';
+let epoch = 0;
+let dirty = false;
+let pending = false;
+let currentData = null;
+let returnFocus = null;
+let editMode = null;   // null | 'evidence' | 'facts'
+let factsPreview = false;
 
-const BADGES = {
-    raw:       { text: 'Raw',        cls: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' },
-    raw_atoms: { text: 'Raw + atoms', cls: 'bg-sky-500/10 border-sky-500/20 text-sky-400' },
-    atomized:  { text: 'Atomized',   cls: 'bg-violet-500/10 border-violet-500/20 text-violet-400' },
-    evicted:   { text: 'Evicted',    cls: 'bg-rose-500/10 border-rose-500/20 text-rose-400' },
+const labels = { raw: 'Full evidence', raw_atoms: 'Evidence + key facts', atomized: 'Key facts only', evicted: 'Excluded' };
+const panel = () => document.getElementById('context-data-panel');
+const host = () => document.getElementById('context-detail-host');
+const list = () => document.getElementById('context-data-items');
+function stateOf(d) { return d.raw_evicted ? d.atomic_context?.length ? 'atomized' : 'evicted' : d.atomic_context?.length ? 'raw_atoms' : 'raw'; }
+function el(tag, cls = '', text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+const ICON = path => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+const ICONS = {
+    search: ICON('<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>'),
+    copy: ICON('<path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>'),
+    bolt: ICON('<path d="M13 10V3L4 14h7v7l9-11h-7z"/>'),
+    edit: ICON('<path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'),
+    globe: ICON('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>'),
+    external: ICON('<path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
+    arrow: ICON('<path d="M10 19l-7-7m0 0l7-7m-7 7h18"/>'),
 };
-
-function hasAtoms(data) {
-    return Array.isArray(data.atomic_context) && data.atomic_context.length > 0;
+function icon(name, cls = '') {
+    const s = document.createElement('span');
+    s.className = 'inline-flex flex-shrink-0';
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = ICONS[name].replace('<svg ', `<svg class="${cls}" `);
+    return s;
 }
 
-function stateOf(data) {
-    const evicted = !!data.raw_evicted;
-    const atoms = hasAtoms(data);
-    if (evicted) return atoms ? 'atomized' : 'evicted';
-    return atoms ? 'raw_atoms' : 'raw';
-}
-
-function badgeCls(state) {
-    return 'context-badge text-[9px] px-1.5 py-0.5 rounded-full border ' + BADGES[state].cls;
-}
-
-function metaFor(data) {
-    const parts = [];
-    const tool = (data.tool_name && data.tool_name.trim() !== '') ? data.tool_name : '';
-    if (tool) parts.push(tool);
-    const srcCount = data.sources
-        ? Object.keys(data.sources).length
-        : (Number(data.source_count) || 0);
-    if (srcCount > 0) parts.push(`${srcCount} source${srcCount === 1 ? '' : 's'}`);
-    parts.push(`raw ~${Number(data.token_estimate) || 0}`);
-    if (hasAtoms(data)) parts.push(`atoms ~${Number(data.atomic_tokens) || 0}`);
-    return parts.join(' · ');
-}
-
-/** POST helper for the atomize_context action. */
-async function postAtomize(op, id, claims) {
+const fetchView = id => requestJson(`index.php?view_context=${encodeURIComponent(id)}&ajax=1`);
+const post = (op, id, claims) => {
     const body = new URLSearchParams({ action: 'atomize_context', op, id: String(id) });
     if (claims !== undefined) body.set('claims', JSON.stringify(claims));
-    const resp = await fetch('index.php', { method: 'POST', body });
-    return resp.json();
-}
-
-async function fetchView(id) {
-    const resp = await fetch(`index.php?view_context=${id}&ajax=1`);
-    return resp.json();
-}
-
-/** Re-render a panel row from fresh view data. */
-function renderRow(id, data) {
-    const item = document.querySelector(`.context-item[data-id="${id}"]`);
-    if (!item) return;
-
-    const state = stateOf(data);
-    item.setAttribute('data-state', state);
-
-    const badge = item.querySelector('.context-badge');
-    if (badge) {
-        badge.textContent = BADGES[state].text;
-        badge.className = badgeCls(state);
-        if (state === 'evicted') badge.title = 'This raw data is not part of the chat anymore. Restore loads the full data back in.';
+    return requestJson('index.php', { method: 'POST', body });
+};
+function applyContextTokens(res) {
+    if (res && typeof res.total_session_tokens === 'number') {
+        updateConversation(state.sessionId, { tokens: res.total_session_tokens });
     }
-
-    const meta = item.querySelector('.context-meta');
-    if (meta) meta.textContent = metaFor(data);
-
-    const btnWrap = item.querySelector('.context-btns');
-    if (btnWrap) {
-        btnWrap.innerHTML = '';
-        btnWrap.appendChild(actionButton('view', 'View', id, state));
-        if (state === 'raw') {
-            btnWrap.appendChild(actionButton('atomize', 'Atomize', id, state));
-        } else if (state === 'raw_atoms' || state === 'atomized') {
-            btnWrap.appendChild(actionButton('reatomize', 'Re-atomize', id, state));
-            btnWrap.appendChild(actionButton('delete_atoms', 'Delete atoms', id, state));
+}
+export async function canLeaveContext() {
+    if (pending) { notify('Context is being updated. Wait for this operation to finish.', { target: host() }); return false; }
+    return !dirty || await confirmAction({ title: 'Discard unsaved context changes?', message: 'Your edits or extracted preview have not been saved.', confirmLabel: 'Discard changes', destructive: true });
+}
+export function resetContextDetail() {
+    epoch++; dirty = false; currentData = null; editMode = null; factsPreview = false;
+    if (host()) { host().replaceChildren(); host().hidden = true; }
+    if (list()) list().hidden = false;
+}
+export function openContextPanel() {
+    returnFocus = document.activeElement;
+    panel().hidden = false;
+    document.getElementById('chat-file-editor-drawer')?.classList.add('inspector-hidden');
+    document.getElementById('context-toggle')?.setAttribute('aria-expanded', 'true');
+}
+async function closeContext() {
+    if (!await canLeaveContext()) return;
+    resetContextDetail(); panel().hidden = true; panel().classList.remove('is-expanded');
+    updateExpandButton(false);
+    document.getElementById('chat-file-editor-drawer')?.classList.remove('inspector-hidden');
+    document.getElementById('context-toggle')?.setAttribute('aria-expanded', 'false');
+    if (returnFocus?.isConnected) returnFocus.focus();
+}
+function count() { const el = document.getElementById('context-data-count'); if (el) el.textContent = list()?.querySelectorAll('.context-item').length || 0; }
+function renderRow(id, d, root = list()) {
+    const row = root?.querySelector(`.context-item[data-id="${Number(id)}"]`); if (!row) return;
+    row.dataset.state = stateOf(d);
+    const badge = row.querySelector('.context-badge'); if (badge) badge.textContent = labels[stateOf(d)];
+    const meta = row.querySelector('.context-meta');
+    if (meta) meta.textContent = `${d.tool_name || 'Source'} · ~${Number(d.raw_evicted ? d.atomic_tokens : d.token_estimate) || 0} active tokens`;
+    const actions = row.querySelector('.context-btns');
+    if (actions) {
+        actions.replaceChildren();
+        for (const [action, label, variant] of [['view', 'View', ''], ['edit_raw', 'Edit evidence', 'secondary'], [d.atomic_context?.length ? 'reatomize' : 'atomize', d.atomic_context?.length ? 'Extract again' : 'Extract key facts', 'primary']]) {
+            const btn = node('button', label, `ui-button${variant ? ` ui-button--${variant}` : ''}`); btn.type = 'button'; btn.dataset.action = action; btn.dataset.id = id; actions.append(btn);
         }
-        btnWrap.appendChild(actionButton(
-            state === 'raw' || state === 'raw_atoms' ? 'evict_raw' : 'restore',
-            state === 'raw' || state === 'raw_atoms' ? 'Evict raw' : 'Restore',
-            id, state
-        ));
     }
 }
-
-function actionButton(action, label, id, state) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    const isEvict = action === 'evict_raw';
-    const isRestore = action === 'restore';
-    btn.className = 'context-action-btn shrink-0 text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 transition-colors cursor-pointer ' +
-        (isEvict ? 'hover:border-rose-500/40 hover:text-rose-400' :
-         isRestore ? 'hover:border-cyan-500/40 hover:text-cyan-400' :
-         'hover:border-cyan-500/40 hover:text-cyan-400');
-    btn.textContent = label;
-    btn.setAttribute('data-action', action);
-    btn.setAttribute('data-id', String(id));
-    return btn;
+export async function refreshContextItem(id, { root = list(), updateViewer = true } = {}) {
+    const version = epoch;
+    const d = await fetchView(id); renderRow(id, d, root);
+    if (updateViewer && version === epoch && currentData?.id == id && !dirty) fill(d);
+    return d;
 }
-
-export async function refreshContextItem(id) {
-    const data = await fetchView(id);
-    if (data.status !== 'success') return;
-    renderRow(id, data);
-    // If the viewer modal for this id is open, re-render it in place.
-    const modal = document.getElementById('context-view-modal');
-    if (modal && modal.getAttribute('data-id') === String(id)) {
-        fillModalBody(modal, data);
-    }
-    return data;
+export function addContextItem(item, root = list()) {
+    if (!root || root.querySelector(`.context-item[data-id="${Number(item.id)}"]`)) return;
+    root.querySelector('#context-data-empty')?.remove();
+    const row = node('div', '', 'context-item'); row.dataset.id = item.id;
+    const copy = node('div', '', 'min-w-0 flex-1');
+    copy.append(node('div', item.query || item.tool_name || 'Context source'), node('div', '', 'context-meta text-xs text-slate-400'));
+    const badge = node('span', '', 'context-badge');
+    const actions = node('div', '', 'context-btns');
+    const view = node('button', 'View', 'ui-button'); view.type = 'button'; view.dataset.action = 'view'; view.dataset.id = item.id;
+    actions.append(view); row.append(copy, badge, actions); root.append(row);
+    renderRow(item.id, item, root); if (root === list()) count();
 }
-
-/** Live-add a freshly retrieved Context Data row (SSE context_data_added). */
-export function addContextItem(item) {
-    const container = document.getElementById('context-data-items');
-    if (!container) return;
-
-    const empty = document.getElementById('context-data-empty');
-    if (empty) empty.remove();
-
-    if (container.querySelector(`.context-item[data-id="${item.id}"]`)) return;
-
-    const data = {
-        id: item.id,
-        raw_evicted: false,
-        atomic_context: null,
-        atomic_tokens: 0,
-        token_estimate: Number(item.token_estimate) || 0,
-        tool_name: item.tool_name || '',
-        search_query: item.query || '',
-        sources: null,
-        source_count: Number(item.source_count) || 0,
-    };
-
-    const div = document.createElement('div');
-    div.className = 'context-item flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-700/40 bg-slate-900/30';
-    div.setAttribute('data-id', item.id);
-    div.appendChild(buildRowInner(data));
-    container.appendChild(div);
-    updateContextCount();
-}
-
-/** Build the inner markup of a row (shared by server render + JS render). */
-function buildRowInner(data) {
-    const state = stateOf(data);
-    const label = (data.search_query && data.search_query.trim() !== '')
-        ? data.search_query : ((data.tool_name && data.tool_name.trim() !== '') ? data.tool_name : 'Context Data');
-
-    const wrap = document.createElement('div');
-    wrap.className = 'flex flex-col min-w-0 flex-1';
-
-    const labelEl = document.createElement('span');
-    labelEl.className = 'text-xs text-slate-300 truncate';
-    labelEl.textContent = label;
-    wrap.appendChild(labelEl);
-
-    const metaEl = document.createElement('span');
-    metaEl.className = 'context-meta text-[10px] text-slate-500 font-mono';
-    metaEl.textContent = metaFor(data);
-    wrap.appendChild(metaEl);
-
-    const badge = document.createElement('span');
-    badge.className = badgeCls(state);
-    badge.textContent = BADGES[state].text;
-    if (state === 'evicted') badge.title = 'This raw data is not part of the chat anymore. Restore loads the full data back in.';
-
-    const btnWrap = document.createElement('div');
-    btnWrap.className = 'context-btns flex items-center gap-1.5';
-    btnWrap.appendChild(actionButton('view', 'View', data.id, state));
-    if (state === 'raw') {
-        btnWrap.appendChild(actionButton('atomize', 'Atomize', data.id, state));
-    } else if (state === 'raw_atoms' || state === 'atomized') {
-        btnWrap.appendChild(actionButton('reatomize', 'Re-atomize', data.id, state));
-        btnWrap.appendChild(actionButton('delete_atoms', 'Delete atoms', data.id, state));
-    }
-    btnWrap.appendChild(actionButton(
-        state === 'raw' || state === 'raw_atoms' ? 'evict_raw' : 'restore',
-        state === 'raw' || state === 'raw_atoms' ? 'Evict raw' : 'Restore',
-        data.id, state
-    ));
-
-    const frag = document.createDocumentFragment();
-    frag.appendChild(wrap);
-    frag.appendChild(badge);
-    frag.appendChild(btnWrap);
-    return frag;
-}
-
-function updateContextCount() {
-    const container = document.getElementById('context-data-items');
-    const countEl = document.getElementById('context-data-count');
-    if (container && countEl) {
-        countEl.textContent = String(container.querySelectorAll('.context-item').length);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Row + viewer actions
-// ---------------------------------------------------------------------------
-
 export async function viewContextItem(id) {
-    const data = await fetchView(id);
-    if (data.status !== 'success') return;
-    showContextModal(data);
+    if (!await canLeaveContext()) return;
+    resetContextDetail(); openContextPanel();
+    const version = ++epoch;
+    host().hidden = false; list().hidden = true; host().replaceChildren(renderLoadingEvidence());
+    try { const d = await fetchView(id); if (version === epoch) fill(d); }
+    catch (e) { if (version === epoch) notify(e.message, { target: host(), action: 'Retry', onAction: () => viewContextItem(id) }); }
 }
-
-export async function atomizeContextItem(id) {
-    // Atomize produces a preview in the modal (no commit until Done).
-    await viewContextItem(id);
-    runPreview(id, 'atomize');
-}
-
-export async function reAtomizeContextItem(id) {
-    runPreview(id, 're-atomize');
-}
-
-export async function evictRawContextItem(id) {
-    await postAtomize('evict_raw', id);
-    await refreshContextItem(id);
-}
-
-export async function restoreContextItem(id) {
-    await postAtomize('restore', id);
-    await refreshContextItem(id);
-}
-
-export async function deleteAtomsContextItem(id) {
-    await postAtomize('delete_atoms', id);
-    await refreshContextItem(id);
-}
-
-export async function editAtomsContextItem(id, claims) {
-    await postAtomize('edit_atoms', id, claims);
-    await refreshContextItem(id);
-}
-
-/** Kick off the atomize/re-atomize preview inside an open modal. */
-async function runPreview(id, op) {
-    const modal = document.getElementById('context-view-modal');
-    if (!modal) {
-        const data = await fetchView(id);
-        if (data.status !== 'success') return;
-        showContextModal(data);
-    }
-    const m = document.getElementById('context-view-modal');
-    const atoms = m.querySelector('.context-atoms');
-    if (!atoms) return;
-
-    atoms.innerHTML = '';
-    const spinner = document.createElement('div');
-    spinner.className = 'flex items-center gap-2 text-xs text-violet-300';
-    spinner.innerHTML = '<span class="uk-spinner uk-spinner-xs animate-spin" uk-spinner="ratio: 0.5"></span> Condensing raw evidence...';
-    atoms.appendChild(spinner);
-
-    const res = await postAtomize(op, id);
-    if (res.status === 'preview') {
-        renderPreview(atoms, id, res.claims, res.atom_tokens);
-    } else if (res.status === 'empty') {
-        atoms.innerHTML = '';
-        const note = document.createElement('p');
-        note.className = 'text-xs text-slate-500 italic';
-        note.textContent = res.message || 'No durable facts could be extracted.';
-        atoms.appendChild(note);
-    } else {
-        atoms.innerHTML = '';
-        const err = document.createElement('p');
-        err.className = 'text-xs text-rose-400';
-        err.textContent = (res && res.message) ? res.message : 'Atomization failed.';
-        atoms.appendChild(err);
-    }
-}
-
-function renderPreview(atoms, id, claims, atomTokens) {
-    atoms.innerHTML = '';
-    const ta = document.createElement('textarea');
-    ta.className = 'w-full h-40 text-xs text-slate-200 bg-slate-950/60 border border-slate-700/50 rounded-lg p-2 font-mono leading-relaxed';
-    ta.value = claims.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
-    atoms.appendChild(ta);
-
-    const meta = document.createElement('div');
-    meta.className = 'text-[10px] text-slate-500 font-mono mt-1';
-    meta.textContent = `preview · ~${Number(atomTokens) || 0} tokens`;
-    atoms.appendChild(meta);
-
-    const bar = document.createElement('div');
-    bar.className = 'flex items-center gap-2 mt-2';
-    const done = document.createElement('button');
-    done.type = 'button';
-    done.className = 'text-[10px] px-2 py-1 rounded border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 cursor-pointer';
-    done.textContent = 'Done (atomize + evict raw)';
-    done.addEventListener('click', async () => {
-        done.disabled = true;
-        await postAtomize('commit', id, parseAtomLines(ta.value));
-        done.disabled = false;
-        await refreshContextItem(id);
+export function parseAtomLines(text) {
+    return text.split('\n').filter(x => x.trim()).map(line => {
+        const m = line.trim().match(/^\[([^\]]+)\]\s*(.+)$/);
+        if (!m) throw new Error('Keep each key fact in the form [source_id] fact. No lines have been saved.');
+        return { source_id: m[1], claim: m[2] };
     });
-    bar.appendChild(done);
-
-    const again = document.createElement('button');
-    again.type = 'button';
-    again.className = 'text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 cursor-pointer';
-    again.textContent = 'Re-atomize';
-    again.addEventListener('click', () => runPreview(id, 're-atomize'));
-    bar.appendChild(again);
-
-    const cancel = document.createElement('button');
-    cancel.type = 'button';
-    cancel.className = 'text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 cursor-pointer';
-    cancel.textContent = 'Cancel';
-    cancel.addEventListener('click', () => refreshContextItem(id));
-    bar.appendChild(cancel);
-
-    atoms.appendChild(bar);
 }
 
-function parseAtomLines(text) {
-    const claims = [];
-    for (const line of (text || '').split('\n')) {
-        const t = line.trim();
-        if (!t) continue;
-        const m = t.match(/^\[([^\]]+)\]\s*(.+)$/);
-        if (m) claims.push({ source_id: m[1], claim: m[2] });
+/* ----------------------------------------------------------------------------
+ * Drawer detail view (matches plans/concepts/context-data.html context-drawer)
+ * ------------------------------------------------------------------------- */
+
+function activeTokens(d) {
+    const raw = d.raw_evicted ? 0 : (Number(d.token_estimate) || 0);
+    const atoms = d.atomic_context?.length ? (Number(d.atomic_tokens) || 0) : 0;
+    return raw + atoms;
+}
+function queryText(d) { return d.search_query || d.tool_name || 'Context source'; }
+function estimateTokens(text) { return Math.max(1, Math.round(String(text || '').length / 4)); }
+function validUrl(url) { try { const u = new URL(url); return ['http:', 'https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
+
+/** Render markdown via the global `marked`. Escapes raw HTML first (evidence is scraped text, never trusted markup), then returns HTML or null when `marked` is unavailable. */
+function renderMd(text) {
+    const src = text == null ? '' : String(text);
+    if (typeof marked !== 'undefined') {
+        try {
+            const escaped = src.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return marked.parse(escaped);
+        } catch (e) { /* fall through to null */ }
     }
-    return claims;
+    return null;
 }
 
-// ---------------------------------------------------------------------------
-// Viewer modal (raw -> atomized arrow)
-// ---------------------------------------------------------------------------
-
-function showContextModal(data) {
-    const existing = document.getElementById('context-view-modal');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'context-view-modal';
-    overlay.setAttribute('data-id', String(data.id));
-    overlay.className = 'fixed inset-0 z-[120] flex items-center justify-center bg-[#070b14]/90 backdrop-blur-sm';
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-
-    const card = document.createElement('div');
-    card.className = 'context-modal-card bg-[#0f172a] border border-cyan-500/30 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.2)]';
-
-    const header = document.createElement('div');
-    header.className = 'flex items-center justify-between px-5 py-3 border-b border-cyan-500/20 shrink-0';
-    const title = document.createElement('span');
-    title.className = 'text-sm font-semibold text-slate-100 truncate';
-    const modalTool = (data.tool_name && data.tool_name.trim() !== '') ? data.tool_name : 'Context Data';
-    const modalQuery = (data.search_query && data.search_query.trim() !== '') ? data.search_query : '';
-    title.textContent = modalQuery !== '' ? `${modalTool}: ${modalQuery}` : modalTool;
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'text-slate-400 hover:text-rose-400 text-xl leading-none px-2 cursor-pointer bg-transparent border-none';
-    closeBtn.textContent = '\u00d7';
-    closeBtn.addEventListener('click', () => overlay.remove());
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    card.appendChild(header);
-
-    const body = document.createElement('div');
-    body.className = 'context-modal-body flex-1 overflow-y-auto px-5 py-4 space-y-4';
-    card.appendChild(body);
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    fillModalBody(overlay, data);
-}
-
-function fillModalBody(overlay, data) {
-    const card = overlay.querySelector('.context-modal-card');
-    const body = card.querySelector('.context-modal-body');
-    body.innerHTML = '';
-
-    if (data.sources && typeof data.sources === 'object' && Object.keys(data.sources).length) {
-        const srcHeading = heading('Sources');
-        body.appendChild(srcHeading);
-        for (const [id, s] of Object.entries(data.sources)) {
-            const a = document.createElement('a');
-            a.href = s.url || '#';
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.className = 'flex flex-col py-1.5 border-b border-slate-800/60';
-            const t = document.createElement('span');
-            t.className = 'text-xs text-slate-300 truncate';
-            t.textContent = s.title || s.domain || s.url || id;
-            a.appendChild(t);
-            if (s.domain && s.domain !== (s.title || '')) {
-                const d = document.createElement('span');
-                d.className = 'text-[10px] text-slate-500 font-mono truncate';
-                d.textContent = s.domain;
-                a.appendChild(d);
-            }
-            body.appendChild(a);
-        }
-    }
-
-    // div1 = raw
-    const state = stateOf(data);
-    const rawHeading = document.createElement('div');
-    rawHeading.className = 'flex items-center gap-2';
-    const rawTitle = heading('Raw Evidence');
-    rawHeading.appendChild(rawTitle);
-    const rawTok = document.createElement('span');
-    rawTok.className = 'text-[10px] text-slate-500 font-mono';
-    rawTok.textContent = `~${Number(data.token_estimate) || 0} tokens`;
-    rawHeading.appendChild(rawTok);
-    if (state === 'atomized' || state === 'evicted') {
-        const evBadge = document.createElement('span');
-        evBadge.className = badgeCls('evicted');
-        evBadge.textContent = 'Evicted';
-        evBadge.title = 'This raw data is not part of the chat anymore. Restore loads the full data back in.';
-        rawHeading.appendChild(evBadge);
-    }
-    body.appendChild(rawHeading);
-
-    const rawBox = document.createElement('div');
-    rawBox.className = 'space-y-2 border border-slate-800 rounded-lg p-4 bg-slate-900/50 max-h-96 overflow-y-auto';
-    if (data.parsed && Array.isArray(data.parsed) && data.parsed.length) {
-        for (const src of data.parsed) {
-            const srcWrap = document.createElement('div');
-            srcWrap.className = 'space-y-1';
-            const srcTitle = document.createElement('div');
-            srcTitle.className = 'text-sm font-semibold text-slate-100';
-            srcTitle.textContent = src.title || src.id || 'Source';
-            srcWrap.appendChild(srcTitle);
-            for (const chunk of (src.chunks || [])) {
-                const chunkEl = document.createElement('div');
-                chunkEl.className = 'text-xs text-slate-300 leading-relaxed';
-                if (typeof marked !== 'undefined') {
-                    chunkEl.innerHTML = marked.parse(chunk);
-                } else {
-                    chunkEl.textContent = chunk;
-                }
-                srcWrap.appendChild(chunkEl);
-            }
-            rawBox.appendChild(srcWrap);
-        }
-    } else {
-        const md = document.createElement('div');
-        md.className = 'markdown-content text-slate-300';
-        const rawMessage = data.message || '';
-        if (typeof marked !== 'undefined' && rawMessage.trim() !== '') {
-            md.innerHTML = marked.parse(rawMessage);
-            if (typeof hljs !== 'undefined') {
-                md.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
-            }
-            addCodeCopyButtons(md);
-        } else {
-            md.textContent = rawMessage || '(empty)';
-        }
-        rawBox.appendChild(md);
-    }
-    body.appendChild(rawBox);
-
-    // arrow
-    const arrow = document.createElement('div');
-    arrow.className = 'flex items-center justify-center gap-2 text-slate-600 text-[10px] font-mono uppercase tracking-wider';
-    arrow.textContent = 'raw \u2192 atomized';
-    body.appendChild(arrow);
-
-    // div2 = atoms
-    const atoms = document.createElement('div');
-    atoms.className = 'context-atoms space-y-2 border border-slate-800 rounded-lg p-3 bg-slate-900/50';
-    const atomsHeading = document.createElement('div');
-    atomsHeading.className = 'flex items-center gap-2';
-    const atomsTitle = heading('Atomized');
-    atomsHeading.appendChild(atomsTitle);
-    if (hasAtoms(data)) {
-        const atomTok = document.createElement('span');
-        atomTok.className = 'text-[10px] text-slate-500 font-mono';
-        atomTok.textContent = `~${Number(data.atomic_tokens) || 0} tokens`;
-        atomsHeading.appendChild(atomTok);
-
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 cursor-pointer';
-        editBtn.textContent = 'Edit';
-        let editing = false;
-        editBtn.addEventListener('click', async () => {
-            if (!editing) {
-                editing = true;
-                const pre = atoms.querySelector('pre');
-                const ta = document.createElement('textarea');
-                ta.className = 'w-full h-40 text-xs text-slate-200 bg-slate-950/60 border border-slate-700/50 rounded-lg p-2 font-mono leading-relaxed';
-                ta.value = data.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
-                if (pre) pre.replaceWith(ta);
-                editBtn.textContent = 'Done';
-            } else {
-                const ta = atoms.querySelector('textarea');
-                await editAtomsContextItem(data.id, parseAtomLines(ta.value));
-            }
+/** Display cards: parsed sources first, source_map fallback, plain manual last. */
+function sourceFeed(d) {
+    const map = (d.sources && typeof d.sources === 'object') ? d.sources : {};
+    if (d.parsed?.length) {
+        return d.parsed.map(s => {
+            const meta = map[s.id] || {};
+            const text = (s.chunks || []).join('\n').trim();
+            return { id: s.id, title: s.title || meta.title || s.id, domain: s.domain || meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
         });
-        atomsHeading.appendChild(editBtn);
     }
-    atoms.appendChild(atomsHeading);
+    const ids = Object.keys(map);
+    if (ids.length) {
+        return ids.map(id => {
+            const meta = map[id] || {};
+            const text = d.message || '';
+            return { id, title: meta.title || meta.domain || id, domain: meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
+        });
+    }
+    return [{ id: 'manual', title: d.tool_name || 'Evidence', domain: '', url: '', text: d.message || '', tokens: estimateTokens(d.message) }];
+}
 
-    if (hasAtoms(data)) {
-        const pre = document.createElement('pre');
-        pre.className = 'whitespace-pre-wrap break-words text-xs text-slate-300 font-mono leading-relaxed';
-        pre.textContent = data.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
-        atoms.appendChild(pre);
+/** Edit contract: source ids must match ContextDataViewAction::parseSources (or 'manual'). */
+function editorSources(d) {
+    if (d.parsed?.length) return d.parsed.map(s => ({ id: s.id, title: s.title || s.id, text: (s.chunks || []).join('\n') }));
+    return [{ id: 'manual', title: 'Evidence', text: d.message || '' }];
+}
+
+async function copyQuery(d) {
+    try { await navigator.clipboard.writeText(queryText(d)); notify('Query copied.', { target: host(), kind: 'info' }); }
+    catch { notify('Could not copy the query.', { target: host() }); }
+}
+
+function renderBreadcrumb() {
+    const wrap = el('div', 'flex items-center justify-between text-[11px] px-1 shrink-0');
+    const back = el('button', 'context-link-btn text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium transition-colors');
+    back.type = 'button';
+    back.append(icon('arrow', 'w-3 h-3'), document.createTextNode('All context'));
+    back.addEventListener('click', () => { withPending(back, async () => { if (await canLeaveContext()) resetContextDetail(); }, { target: host() }); });
+    wrap.append(back, el('span', 'text-slate-500 text-[10px]', 'Evidence & extracted facts'));
+    return wrap;
+}
+
+function renderLoadingEvidence() {
+    const wrap = el('div', 'context-loading');
+    wrap.setAttribute('role', 'status'); wrap.setAttribute('aria-live', 'polite');
+    const row = el('div', 'context-skeleton-row');
+    row.append(el('div', 'context-skeleton'), el('div', 'context-skeleton'));
+    wrap.append(el('div', 'context-skeleton h-lg'), row, el('div', 'context-skeleton h-md'), el('div', 'context-skeleton h-md'));
+    return wrap;
+}
+
+function renderQueryBox(d) {
+    const box = el('div', 'context-query-box bg-[#0c1625] border border-[#172d47] rounded-lg p-2.5 text-xs space-y-1.5');
+    const head = el('div', 'flex items-center justify-between');
+    const label = el('span', 'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400');
+    label.append(icon('search', 'w-3 h-3 text-cyan-400'), el('span', '', 'Search Query'));
+    const copy = el('button', 'context-icon-btn text-slate-400 hover:text-cyan-400 transition-colors');
+    copy.type = 'button'; copy.title = 'Copy query';
+    copy.append(icon('copy', 'w-3 h-3'));
+    copy.addEventListener('click', () => copyQuery(d));
+    head.append(label, copy);
+    box.append(head, el('p', 'font-mono text-[11px] text-slate-200 truncate select-text', queryText(d)));
+    return box;
+}
+
+async function toggleContextInclude(id) {
+    if (pending || !await canLeaveContext()) return;
+    const op = currentData?.raw_evicted ? 'restore' : 'evict_raw';
+    pending = true;
+    try {
+        const res = await post(op, id); dirty = false;
+        if (op === 'evict_raw') unlock();
+        applyContextTokens(res);
+        await refreshContextItem(id);
+    } finally { pending = false; }
+}
+
+function renderToggle(d) {
+    const wrap = el('div', 'flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#0a1422] border border-[#172c46] text-xs');
+    const info = el('div', 'min-w-0');
+    info.append(el('div', 'text-[11px] text-slate-300', 'Include in model context'));
+    const sub = d.raw_evicted
+        ? 'Disabled: context excluded from next prompt'
+        : `Active: feeds ${activeTokens(d)} tokens into chat answers`;
+    info.append(el('div', `text-[10px] ${d.raw_evicted ? 'text-slate-500' : 'text-slate-400'}`, sub));
+    const sw = el('button', 'context-switch');
+    sw.type = 'button'; sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', String(!d.raw_evicted));
+    sw.setAttribute('aria-label', 'Include in model context');
+    sw.append(el('span', 'context-switch-knob'));
+    sw.addEventListener('click', () => { withPending(sw, () => toggleContextInclude(d.id), { target: host() }); });
+    wrap.append(info, sw);
+    return wrap;
+}
+
+function renderActions(d) {
+    const wrap = el('div', 'context-actions space-y-2');
+    const grid = el('div', 'grid grid-cols-2 gap-2');
+    const extract = el('button', 'py-1.5 px-2 rounded-md bg-cyan-400 hover:bg-cyan-300 text-[#07131e] font-semibold text-xs transition-colors flex items-center justify-center gap-1');
+    extract.type = 'button'; extract.append(icon('bolt', 'w-3.5 h-3.5'), document.createTextNode('Extract key facts'));
+    extract.addEventListener('click', () => { withPending(extract, () => d.atomic_context?.length ? reAtomizeContextItem(d.id) : atomizeContextItem(d.id), { target: host() }); });
+    const editAll = el('button', 'py-1.5 px-2 rounded-md bg-[#112238] hover:bg-[#162d4a] border border-[#1e3b61] text-slate-200 text-xs font-medium transition-colors flex items-center justify-center gap-1');
+    editAll.type = 'button'; editAll.append(icon('edit', 'w-3.5 h-3.5 text-slate-400'), document.createTextNode('Edit all evidence'));
+    editAll.addEventListener('click', () => { withPending(editAll, async () => { if (await canLeaveContext()) { if (currentData?.id === d.id) startEvidenceEdit(d); else await editEvidenceContextItem(d.id); } }, { target: host() }); });
+    grid.append(extract, editAll);
+    wrap.append(grid, renderToggle(d));
+    return wrap;
+}
+
+function renderSourceCard(src) {
+    const card = el('div', 'context-source-card bg-[#0e1a2b] border border-[#172c46] rounded-lg p-2.5 space-y-2');
+    const top = el('div', 'flex items-start justify-between gap-1.5');
+    const meta = el('div', 'flex items-start gap-1.5 min-w-0 flex-1');
+    meta.append(icon('globe', 'w-3.5 h-3.5 text-cyan-400 mt-0.5 flex-shrink-0'));
+    const info = el('div', 'min-w-0 flex-1');
+    const titleRow = el('div', 'flex items-center gap-1.5');
+    titleRow.append(el('h4', 'text-xs font-semibold text-slate-100 truncate', src.title || src.id));
+    titleRow.append(el('span', 'text-[10px] font-mono text-cyan-300 bg-[#102035] px-1 rounded flex-shrink-0', `~${src.tokens} tok`));
+    info.append(titleRow);
+    if (src.domain) info.append(el('span', 'text-[10px] text-slate-400 font-mono block truncate', src.domain));
+    meta.append(info);
+    top.append(meta);
+    if (validUrl(src.url)) {
+        const a = el('a', 'context-icon-btn text-slate-400 hover:text-white');
+        a.href = validUrl(src.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = 'Open link';
+        a.append(icon('external', 'w-3 h-3'));
+        top.append(a);
+    }
+    const snippet = el('div', 'context-evidence-text p-3 rounded bg-[#070d17] border border-[#142337] overflow-y-auto text-xs text-slate-300 leading-relaxed max-h-48 select-text markdown-content');
+    const snippetHtml = renderMd(src.text || 'No source text available.');
+    if (snippetHtml !== null) snippet.innerHTML = snippetHtml; else snippet.textContent = src.text || 'No source text available.';
+    card.append(top, snippet);
+    return card;
+}
+
+function renderSources(d) {
+    const wrap = el('div', 'context-sources space-y-2');
+    const feed = sourceFeed(d);
+    const head = el('div', 'flex items-center justify-between text-xs text-slate-300 font-medium px-1');
+    const left = el('div', 'flex items-center gap-1.5');
+    left.append(icon('globe', 'w-3.5 h-3.5 text-cyan-400'), el('span', '', 'Sources & Evidence'));
+    left.append(el('span', 'px-1.5 py-0.2 rounded-full bg-[#10233b] text-cyan-300 text-[10px] font-mono border border-cyan-500/20', String(feed.length)));
+    head.append(left, el('span', 'text-[10px] text-slate-400', `${feed.length} source${feed.length === 1 ? '' : 's'} linked`));
+    wrap.append(head);
+    for (const src of feed) wrap.append(renderSourceCard(src));
+    return wrap;
+}
+
+function renderFacts(d) {
+    const wrap = el('div', 'context-facts p-2.5 rounded-lg bg-[#0a1422] border border-[#172c46] space-y-1.5');
+    const head = el('div', 'flex items-center justify-between text-xs');
+    const left = el('span', 'font-semibold text-slate-300 flex items-center gap-1.5');
+    left.append(el('span', 'w-1.5 h-1.5 rounded-full bg-slate-500 flex-shrink-0'), el('span', '', 'Extracted Facts'));
+    const right = el('div', 'flex items-center gap-2');
+    right.append(el('span', 'font-mono text-[10px] text-slate-500', `${Number(d.atomic_tokens) || 0} tokens`));
+    if (d.atomic_context?.length) {
+        const edit = el('button', 'context-link-btn text-cyan-400 hover:text-cyan-300');
+        edit.type = 'button'; edit.textContent = 'Edit';
+        edit.addEventListener('click', () => { withPending(edit, async () => { if (await canLeaveContext()) startFactsEdit(d, d.atomic_context, false); }, { target: host() }); });
+        const del = el('button', 'context-link-btn text-slate-400 hover:text-rose-300');
+        del.type = 'button'; del.textContent = 'Delete';
+        del.addEventListener('click', () => { withPending(del, () => deleteAtomsContextItem(d.id), { target: host() }); });
+        right.append(edit, del);
+    }
+    head.append(left, right);
+    wrap.append(head);
+    const body = el('div', 'context-atoms');
+    if (d.atomic_context?.length) {
+        const raw = d.atomic_context.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
+        const html = renderMd(d.atomic_context.map(c => `- **${c.source_id}** ${c.claim}`).join('\n'));
+        const md = el('div', 'markdown-content context-atoms-list');
+        if (html !== null) md.innerHTML = html; else md.textContent = raw;
+        body.append(md);
     } else {
-        const p = document.createElement('p');
-        p.className = 'text-xs text-slate-600 italic';
-        p.textContent = 'Not atomized yet.';
-        atoms.appendChild(p);
+        body.append(el('p', 'text-[11px] text-slate-500 italic leading-relaxed', 'No facts extracted yet. Click “Extract key facts” to distill evidence into verified bullet points.'));
     }
-    body.appendChild(atoms);
-
-    // control bar
-    const bar = document.createElement('div');
-    bar.className = 'flex items-center gap-2 pt-1 border-t border-slate-800';
-    if (state === 'raw') {
-        bar.appendChild(actionButton('atomize', 'Atomize', data.id, state));
-    } else if (state === 'raw_atoms' || state === 'atomized') {
-        bar.appendChild(actionButton('reatomize', 'Re-atomize', data.id, state));
-        bar.appendChild(actionButton('delete_atoms', 'Delete atoms', data.id, state));
-    }
-    bar.appendChild(actionButton(
-        state === 'raw' || state === 'raw_atoms' ? 'evict_raw' : 'restore',
-        state === 'raw' || state === 'raw_atoms' ? 'Evict raw context' : 'Restore',
-        data.id, state
-    ));
-    body.appendChild(bar);
+    wrap.append(body);
+    return wrap;
 }
 
-function heading(text) {
-    const h = document.createElement('div');
-    h.className = 'text-[10px] font-semibold uppercase tracking-wider text-cyan-400';
-    h.textContent = text;
-    return h;
+function renderBody(d) {
+    const body = el('div', 'context-detail-body');
+    body.append(renderQueryBox(d), renderActions(d), renderSources(d), renderFacts(d));
+    return body;
 }
 
-// ---------------------------------------------------------------------------
-// Delegated click handling (server-rendered + JS-rendered rows share it)
-// ---------------------------------------------------------------------------
+function renderFooter(d) {
+    const f = el('div', 'context-footer p-3 border-t border-[#15253b] bg-[#070d17] space-y-2 shrink-0');
+    const status = el('div', 'flex items-center justify-between text-[10px] font-mono');
+    status.append(el('span', 'text-slate-400', `● ${activeTokens(d)} tokens in active chat`));
+    status.append(el('span', dirty ? 'text-slate-400' : 'text-slate-500', dirty ? 'Unapplied changes staged' : 'Up to date'));
+    const actions = el('div', 'flex items-center gap-2');
+    if (editMode) {
+        const cancel = el('button', 'flex-1 py-1.5 px-3 rounded-lg bg-[#112238] hover:bg-[#162d4a] border border-[#1e3b61] text-slate-200 text-xs font-medium transition-colors', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', () => { withPending(cancel, async () => { if (await canLeaveContext()) fill(d); }, { target: host() }); });
+        const save = el('button', 'py-1.5 px-3 rounded-lg bg-cyan-300 hover:bg-cyan-200 text-[#07131e] font-semibold text-xs transition-colors', 'Save & Apply');
+        save.type = 'button';
+        save.addEventListener('click', () => { withPending(save, () => applyEdits(d), { target: host() }); });
+        actions.append(cancel, save);
+    } else {
+        const exclude = el('button', 'flex-1 py-1.5 px-3 rounded-lg bg-[#3a1b24] hover:bg-[#48202c] border border-rose-900/50 text-rose-300 font-medium text-xs transition-colors', d.raw_evicted ? 'Restore evidence' : 'Exclude context');
+        exclude.type = 'button';
+        exclude.addEventListener('click', () => { withPending(exclude, () => d.raw_evicted ? restoreContextItem(d.id) : evictRawContextItem(d.id), { target: host() }); });
+        const applied = el('button', 'py-1.5 px-3 rounded-lg bg-[#102338] text-slate-400 border border-[#1d3759] text-xs cursor-default', '✓ Applied to Chat');
+        applied.type = 'button'; applied.disabled = true;
+        actions.append(exclude, applied);
+    }
+    f.append(status, actions);
+    return f;
+}
+function rerenderFooter(d) { const old = host().querySelector('.context-footer'); if (old) old.replaceWith(renderFooter(d)); }
 
-export function initContextDataPanel() {
-    const container = document.getElementById('context-data-items');
-    if (!container || container.dataset.contextBound) return;
-    container.dataset.contextBound = '1';
+function fill(d) {
+    currentData = d; dirty = false; editMode = null; factsPreview = false;
+    const root = host(); root.hidden = false; list().hidden = true; root.replaceChildren();
+    root.append(renderBreadcrumb(), renderBody(d), renderFooter(d));
+}
 
-    container.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-action]');
-        if (!btn) return;
-        const id = Number(btn.getAttribute('data-id'));
-        const action = btn.getAttribute('data-action');
-        switch (action) {
-            case 'view':         viewContextItem(id); break;
-            case 'atomize':      atomizeContextItem(id); break;
-            case 'reatomize':    reAtomizeContextItem(id); break;
-            case 'delete_atoms': deleteAtomsContextItem(id); break;
-            case 'evict_raw':    evictRawContextItem(id); break;
-            case 'restore':      restoreContextItem(id); break;
-        }
+function unlock() {
+    state.contextLocked = false;
+    const q = document.getElementById('q'); if (q) { q.disabled = false; q.placeholder = 'Message Localsy…'; }
+    paintAvailability();
+}
+
+async function applyEdits(d) {
+    if (pending) return;
+    if (editMode === 'evidence') return saveEvidence(d);
+    if (editMode === 'facts') return saveFacts(d);
+}
+
+function startEvidenceEdit(d) {
+    editMode = 'evidence'; dirty = true;
+    const area = host().querySelector('.context-sources'); if (!area) return;
+    area.replaceChildren();
+    const sources = editorSources(d);
+    sources.forEach((s, i) => {
+        const label = el('label', 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1', s.title);
+        label.htmlFor = `context-evidence-${i}`;
+        const ta = el('textarea', 'context-evidence-editor w-full min-h-24 p-2 rounded bg-[#070d17] border border-[#142337] font-mono text-[11px] text-slate-300 leading-relaxed resize-y');
+        ta.id = label.htmlFor; ta.rows = 8; ta.value = s.text;
+        ta.addEventListener('input', () => { dirty = true; });
+        area.append(label, ta);
     });
+    area.append(el('p', 'text-[11px] text-slate-500 italic', 'Editing replaces the retained evidence and clears existing key facts so removed text is not reused.'));
+    rerenderFooter(d);
+    area.querySelector('textarea')?.focus();
+}
 
-    // The viewer modal itself also hosts action buttons.
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('#context-view-modal [data-action]');
-        if (!btn) return;
-        const id = Number(btn.getAttribute('data-id'));
-        const action = btn.getAttribute('data-action');
-        switch (action) {
-            case 'atomize':      runPreview(id, 'atomize'); break;
-            case 'reatomize':    runPreview(id, 're-atomize'); break;
-            case 'delete_atoms': deleteAtomsContextItem(id); break;
-            case 'evict_raw':    evictRawContextItem(id); break;
-            case 'restore':      restoreContextItem(id); break;
-        }
+async function saveEvidence(d) {
+    if (pending) return;
+    const editors = [...host().querySelectorAll('.context-evidence-editor')];
+    const sources = editorSources(d);
+    const evidence = sources.map((s, i) => ({ id: s.id, text: editors[i]?.value ?? '' }));
+    pending = true;
+    try {
+        const body = new URLSearchParams({ action: 'atomize_context', op: 'edit_raw', id: String(d.id), base_message: d.message || '', evidence: JSON.stringify(evidence) });
+        const res = await requestJson('index.php', { method: 'POST', body });
+        dirty = false; editMode = null;
+        applyContextTokens(res);
+        await refreshContextItem(d.id);
+        notify('Evidence saved. Extract key facts when you are ready.', { target: host(), kind: 'info' });
+    } finally { pending = false; }
+}
+
+async function runPreview(id, op) {
+    if (pending || !ensureAIAvailable(host()) || !await canLeaveContext()) return;
+    if (currentData?.id != id) await viewContextItem(id);
+    if (currentData?.id != id) return;
+    const d = currentData; const version = epoch; pending = true;
+    const progress = el('div', 'context-progress'); progress.id = 'context-extraction-progress';
+    const spinner = el('span', 'ui-spinner'); spinner.setAttribute('aria-hidden', 'true');
+    const copy = el('span'); copy.append(el('strong', '', 'Extracting key facts…'), el('span', '', 'The AI is reviewing the retained evidence. This can take a moment.'));
+    progress.append(spinner, copy); progress.setAttribute('role', 'status'); progress.setAttribute('aria-live', 'polite');
+    host().prepend(progress); host().setAttribute('aria-busy', 'true');
+    const area = host().querySelector('.context-atoms'); area.replaceChildren(el('p', 'text-slate-400', 'Extracting key facts… Your saved evidence is unchanged.')); area.setAttribute('aria-busy', 'true');
+    try {
+        const res = await post(op, id);
+        if (version !== epoch) return;
+        progress.remove();
+        if (res.status === 'preview') startFactsEdit(d, res.claims || [], true);
+        else { fill(d); notify(res.message || 'No key facts were found.', { target: host(), kind: 'info' }); }
+    } catch (e) { if (version === epoch) { fill(d); notify(e.message, { target: host() }); if (e.code === 'model_busy') reportBusy(e.message); } }
+    finally { pending = false; progress.remove(); host()?.removeAttribute('aria-busy'); area.removeAttribute('aria-busy'); }
+}
+
+function startFactsEdit(d, claims, preview) {
+    editMode = 'facts'; factsPreview = preview; dirty = true;
+    const area = host().querySelector('.context-facts'); if (!area) return;
+    area.replaceChildren();
+    const ta = el('textarea', 'context-fact-editor w-full min-h-28 p-2 rounded bg-[#070d17] border border-[#142337] font-mono text-[11px] text-slate-300 leading-relaxed resize-y');
+    ta.id = 'context-fact-editor'; ta.rows = 7;
+    ta.value = claims.map(c => `[${c.source_id}] ${c.claim}`).join('\n');
+    ta.addEventListener('input', () => { dirty = true; });
+    area.append(ta, el('p', 'text-[11px] text-slate-500 italic', preview ? 'Preview — review before applying. Saving replaces the full evidence with these facts.' : 'One [source_id] fact per line.'));
+    rerenderFooter(d);
+    ta.focus();
+}
+
+async function saveFacts(d) {
+    const ta = host().querySelector('#context-fact-editor'); if (!ta) return;
+    const parsed = parseAtomLines(ta.value);
+    if (!parsed.length) throw new Error('Add at least one key fact, or cancel.');
+    pending = true;
+    try {
+        const res = await post(factsPreview ? 'commit' : 'edit_atoms', d.id, parsed);
+        dirty = false; editMode = null;
+        applyContextTokens(res);
+        await refreshContextItem(d.id);
+        unlock();
+    } finally { pending = false; }
+}
+
+async function mutate(id, op) {
+    if (pending || !await canLeaveContext()) return;
+    if (['delete_atoms', 'evict_raw'].includes(op) && !await confirmAction({ title: op === 'delete_atoms' ? 'Delete these key facts?' : 'Exclude full evidence?', message: op === 'delete_atoms' ? 'The extracted key facts will be deleted. Original evidence remains available to restore.' : 'The full source text will stop being sent to the AI. Saved key facts remain active. You can restore the evidence later.', confirmLabel: op === 'delete_atoms' ? 'Delete key facts' : 'Exclude evidence', destructive: true })) return;
+    pending = true;
+    try {
+        const res = await post(op, id); dirty = false;
+        applyContextTokens(res);
+        await refreshContextItem(id);
+        if (op !== 'restore') unlock();
+    }
+    finally { pending = false; }
+}
+export const atomizeContextItem = id => runPreview(id, 'atomize');
+export const reAtomizeContextItem = id => runPreview(id, 're-atomize');
+export const evictRawContextItem = id => mutate(id, 'evict_raw');
+export const restoreContextItem = id => mutate(id, 'restore');
+export const deleteAtomsContextItem = id => mutate(id, 'delete_atoms');
+export async function editAtomsContextItem(id, claims) { await post('edit_atoms', id, claims); dirty = false; return refreshContextItem(id); }
+export async function editEvidenceContextItem(id) {
+    await viewContextItem(id);
+    if (currentData?.id == id && !dirty && !pending) startEvidenceEdit(currentData);
+}
+
+function node(tag, text, cls = '') { const e = document.createElement(tag); e.textContent = text; e.className = cls; return e; }
+
+let initialized = false;
+function updateExpandButton(expanded) {
+    const btn = document.getElementById('context-expand'); if (!btn) return;
+    const label = expanded ? 'Compact reading area' : 'Expand reading area';
+    btn.setAttribute('aria-label', label); btn.title = label; btn.setAttribute('aria-pressed', String(expanded));
+}
+export function initContextDataPanel() {
+    if (initialized || !panel()) return; initialized = true;
+    window.canLeaveContext = canLeaveContext; window.resetContextDetail = resetContextDetail;
+    document.getElementById('context-toggle')?.addEventListener('click', () => panel().hidden ? openContextPanel() : closeContext());
+    document.getElementById('context-close')?.addEventListener('click', closeContext);
+    document.getElementById('context-expand')?.addEventListener('click', () => updateExpandButton(panel().classList.toggle('is-expanded')));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel().hidden && !document.querySelector('dialog[open]')) closeContext(); });
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('#context-data-items [data-action]'); if (!btn) return;
+        const actions = { view: viewContextItem, edit_raw: editEvidenceContextItem, atomize: atomizeContextItem, reatomize: reAtomizeContextItem, restore: restoreContextItem };
+        const action = actions[btn.dataset.action]; if (action) withPending(btn, () => action(Number(btn.dataset.id)), { target: panel() });
     });
 }

@@ -1,3 +1,4 @@
+import { withPending, confirmAction } from '../workspace/feedback.js';
 /**
  * @file js/jobs/registryManager.js
  * @description Template sources list, add, edit, and delete.
@@ -10,7 +11,8 @@ let entriesCache = [];
 
 export function initRegistryManager() {
     const form = document.getElementById('registry-form');
-    if (form) form.addEventListener('submit', saveRegistry);
+    if (form) form.addEventListener('submit', e => { e.preventDefault(); withPending(e.submitter, () => saveRegistry(e), { target: form, lockForm: true }); });
+    document.getElementById('reg-cancel')?.addEventListener('click', resetForm);
     window.loadRegistry = loadRegistry;
     window.editRegistry = editRegistry;
     window.deleteRegistry = deleteRegistry;
@@ -23,13 +25,13 @@ export async function loadRegistry() {
 
     const data = await getJson('list_registry');
     if (data.status !== 'success') {
-        container.innerHTML = '<p class="text-rose-400 text-[10px] uppercase font-bold">Failed to load sources.</p>';
+        container.innerHTML = '<p class="text-rose-400 text-xs normal-case font-bold">Failed to load sources.</p>';
         return;
     }
 
     entriesCache = data.entries || [];
     if (entriesCache.length === 0) {
-        container.innerHTML = '<div class="text-center py-12 text-slate-600"><p class="text-[10px] tracking-widest uppercase font-bold">No sources yet</p><p class="text-[9px] text-slate-600 mt-1">Add a listing URL template above to get started.</p></div>';
+        container.innerHTML = '<div class="text-center py-12 text-slate-600"><p class="text-xs tracking-normal normal-case font-bold">No sources yet</p><p class="text-xs text-slate-600 mt-1">Add a listing URL template above to get started.</p></div>';
     } else {
         container.innerHTML = '';
         entriesCache.forEach(entry => container.appendChild(renderEntry(entry)));
@@ -39,7 +41,7 @@ export async function loadRegistry() {
 function renderEntry(entry) {
     const placeholders = entry.placeholders || {};
     const ph = Object.entries(placeholders).map(([name, values]) =>
-        `<div class="text-[9px] text-slate-500 font-mono mt-1"><span class="text-cyan-400/80">{${esc(name)}}</span> = ${esc((values || []).join(', '))}</div>`
+        `<div class="text-xs text-slate-500 font-mono mt-1"><span class="text-cyan-400/80">{${esc(name)}}</span> = ${esc((values || []).join(', '))}</div>`
     ).join('');
 
     const card = document.createElement('div');
@@ -48,14 +50,14 @@ function renderEntry(entry) {
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-[11px] font-bold text-slate-100">${esc(entry.domain || '')}</span>
+                    <span class="text-xs font-bold text-slate-100">${esc(entry.domain || '')}</span>
                 </div>
-                <div class="text-[9px] text-slate-500 font-mono mt-1.5 break-all">${esc(entry.url)}</div>
+                <div class="text-xs text-slate-500 font-mono mt-1.5 break-all">${esc(entry.url)}</div>
                 ${ph}
             </div>
             <div class="flex gap-1.5 shrink-0 items-start">
-                <button onclick="window.editRegistry('${entry.uuid}')" class="px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 transition-all cursor-pointer outline-none">Edit</button>
-                <button onclick="window.deleteRegistry('${entry.uuid}')" class="px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all cursor-pointer outline-none">Delete</button>
+                <button onclick="window.editRegistry('${entry.uuid}')" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 transition-all cursor-pointer outline-none">Edit</button>
+                <button onclick="window.deleteRegistry('${entry.uuid}')" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all cursor-pointer outline-none">Delete</button>
             </div>
         </div>
     `;
@@ -87,9 +89,11 @@ async function saveRegistry(e) {
     }
 }
 
-function editRegistry(uuid) {
+async function editRegistry(uuid) {
+    if (document.getElementById('registry-form').dataset.dirty === 'true' && !await confirmAction('Discard the source edits in this form?', { confirmLabel: 'Discard edits', destructive: true })) return;
     const entry = entriesCache.find(e => e.uuid === uuid);
     if (!entry) return;
+    document.getElementById('registry-form').dataset.dirty = 'false';
     editingUuid = uuid;
     document.getElementById('reg-url').value = entry.url || '';
     document.getElementById('reg-job-title').value = ((entry.placeholders || {}).job_title || []).join(', ');
@@ -98,6 +102,7 @@ function editRegistry(uuid) {
 }
 
 function resetForm() {
+    document.getElementById('registry-form').dataset.dirty = 'false';
     editingUuid = null;
     document.getElementById('reg-url').value = '';
     document.getElementById('reg-job-title').value = '';
@@ -106,7 +111,7 @@ function resetForm() {
 }
 
 export async function deleteRegistry(uuid) {
-    if (!confirm('Delete this source?')) return;
+    if (!await confirmAction('Delete this search source? Saved jobs will remain.', { confirmLabel: 'Delete source', destructive: true })) return;
     const data = await postJson('delete_registry', { uuid });
     if (data.status === 'success') {
         flash('Source deleted.');

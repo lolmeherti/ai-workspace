@@ -3,7 +3,7 @@
  * @description Bootstrap the job tracker workspace modules and expose handlers on window.
  */
 
-import { switchJobView, refreshJobCvSelect } from './jobViews.js';
+import { switchJobView, refreshJobCvSelect, closeJobSetup } from './jobViews.js';
 import { initInbox, loadInbox } from './jobInbox.js';
 import { initDetails, clearDetails } from './jobDetails.js';
 import './jobActions.js';
@@ -27,10 +27,17 @@ initProgress();
 switchJobView('details');
 clearDetails();
 
+let loaded = false;
+let setupLoaded = false;
 document.addEventListener('jobs-opened', () => {
-    loadCvs();
-    loadProfile();
-    loadRegistry();
-    refreshJobCvSelect();
-    loadInbox();
+    if (!loaded) { loaded = true; refreshJobCvSelect(); loadInbox(); }
 });
+document.addEventListener('job-setup-opened', () => {
+    if (!setupLoaded) { setupLoaded = true; loadCvs(); loadProfile(); loadRegistry(); }
+});
+document.getElementById('job-setup-open')?.addEventListener('click', () => switchJobView('cvs'));
+document.getElementById('job-setup-close')?.addEventListener('click', closeJobSetup);
+document.getElementById('job-setup-footer-close')?.addEventListener('click', closeJobSetup);
+document.getElementById('job-setup')?.addEventListener('cancel', e => { e.preventDefault(); closeJobSetup(); });
+document.getElementById('job-setup')?.addEventListener('input', e => { const form = e.target.closest('form'); if (form) form.dataset.dirty = 'true'; });
+document.getElementById('job-activity-back')?.addEventListener('click', clearDetails);

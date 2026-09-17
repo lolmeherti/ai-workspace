@@ -1,3 +1,5 @@
+import { confirmAction, withPending } from '../workspace/feedback.js';
+import { ensureAIAvailable } from '../workspace/availability.js';
 /**
  * @file js/jobs/cvManager.js
  * @description CV list, upload, extract, set-active, and delete.
@@ -103,12 +105,12 @@ export async function loadCvs() {
     try {
         data = await getJson('list_cvs');
     } catch (e) {
-        container.innerHTML = '<p class="text-rose-400 text-[10px] uppercase font-bold text-center py-10">Failed to load CVs.</p>';
+        container.innerHTML = '<p class="text-rose-400 text-xs normal-case font-bold text-center py-10">Failed to load CVs.</p>';
         return;
     }
 
     if (data.status !== 'success') {
-        container.innerHTML = '<p class="text-rose-400 text-[10px] uppercase font-bold text-center py-10">Failed to load CVs.</p>';
+        container.innerHTML = '<p class="text-rose-400 text-xs normal-case font-bold text-center py-10">Failed to load CVs.</p>';
         return;
     }
 
@@ -116,15 +118,15 @@ export async function loadCvs() {
         container.innerHTML = `
             <div class="text-center py-14 flex flex-col items-center justify-center gap-3 select-none rounded-xl border border-dashed border-slate-800 bg-[#0a0f1d]/40">
                 <uk-icon icon="file-text" class="w-10 h-12 text-slate-700 opacity-40"></uk-icon>
-                <p class="text-[10px] tracking-widest uppercase font-bold text-slate-500">No CVs yet</p>
-                <p class="text-[9px] text-slate-600">Drop your resume in the panel above to add your first CV.</p>
+                <p class="text-xs tracking-normal normal-case font-bold text-slate-500">No CVs yet</p>
+                <p class="text-xs text-slate-600">Drop your resume in the panel above to add your first CV.</p>
             </div>`;
     } else {
         container.innerHTML = '';
         data.cvs.forEach(cv => container.appendChild(renderCvCard(cv)));
     }
 
-    refreshJobCvSelect();
+    refreshJobCvSelect(data.cvs);
 }
 
 function renderCvCard(cv) {
@@ -139,17 +141,17 @@ function renderCvCard(cv) {
                 <div class="flex items-center gap-2 flex-wrap">
                     <uk-icon icon="file-text" class="w-4 h-4 text-cyan-400/70 shrink-0"></uk-icon>
                     <span class="text-[12px] font-bold text-slate-100 truncate">${esc(cv.designation)}</span>
-                    ${active ? '<span class="px-1.5 py-0.5 text-[8px] font-extrabold tracking-widest uppercase bg-cyan-950/50 border border-cyan-500/30 text-cyan-400 rounded-md shrink-0">Active</span>' : ''}
+                    ${active ? '<span class="px-1.5 py-0.5 text-xs font-extrabold tracking-normal normal-case bg-cyan-950/50 border border-cyan-500/30 text-cyan-400 rounded-md shrink-0">Default</span>' : ''}
                 </div>
-                <div class="text-[9px] text-slate-500 font-mono mt-1 truncate">${esc(cv.file_hash || '')}</div>
+                <div class="text-xs text-slate-500 font-mono mt-1 truncate">${esc(cv.file_hash || '')}</div>
             </div>
             <div class="flex gap-1.5 shrink-0 flex-wrap justify-end">
-                <button onclick="window.extractCv('${cv.uuid}', this)" class="px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/40 hover:border-cyan-400/50 transition-all cursor-pointer outline-none">Extract Details</button>
-                ${active ? '' : `<button onclick="window.setActiveCv('${cv.uuid}')" class="px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 transition-all cursor-pointer outline-none">Set Active</button>`}
-                <button onclick="window.deleteCv('${cv.uuid}')" class="px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-900/20 transition-all cursor-pointer outline-none">Delete</button>
+                <button data-ai-action onclick="window.extractCv('${cv.uuid}', this)" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/40 hover:border-cyan-400/50 transition-all cursor-pointer outline-none">Extract Details</button>
+                ${active ? '' : `<button onclick="window.setActiveCv('${cv.uuid}')" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 transition-all cursor-pointer outline-none">Make default</button>`}
+                <button onclick="window.deleteCv('${cv.uuid}')" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-900/20 transition-all cursor-pointer outline-none">Delete</button>
             </div>
         </div>
-        ${hasMarkdown ? `<pre class="mt-3 text-[10px] text-slate-300 whitespace-pre-wrap bg-[#060b13] border border-slate-900 p-3 rounded-lg max-h-48 overflow-y-auto leading-relaxed">${esc(cv.extracted_markdown)}</pre>` : '<p class="text-[9px] text-slate-500 mt-3 italic">Not extracted yet &mdash; click <span class="text-cyan-400 not-italic font-bold">Extract Details</span> to build the profile.</p>'}
+        ${hasMarkdown ? `<pre class="mt-3 text-xs text-slate-300 whitespace-pre-wrap bg-[#060b13] border border-slate-900 p-3 rounded-lg max-h-48 overflow-y-auto leading-relaxed">${esc(cv.extracted_markdown)}</pre>` : '<p class="text-xs text-slate-500 mt-3 italic">Not extracted yet &mdash; click <span class="text-cyan-400 not-italic font-bold">Extract Details</span> to prepare this CV for searches.</p>'}
     `;
     return card;
 }
@@ -176,6 +178,7 @@ async function uploadCv(e) {
         const data = await res.json().catch(() => ({ status: 'error', message: 'Server returned an invalid response (HTTP ' + res.status + ').' }));
 
         if (data.status === 'success') {
+            document.getElementById('cv-upload-form').dataset.dirty = 'false';
             flash('CV uploaded.');
             if (designationInput) designationInput.value = '';
             clearFile();
@@ -196,6 +199,7 @@ function setUploading(on) {
     const submitBtn = document.getElementById('cv-upload-submit');
     const label = document.getElementById('cv-upload-label');
     if (!submitBtn) return;
+    document.getElementById('cv-upload-form').setAttribute('aria-busy', String(on));
     if (on) {
         submitBtn.disabled = true;
         if (label) label.textContent = 'Uploading…';
@@ -207,14 +211,17 @@ function setUploading(on) {
 }
 
 export async function extractCv(uuid, button) {
+    if (button?.disabled || !ensureAIAvailable(document.getElementById('job-setup-notices'))) return;
     const originalLabel = button ? button.textContent : '';
     if (button) {
         button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
         button.textContent = 'Extracting…';
     }
 
     const data = await postJson('extract_cv', { cv_uuid: uuid });
 
+    button?.removeAttribute('aria-busy');
     if (data.status === 'success') {
         flash('CV details extracted.');
         loadCvs();
@@ -238,7 +245,7 @@ export async function setActiveCv(uuid) {
 }
 
 export async function deleteCv(uuid) {
-    if (!confirm('Delete this CV? Existing applications keep their stored snapshot.')) return;
+    if (!await confirmAction('Delete this CV? Existing applications keep their stored snapshot.', { confirmLabel: 'Delete CV', destructive: true })) return;
     const data = await postJson('delete_cv', { cv_uuid: uuid });
     if (data.status === 'success') {
         flash('CV deleted.');

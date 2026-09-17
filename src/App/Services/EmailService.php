@@ -260,11 +260,11 @@ class EmailService
                             try {
                                 $msg->setFlag(['Seen']);
                             } catch (\Throwable $errFlag) {
-                                \App\Logger::warning('setFlag failed for ' . $account['email_address'] . ' uid=' . $uid . ': ' . $errFlag->getMessage());
+                                \App\Logger::warn('setFlag failed for ' . $account['email_address'] . ' uid=' . $uid . ': ' . $errFlag->getMessage());
                                 try {
                                     $msg->markAsRead();
                                 } catch (\Throwable $errRead) {
-                                    \App\Logger::warning('markAsRead also failed for ' . $account['email_address'] . ' uid=' . $uid . ': ' . $errRead->getMessage());
+                                    \App\Logger::warn('markAsRead also failed for ' . $account['email_address'] . ' uid=' . $uid . ': ' . $errRead->getMessage());
                                 }
                             }
                         }

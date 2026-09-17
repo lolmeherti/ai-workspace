@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mount, fixture, json, deferred, settle } from './dom.mjs';
+const dom = mount(fixture());
+const { state } = await import('../../src/js/state.js');
+const navigation = await import('../../src/js/chat/chatNavigation.js');
+window.switchSidebarTab = () => {};
+navigation.initChatNavigation();
+const conversation = (id, title) => json({ status: 'success', title, tokens: 10, messages_html: `<p>Chat ${id}</p>`, context_html: `<div class="context-item" data-id="${id}"></div>` });
+test('one click selects a conversation, latest request wins, drafts survive round trips', async () => {
+    document.getElementById('q').value = 'Draft in chat 3';
+    const first = deferred(), second = deferred();
+    globalThis.fetch = url => String(url).endsWith('=2') ? first.promise : second.promise;
+    document.querySelector('[data-session-id="2"] .session-title').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    await settle();
+    assert.equal(document.querySelector('[data-session-id="2"]').getAttribute('aria-busy'), 'true');
+    const newest = navigation.navigateConversation(1);
+    second.resolve(conversation(1, 'Newest'));
+    await newest;
+    first.resolve(conversation(2, 'Stale')); await settle();
+    assert.equal(state.sessionId, 1); assert.equal(document.getElementById('conversation-title').textContent, 'Newest');
+    assert.equal(document.getElementById('send-btn').disabled, false);
+    document.getElementById('q').value = 'Draft in chat 1';
+    await navigation.navigateConversation(3);
+    assert.equal(document.getElementById('q').value, 'Draft in chat 3');
+    await navigation.navigateConversation(1);
+    assert.equal(document.getElementById('q').value, 'Draft in chat 1');
+});
+test('background context additions cannot leak into the selected conversation', async () => {
+    const { addContextItem } = await import('../../src/js/chat/chatContextData.js');
+    const detached = document.createElement('div');
+    addContextItem({ id: 999, query: 'Background evidence' }, detached);
+    assert.ok(detached.querySelector('[data-id="999"]'));
+    assert.equal(document.getElementById('context-data-items').querySelector('[data-id="999"]'), null);
+});
+test.after(() => dom.window.close());

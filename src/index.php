@@ -19,9 +19,16 @@ use App\EnvEditor;
 use App\Cache;
 use App\Repositories\MemoryRepository;
 use App\Repositories\ChatSessionRepository;
+use App\Repositories\AppSettingsRepository;
 use App\Bootstrap\PageDataLoader;
 
 Config::load(__DIR__);
+
+$workspaceAction = $_GET['api_action'] ?? '';
+if (in_array($workspaceAction, \App\Actions\WorkspaceStateAction::ACTIONS, true)) {
+    (new \App\Actions\WorkspaceStateAction())->execute($workspaceAction);
+    exit;
+}
 
 try {
     $envEditor = new EnvEditor(__DIR__ . '/.env');
@@ -52,26 +59,55 @@ try {
     $agentManager = new AgentManager();
     $memoryExtractor = $db ? new MemoryExtractor($db, $agentManager) : null;
 
-    // Fetch available models from Go API for the settings dropdown
+    // Reasoning-effort control state is rendered server-side so the composer
+    // shows the correct slider/toggle on first paint (no async fetch). Saved
+    // value comes from app_settings; control type from the runtime policy the
+    // launcher persisted to .env at boot.
+    $reasoningEffort = 'medium';
+    if ($db) {
+        $reasoningEffort = (new AppSettingsRepository($db))->get('reasoning_effort', 'medium');
+    }
+    $runtimePolicy = json_decode((string) Config::get('LLM_RUNTIME_POLICY', '{}'), true) ?: [];
+    $reasoningGraduated = !empty($runtimePolicy['reasoning']['effort_map'] ?? []);
+    if ($reasoningGraduated) {
+        if (!in_array($reasoningEffort, ['low', 'medium', 'high'], true)) {
+            $reasoningEffort = 'medium';
+        }
+    } else {
+        $reasoningEffort = $reasoningEffort === 'off' ? 'off' : 'medium';
+    }
+
+    // Fetch available models from Go API for the settings dropdown. Cached: the
+    // list only changes when the launcher restarts with a new models.json, and
+    // it is only consumed by the settings modal — an unconditional 3s outbound
+    // call on every page load is pure waste.
     $modelsList = [];
     try {
-        $goHost = Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
-        $goHost = str_replace('/v1', '', rtrim($goHost, '/'));
-        // The Go API runs on the same host as llama but uses port 9876 instead of 1234
-        $modelsUrl = preg_replace('#:\d{1,5}/?$#', ':9876/api/models', $goHost);
-        if ($modelsUrl === '' || $modelsUrl === $goHost) {
-            $modelsUrl = 'http://host.docker.internal:9876/api/models';
-        }
+        $cachedModels = Cache::get('models_list');
+        if ($cachedModels !== null) {
+            $modelsList = json_decode($cachedModels, true) ?: [];
+        } else {
+            $goHost = Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1');
+            $goHost = str_replace('/v1', '', rtrim($goHost, '/'));
+            // The Go API runs on the same host as llama but uses port 9876 instead of 1234
+            $modelsUrl = preg_replace('#:\d{1,5}/?$#', ':9876/api/models', $goHost);
+            if ($modelsUrl === '' || $modelsUrl === $goHost) {
+                $modelsUrl = 'http://host.docker.internal:9876/api/models';
+            }
 
-        $ch = curl_init($modelsUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 3,
-        ]);
-        if ($response = @curl_exec($ch)) {
-            $modelsList = json_decode($response, true) ?: [];
+            $ch = curl_init($modelsUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 3,
+            ]);
+            if ($response = @curl_exec($ch)) {
+                $modelsList = json_decode($response, true) ?: [];
+                if (!empty($modelsList)) {
+                    Cache::set('models_list', $response, 300);
+                }
+            }
+            curl_close($ch);
         }
-        curl_close($ch);
     } catch (\Exception $_e) {}
 
     // First-run onboarding preview. Force with ?onboarding=1 to review the flow
@@ -89,7 +125,7 @@ try {
 } catch (\App\Services\ModelBusyException $e) {
     http_response_code(409);
     header('Content-Type: application/json');
-    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    echo json_encode(['status' => 'error', 'code' => 'model_busy', 'message' => $e->getMessage()]);
     exit;
 } catch (\Throwable $e) {
     \App\Logger::critical("Bootstrap failure in index.php", [
@@ -110,22 +146,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Continuous Chat Session</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        slate: {
-                            750: '#2a3b55',
-                            850: '#182236',
-                        },
-                    },
-                },
-            },
-        };
-    </script>
+    <title>Localsy · AI workspace</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/css/core.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/core.iife.js" type="module"></script>
     <script src="https://cdn.jsdelivr.net/npm/franken-ui@2.1.2/dist/js/icon.iife.js" type="module"></script>
@@ -135,10 +156,13 @@ try {
     <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.2/lib/index.umd.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="css/utilities.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/workspaces.css">
 </head>
 <body class="h-screen w-screen flex overflow-hidden antialiased selection:bg-cyan-500/30">
-    <div class="h-full w-full flex">
+    <div id="app-shell" class="h-full w-full flex">
+        <button type="button" id="sidebar-toggle" class="ui-icon-button sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="workspace-sidebar"><uk-icon icon="menu" class="w-5 h-5" aria-hidden="true"></uk-icon></button>
         <?php include __DIR__ . '/views/sidebar.php'; ?>
         
         <div id="chat-workspace" class="flex-1 flex flex-col h-full min-w-0">
@@ -159,11 +183,13 @@ try {
     </div>
 
     <?php include __DIR__ . '/views/modal-settings.php'; ?>
+    <?php include __DIR__ . '/views/memory-consolidation.php'; ?>
 
     <script>
         const currentActiveTab = '<?php echo $activeTab; ?>';
         const initialSessionTokens = <?php echo $totalSessionTokens; ?>;
         const maxTokensLimit = <?php echo (int) Config::get('LLM_CTX_SIZE', 32768); ?>;
+        const reasoningEffortGraduated = <?php echo $reasoningGraduated ? 'true' : 'false'; ?>;
         window.REPLY_DOWNVOTE_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::DOWNVOTE_REASONS, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
         window.REPLY_TOOL_TURN_REASONS = <?php echo json_encode(\App\Actions\RateReplyAction::TOOL_TURN_REASONS); ?>;
     </script>

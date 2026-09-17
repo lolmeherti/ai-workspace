@@ -1,10 +1,11 @@
+import { confirmAction, withPending } from '../workspace/feedback.js';
 /**
  * @file js/jobs/jobActions.js
  * @description Individual job actions: transitions, restore, delete, block, apply.
  */
 
 import { flash, postJson, getJson, esc } from './jobUtil.js';
-import { refreshDetails, clearDetails } from './jobDetails.js';
+import { refreshDetails, clearDetails, selectedJobId } from './jobDetails.js';
 import { refreshInbox } from './jobInbox.js';
 
 window.jobAction = jobAction;
@@ -39,11 +40,11 @@ async function restore(uuid) {
 }
 
 async function deleteJob(uuid) {
-    if (!confirm('Delete this job permanently?')) return;
+    if (!await confirmAction('Delete this job permanently?', { confirmLabel: 'Delete job', destructive: true })) return;
     const data = await postJson('batch_action', { uuids: JSON.stringify([uuid]), action: 'delete' });
     if (data.status === 'success') {
         flash('Job deleted.');
-        clearDetails();
+        if (selectedJobId() === uuid) clearDetails();
         await refreshInbox();
     } else {
         flash(data.message || 'Delete failed.', false);
@@ -51,12 +52,12 @@ async function deleteJob(uuid) {
 }
 
 async function blockCompany(uuid) {
-    if (!confirm('Block this company for 7 days? Its unread jobs will be removed.')) return;
+    if (!await confirmAction('Block this company for 7 days? Its unread jobs will be removed.', { confirmLabel: 'Block company', destructive: true })) return;
     await handleMutation(await postJson('block_company', { uuid }));
 }
 
 async function blockDomain(uuid) {
-    if (!confirm('Block this source domain for 7 days? Its unread jobs will be removed.')) return;
+    if (!await confirmAction('Block this source domain for 7 days? Its unread jobs will be removed.', { confirmLabel: 'Block source', destructive: true })) return;
     await handleMutation(await postJson('block_domain', { uuid }));
 }
 
@@ -76,6 +77,7 @@ async function openApplyForm(uuid) {
     if (!container) return;
 
     const cvs = await getJson('list_cvs');
+    if (selectedJobId() !== uuid) return;
     const cvOptions = (cvs.status === 'success' && Array.isArray(cvs.cvs))
         ? cvs.cvs.map(cv => `<option value="${esc(cv.uuid)}">${esc(cv.designation)}</option>`).join('')
         : '';
@@ -84,26 +86,29 @@ async function openApplyForm(uuid) {
     form.id = 'job-apply-form';
     form.className = 'mb-5 p-4 rounded-xl border border-cyan-500/20 bg-[#0a0f1d]/80 space-y-3';
     form.innerHTML = `
-        <div class="text-[10px] font-bold uppercase tracking-widest text-cyan-400">Apply to this job</div>
+        <div class="text-xs font-bold normal-case tracking-normal text-cyan-400">Record an application</div>
+        <p class="ui-muted">Record an application you already sent. This does not send anything to the employer.</p>
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Date & time</label>
-                <input type="datetime-local" name="applied_at" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors">
+                <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">Date & time</label>
+                <input id="job-applied-at" required aria-label="Application date and time" type="datetime-local" name="applied_at" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors">
             </div>
             <div>
-                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">CV</label>
-                <select name="applied_cv_uuid" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors">${cvOptions}</select>
+                <label class="block text-xs font-bold normal-case tracking-normal text-slate-400 mb-1.5">CV</label>
+                <select id="job-applied-cv" required aria-label="CV used for application" name="applied_cv_uuid" class="w-full bg-[#0b1120] border border-slate-800 rounded-lg px-3 py-2 text-slate-200 outline-none focus:border-cyan-500/40 transition-colors">${cvOptions}</select>
             </div>
         </div>
         <div class="flex gap-2 justify-end">
-            <button type="button" class="job-apply-cancel px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-700 text-slate-400 hover:text-slate-200 transition-all cursor-pointer outline-none">Cancel</button>
-            <button type="submit" class="px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none">Confirm</button>
+            <button type="button" class="job-apply-cancel px-3 py-2 rounded-lg text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-400 hover:text-slate-200 transition-all cursor-pointer outline-none">Cancel</button>
+            <button type="submit" class="px-3 py-2 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none">Confirm</button>
         </div>`;
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        window.submitApply(uuid, form);
+        withPending(e.submitter, () => window.submitApply(uuid, form));
     });
+    form.querySelector('select').value = document.getElementById('job-cv-select').value;
     container.prepend(form);
+    document.dispatchEvent(new Event('workspace-content-ready'));
     form.querySelector('input[name="applied_at"]')?.focus();
 }
 
@@ -117,7 +122,7 @@ async function submitApply(uuid, form) {
     }
     const data = await postJson('transition_job', { uuid, to: 'applied', applied_at: appliedAt, applied_cv_uuid: cvUuid });
     if (data.status === 'success') {
-        cancelApply();
+        form.remove();
     }
     await handleMutation(data);
 }

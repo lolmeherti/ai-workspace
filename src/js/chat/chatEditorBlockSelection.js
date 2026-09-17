@@ -1,3 +1,4 @@
+import { state } from '../state.js';
 /**
  * @file js/chat/chatEditorBlockSelection.js
  * @description Block selection, sequential check, and target pill UI in editor drawer.
@@ -100,7 +101,7 @@ export function updateActiveTargetPill() {
     const existingPill = document.getElementById('active-target-pill');
     if (existingPill) existingPill.remove();
 
-    if (window.activeToggledBlocks.size === 0) return;
+    if (!state.editorVisible || window.activeToggledBlocks.size === 0) return;
 
     const toggledArray = Array.from(window.activeToggledBlocks);
     const count = toggledArray.length;
@@ -114,8 +115,8 @@ export function updateActiveTargetPill() {
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
         </span>
         <div class="truncate flex-1 min-w-0 text-left">
-            <div class="text-[10px] font-bold tracking-wider uppercase text-slate-200 truncate">Targeting Context</div>
-            <div class="text-[9px] text-indigo-500/70 truncate font-semibold uppercase tracking-wider">${count} Block(s) Selected (${toggledArray.join(', ')})</div>
+            <div class="text-xs font-bold tracking-normal normal-case text-slate-200 truncate">Targeting Context</div>
+            <div class="text-xs text-indigo-500/70 truncate font-semibold normal-case tracking-normal">${count} Block(s) Selected (${toggledArray.join(', ')})</div>
         </div>
         <button type="button" class="text-slate-500 hover:text-rose-400 transition-colors duration-150 focus:outline-none ml-1 font-extrabold text-xs cursor-pointer shrink-0" onclick="window.clearActiveBlockToggles()">×</button>
     `;

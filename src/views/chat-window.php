@@ -1,18 +1,18 @@
-<section class="flex-1 flex flex-col h-full relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1526] via-[#070b14] to-[#070b14]">
+<section id="chat-section" class="flex-1 flex flex-col h-full relative bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0d1526] via-[#070b14] to-[#070b14]">
     
     <header class="h-16 border-b border-slate-800/80 flex items-center justify-between px-6 glass-panel backdrop-blur-md z-10">
         <h2 class="m-0 text-base font-semibold truncate text-slate-100 flex items-center gap-3">
             <uk-icon icon="message-square" class="w-5 h-5 text-cyan-500"></uk-icon>
-            <?php echo htmlspecialchars($activeSessionTitle); ?>
+            <span id="conversation-title"><?php echo htmlspecialchars($activeSessionTitle); ?></span>
         </h2>
         <div class="flex items-center gap-4">
-            <div id="token-counter-container" class="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800/80 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide">
+            <div id="token-counter-container" class="hidden md:flex items-center gap-2 bg-slate-900/60 border border-slate-800/80 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-normal">
                 <uk-icon icon="cpu" class="w-3.5 h-3.5 text-cyan-400"></uk-icon>
                 <span class="text-slate-400">Context: <strong id="token-counter-text" class="text-slate-200"><?php echo number_format((int)($totalSessionTokens ?? 0)); ?> / <?php echo number_format((int)\App\Config::get('LLM_CTX_SIZE', 32768)); ?></strong> tokens</span>
                 <div class="w-16 h-1.5 bg-slate-850 rounded-full overflow-hidden ml-1 border border-slate-800">
                     <div id="token-counter-bar" class="h-full bg-cyan-500 transition-all duration-300" style="width: 0%"></div>
                 </div>
-                <button type="button" id="btn-sync-lmstudio" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Sync Context Limit from LM Studio">
+                <button type="button" id="btn-sync-lmstudio" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-xs tracking-normal transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Sync Context Limit from LM Studio">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 transform group-hover:rotate-180 transition-transform duration-500 ease-out">
                         <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                         <path d="M3 3v5h5"/>
@@ -21,7 +21,7 @@
                     </svg>
                     <span>SYNC LIMIT</span>
                 </button>
-                <button type="button" id="btn-manual-condense" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-[10px] tracking-wider transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Manually Condense Chat History" onclick="triggerManualCondensation()">
+                <button type="button" id="btn-manual-condense" data-ai-action class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-xs tracking-normal transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Manually Condense Chat History" onclick="triggerManualCondensation()">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 transition-transform duration-300 group-hover:scale-110">
                         <polyline points="21 8 21 21 3 21 3 8"/>
                         <rect x="1" y="3" width="22" height="5"/>
@@ -29,333 +29,22 @@
                     </svg>
                     <span>CONDENSE CHAT</span>
                 </button>
+                <button type="button" id="context-toggle" aria-controls="context-data-panel" aria-expanded="false" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-xs tracking-normal transition-all duration-300 font-bold cursor-pointer ml-1.5 outline-none" title="Toggle Context Data">
+                    <uk-icon icon="database" class="w-3.5 h-3.5" aria-hidden="true"></uk-icon>
+                    <span>Context Data</span> <span id="context-data-count" class="ui-count"><?php echo count(array_filter($history ?? [], fn($m) => ($m['message_type'] ?? '') === 'data_fetching')); ?></span>
+                </button>
             </div>
-
-            <?php if (!$status->all_operational): ?>
-                <span class="text-xs font-bold px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center gap-2 shadow-[0_0_10px_rgba(244,63,94,0.2)]">
-                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> Offline
-                </span>
-            <?php else: ?>
-                <span class="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-2 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Operational
-                </span>
-            <?php endif; ?>
         </div>
     </header>
 
-    <!-- CONTEXT DATA PANEL -->
-    <?php
-    $contextItems = [];
-    foreach (($history ?? []) as $msg) {
-        if (($msg['message_type'] ?? '') !== 'data_fetching') {
-            continue;
-        }
-        $sourceCount = 0;
-        if (!empty($msg['source_map'])) {
-            $decoded = json_decode($msg['source_map'], true);
-            if (is_array($decoded)) {
-                $sourceCount = count($decoded);
-            }
-        }
-        $rawEvicted = (int)($msg['raw_evicted'] ?? 0) === 1;
-        $hasAtoms = !empty($msg['atomic_context']);
-        $toolName = trim($msg['tool_name'] ?? '');
-        $queryText = trim($msg['search_query'] ?? '');
-        $label = $queryText !== '' ? $queryText : ($toolName !== '' ? $toolName : 'Context Data');
-        $tokens = (int)($msg['token_estimate'] ?? 0);
-        $atomTokens = (int)($msg['atomic_tokens'] ?? 0);
-
-        if ($rawEvicted) {
-            $state = $hasAtoms ? 'atomized' : 'evicted';
-        } else {
-            $state = $hasAtoms ? 'raw_atoms' : 'raw';
-        }
-        $badgeMap = [
-            'raw' => ['Raw', 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'],
-            'raw_atoms' => ['Raw + atoms', 'bg-sky-500/10 border-sky-500/20 text-sky-400'],
-            'atomized' => ['Atomized', 'bg-violet-500/10 border-violet-500/20 text-violet-400'],
-            'evicted' => ['Evicted', 'bg-rose-500/10 border-rose-500/20 text-rose-400'],
-        ];
-        $badgeText = $badgeMap[$state][0];
-        $badgeCls = $badgeMap[$state][1];
-
-        $metaParts = [];
-        if ($toolName !== '') {
-            $metaParts[] = $toolName;
-        }
-        if ($sourceCount > 0) {
-            $metaParts[] = $sourceCount . ' source' . ($sourceCount === 1 ? '' : 's');
-        }
-        $metaParts[] = 'raw ~' . $tokens;
-        if ($hasAtoms) {
-            $metaParts[] = 'atoms ~' . $atomTokens;
-        }
-        $contextItems[] = [
-            'id' => (int)$msg['id'],
-            'state' => $state,
-            'label' => $label,
-            'meta' => implode(' · ', $metaParts),
-            'badgeText' => $badgeText,
-            'badgeCls' => $badgeCls,
-        ];
-    }
-    ?>
-    <style>
-    #context-data-panel summary { list-style: none; }
-    #context-data-panel summary::-webkit-details-marker { display: none; }
-    #context-data-panel[open] .ctx-chevron { transform: rotate(180deg); }
-    .ctx-chevron { transition: transform 0.2s; }
-    </style>
-    <details id="context-data-panel" class="border-b border-slate-800/80 bg-[#0b1120]">
-        <summary class="flex items-center justify-between px-6 py-2.5 cursor-pointer select-none hover:bg-slate-800/30 transition-colors">
-            <span class="text-[10px] font-semibold tracking-wider uppercase text-cyan-400 flex items-center gap-2">
-                <uk-icon icon="database" class="w-3.5 h-3.5"></uk-icon> Context Data
-                <span id="context-data-count" class="text-slate-500 font-mono normal-case"><?php echo count($contextItems); ?></span>
-            </span>
-            <svg class="ctx-chevron w-3 h-3 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </summary>
-        <div id="context-data-items" class="px-6 pb-4 space-y-2 max-h-[40vh] overflow-y-auto">
-            <?php if (empty($contextItems)): ?>
-                <p id="context-data-empty" class="text-xs text-slate-500 text-center py-4">No retained context data yet.</p>
-            <?php else: ?>
-                <?php foreach ($contextItems as $item): ?>
-                    <div class="context-item flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-700/40 bg-slate-900/30" data-id="<?php echo $item['id']; ?>" data-state="<?php echo $item['state']; ?>">
-                        <div class="flex flex-col min-w-0 flex-1">
-                            <span class="text-xs text-slate-300 truncate"><?php echo htmlspecialchars($item['label']); ?></span>
-                            <span class="context-meta text-[10px] text-slate-500 font-mono"><?php echo htmlspecialchars($item['meta']); ?></span>
-                        </div>
-                        <span class="context-badge text-[9px] px-1.5 py-0.5 rounded-full border <?php echo $item['badgeCls']; ?>"<?php if ($item['state'] === 'evicted'): ?> title="This raw data is not part of the chat anymore. Restore loads the full data back in."<?php endif; ?>><?php echo $item['badgeText']; ?></span>
-                        <div class="context-btns flex items-center gap-1.5">
-                            <button type="button" data-action="view" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">View</button>
-                            <?php if ($item['state'] === 'raw'): ?>
-                                <button type="button" data-action="atomize" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Atomize</button>
-                            <?php elseif ($item['state'] === 'raw_atoms' || $item['state'] === 'atomized'): ?>
-                                <button type="button" data-action="reatomize" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Re-atomize</button>
-                                <button type="button" data-action="delete_atoms" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 transition-colors cursor-pointer">Delete atoms</button>
-                            <?php endif; ?>
-                            <?php if ($item['state'] === 'raw' || $item['state'] === 'raw_atoms'): ?>
-                                <button type="button" data-action="evict_raw" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-rose-500/40 hover:text-rose-400 transition-colors cursor-pointer">Evict raw</button>
-                            <?php else: ?>
-                                <button type="button" data-action="restore" data-id="<?php echo $item['id']; ?>" class="text-[10px] px-2 py-1 rounded border border-slate-700/50 text-slate-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-colors cursor-pointer">Restore</button>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-    </details>
-
     <!-- NEW SPLIT-PANE WRAPPER -->
-    <div class="flex-1 flex h-full relative overflow-hidden">
+    <div class="chat-split flex-1 flex h-full relative overflow-hidden">
         
         <!-- LEFT PANE: CONVERSATION HUB (100% width on load, shrinks to 40% when editor is active) -->
         <div class="flex-1 flex flex-col h-full min-w-0" id="chat-pane">
             
             <div class="flex-1 overflow-y-auto p-6 space-y-8" id="chatWindow">
-                <?php if (empty($history)): ?>
-                    <div class="flex flex-col items-center justify-center text-center h-full py-20 opacity-80" id="empty-state">
-                        <div class="w-20 h-20 mb-6 rounded-full bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
-                            <uk-icon icon="bot" class="w-10 h-10 text-cyan-400"></uk-icon>
-                        </div>
-                        <h3 class="text-2xl font-bold tracking-tight text-white mb-2">How can I assist you today?</h3>
-                        <p class="text-sm text-slate-400 max-w-sm">Enter a prompt, ask a question, or attach a document/image to start the conversation.</p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($history as $msg): ?>
-                        <?php 
-                        $msgType = $msg['message_type'] ?? 'text';
-                        if ($msgType === 'data_fetching'):
-                            // Data fetching results are internal tool output — the model
-                            // already summarized them in its response. Skip rendering.
-                            continue;
-                        endif;
-                        if (($msg['role'] ?? '') === 'system') continue;
-                        ?>
-                        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
-                            
-                            <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
-                                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2">
-                                    <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
-                                    <?php if ($msg['role'] !== 'user'): ?>
-                                        <?php if (!empty($msg['search_query'])): ?>
-                                            <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">
-                                                <uk-icon icon="globe" class="w-3.5 h-3.5"></uk-icon> Web Search
-                                            </span>
-                                        <?php endif; ?>
-                                    <?php endif; ?>
-                                </span>
-                                <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center animate-fade-in" 
-                                        onclick="copyToClipboard(this)" 
-                                        title="Copy message">
-                                    <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
-                                </button>
-                            </div>
-                            
-                            <div class="<?php echo $msg['role'] === 'user' ? 'chat-user rounded-2xl rounded-tr-sm' : 'chat-assistant rounded-2xl rounded-tl-sm markdown-content flex flex-col items-stretch'; ?> px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%]"
-                                 data-raw="<?php echo htmlspecialchars($msg['message']); ?>">
-                                <?php if (!empty($msg['image_path'])): ?>
-                                    <?php 
-                                    $ext = strtolower(pathinfo($msg['image_path'], PATHINFO_EXTENSION));
-                                    if (in_array($ext, ["png", "jpg", "jpeg", "gif", "webp"])): 
-                                    ?>
-                                        <img src="<?php echo htmlspecialchars($msg['image_path']); ?>" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md block" alt="Uploaded image">
-                                    <?php else: ?>
-                                        <div class="flex items-center gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-lg max-w-xs mb-3">
-                                            <uk-icon icon="file-text" class="w-6 h-6 text-cyan-400"></uk-icon>
-                                            <span class="text-xs text-slate-300 font-medium truncate"><?php echo htmlspecialchars(basename($msg['image_path'])); ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php endif; ?>
-                                
-                                <?php if ($msg['role'] === 'assistant'): ?>
-                                    <?php $briefingCards = !empty($msg['briefing_cards']) ? $msg['briefing_cards'] : null; ?>
-                                    <div class="markdown-rendered" data-markdown="<?php echo htmlspecialchars($msg['message']); ?>"<?php if ($briefingCards !== null): ?> data-briefing-cards="<?php echo htmlspecialchars($briefingCards, ENT_QUOTES, 'UTF-8'); ?>"<?php endif; ?>></div>
-                                    <?php $sources = !empty($msg['source_map']) ? json_decode($msg['source_map'], true) : null; ?>
-                                    <?php if (!empty($sources)): ?>
-                                        <div class="sources-panel relative w-full mt-4 overflow-hidden rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(6,182,212,0.08),inset_0_1px_0_rgba(6,182,212,0.06)]">
-                                            <span class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent"></span>
-                                            <div class="flex items-center gap-2 px-4 pt-3 pb-2">
-                                                <span class="relative flex items-center justify-center w-6 h-6 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.12)]">
-                                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                                </span>
-                                                <span class="text-[10px] font-semibold tracking-wider uppercase bg-gradient-to-r from-cyan-300 via-blue-400 to-emerald-400 bg-clip-text text-transparent">Sources</span>
-                                                <span class="relative flex h-1.5 w-1.5">
-                                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                                                    <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400"></span>
-                                                </span>
-                                                <span class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-mono"><?php echo count($sources); ?></span>
-                                            </div>
-                                            <div class="px-3 pb-3 flex flex-col gap-1.5">
-                                                <?php foreach ($sources as $s): ?>
-                                                    <?php
-                                                    $srcUrl = $s['url'] ?? '';
-                                                    $srcDomain = $s['domain'] ?? '';
-                                                    $srcTitle = $s['title'] ?? '';
-                                                    if ($srcTitle === '') {
-                                                        $srcTitle = $srcDomain !== '' ? $srcDomain : $srcUrl;
-                                                    }
-                                                    ?>
-                                                    <a href="<?php echo htmlspecialchars($srcUrl); ?>" target="_blank" rel="noopener noreferrer" class="group relative flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-700/40 bg-slate-900/30 hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:shadow-[0_0_16px_rgba(6,182,212,0.10)] transition-all duration-200">
-                                                        <span class="flex items-center justify-center w-7 h-7 shrink-0 rounded-md bg-slate-800/60 border border-slate-700/50 text-cyan-400 group-hover:border-cyan-500/40 group-hover:text-cyan-300 group-hover:shadow-[0_0_12px_rgba(6,182,212,0.25)] transition-all">
-                                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                                        </span>
-                                                        <span class="flex flex-col min-w-0 flex-1">
-                                                            <span class="text-xs text-slate-300 truncate group-hover:text-cyan-200 transition-colors"><?php echo htmlspecialchars($srcTitle); ?></span>
-                                                            <?php if ($srcDomain !== '' && $srcDomain !== $srcTitle): ?>
-                                                                <span class="text-[10px] text-slate-500 truncate font-mono group-hover:text-slate-400 transition-colors"><?php echo htmlspecialchars($srcDomain); ?></span>
-                                                            <?php endif; ?>
-                                                        </span>
-                                                        <span class="shrink-0 text-slate-600 group-hover:text-cyan-400 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all">
-                                                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                                        </span>
-                                                    </a>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php $perf = !empty($msg['perf_metrics']) ? json_decode($msg['perf_metrics'], true) : null; ?>
-                                <?php if (!empty($perf['calls'])): ?>
-                                    <?php
-                                    $pmCalls = $perf['calls'];
-                                    $pmLabels = ['firstpass' => 'first pass', 'answer' => 'answer', 'condenser' => 'condenser', 'tools' => 'tools'];
-                                    $pmAc = null;
-                                    foreach ($pmCalls as $pmC) {
-                                        if (($pmC['purpose'] ?? '') === 'answer') { $pmAc = $pmC; break; }
-                                    }
-                                    if ($pmAc === null) {
-                                        foreach ($pmCalls as $pmC) {
-                                            if (($pmC['purpose'] ?? '') === 'firstpass') { $pmAc = $pmC; break; }
-                                        }
-                                    }
-                                    if ($pmAc === null) { $pmAc = $pmCalls[count($pmCalls) - 1]; }
-                                    $pmParts = [count($pmCalls) . ' call' . (count($pmCalls) === 1 ? '' : 's')];
-                                    if (isset($perf['total_ms'])) { $pmParts[] = number_format($perf['total_ms'] / 1000, 1) . 's'; }
-                                    if (!empty($perf['ttft_ms'])) { $pmParts[] = 'TTFT ' . number_format($perf['ttft_ms'] / 1000, 1) . 's'; }
-                                    if ($pmAc && ($pmAc['reasoning_ms'] ?? 0) > 0) { $pmParts[] = 'think ' . number_format($pmAc['reasoning_ms'] / 1000, 1) . 's'; }
-                                    if ($pmAc) {
-                                        $pmTps = 0;
-                                        if (($pmAc['content_ms'] ?? 0) > 0 && ($pmAc['content_tok'] ?? 0) > 0) { $pmTps = ($pmAc['content_tok'] ?? 0) / (($pmAc['content_ms'] ?? 1) / 1000); }
-                                        elseif (($pmAc['pred_tps'] ?? 0) > 0) { $pmTps = $pmAc['pred_tps']; }
-                                        if ($pmTps > 0) { $pmParts[] = (int)round($pmTps) . ' tok/s'; }
-                                        if (($pmAc['prompt_tokens'] ?? 0) > 0) { $pmParts[] = (int)round(($pmAc['cache_n'] ?? 0) / $pmAc['prompt_tokens'] * 100) . '% cached'; }
-                                    }
-                                    $pmSummary = implode(' · ', $pmParts);
-                                    $pmChain = implode(' → ', array_map(fn($c) => $pmLabels[$c['purpose'] ?? ''] ?? ($c['purpose'] ?? '?'), $pmCalls));
-                                    ?>
-                                    <details class="metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40">
-                                        <summary class="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none text-slate-300">
-                                            <span class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                                                <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                                                metrics
-                                            </span>
-                                            <span class="text-[11px] font-mono text-slate-400 truncate"><?php echo htmlspecialchars($pmSummary); ?></span>
-                                        </summary>
-                                        <div class="px-3 pb-3 border-t border-slate-800/60">
-                                            <div class="text-[10px] text-slate-500 font-mono py-1.5"><?php echo htmlspecialchars($pmChain); ?></div>
-                                            <table class="w-full text-[10px] font-mono text-slate-400">
-                                                <thead><tr class="text-slate-500 text-left">
-                                                    <th class="py-1 pr-2 font-normal">call</th><th class="py-1 pr-2 font-normal">time</th><th class="py-1 pr-2 font-normal">prefill</th><th class="py-1 pr-2 font-normal">think</th><th class="py-1 font-normal">text</th>
-                                                </tr></thead>
-                                                <tbody>
-                                                <?php foreach ($pmCalls as $pmC): ?>
-                                                    <?php
-                                                    $pmLabel = $pmLabels[$pmC['purpose'] ?? ''] ?? ($pmC['purpose'] ?? '?');
-                                                    $pmPrefill = ($pmC['prompt_ms'] ?? 0) > 0 ? (int)round($pmC['prompt_ms']) . 'ms · ' . ($pmC['prompt_n'] ?? 0) . ' tok' . (($pmC['cache_n'] ?? 0) > 0 ? ' · ' . $pmC['cache_n'] . ' cached' : '') : '—';
-                                                    $pmThink = ($pmC['reasoning_ms'] ?? 0) > 0 ? (int)round($pmC['reasoning_ms']) . 'ms · ' . ($pmC['reasoning_tok'] ?? 0) . ' tok' : '—';
-                                                    $pmText = ($pmC['content_ms'] ?? 0) > 0 ? (int)round($pmC['content_ms']) . 'ms · ' . ($pmC['content_tok'] ?? 0) . ' tok' : '—';
-                                                    ?>
-                                                    <tr class="border-t border-slate-800/40">
-                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmLabel); ?></td>
-                                                        <td class="py-1 pr-2"><?php echo (int)round($pmC['elapsed_ms'] ?? 0); ?>ms</td>
-                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmPrefill); ?></td>
-                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmThink); ?></td>
-                                                        <td class="py-1"><?php echo htmlspecialchars($pmText); ?></td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </details>
-                                <?php endif; ?>
-                                <?php else: ?>
-                                    <?php echo nl2br(htmlspecialchars($msg['message'])); ?>
-                                <?php endif; ?>
-
-                                <?php if (strlen($msg['message']) > 300): ?>
-                                    <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 bottom-copy-container mt-auto">
-                                        <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 animate-fade-in flex items-center gap-1" 
-                                                onclick="copyToClipboard(this)" 
-                                                title="Copy message">
-                                            <uk-icon icon="copy" class="w-3 h-3"></uk-icon>
-                                        </button>
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if ($msg['role'] === 'assistant'): ?>
-                                <?php
-                                    $rating = $msg['rating'] ?? null;
-                                    $ratingReason = (string)($msg['rating_reason'] ?? '');
-                                    $hadTool = !empty($msg['had_tool_calls']);
-                                ?>
-                                <div class="reply-rating flex items-center gap-1 mt-2" data-message-id="<?php echo (int)$msg['id']; ?>" data-had-tool-calls="<?php echo $hadTool ? '1' : '0'; ?>" data-rating="<?php echo $rating === null ? '' : (int)$rating; ?>" data-reason="<?php echo htmlspecialchars($ratingReason); ?>">
-                                    <button type="button" data-rate="1" title="Good reply" class="rate-btn w-7 h-7 flex items-center justify-center rounded-lg border border-slate-700 text-slate-500 hover:text-slate-200 hover:border-slate-500 transition-colors cursor-pointer bg-transparent <?php echo ($rating !== null && (int)$rating === 1) ? 'rate-active-up' : ''; ?>">
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>
-                                    </button>
-                                    <button type="button" data-rate="0" title="Bad reply" class="rate-btn w-7 h-7 flex items-center justify-center rounded-lg border border-slate-700 text-slate-500 hover:text-slate-200 hover:border-slate-500 transition-colors cursor-pointer bg-transparent <?php echo ($rating !== null && (int)$rating === 0) ? 'rate-active-down' : ''; ?>">
-                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2v12M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
-                                    </button>
-                                    <div class="reason-menu hidden flex flex-wrap gap-1 mt-1.5">
-                                        <?php foreach (\App\Actions\RateReplyAction::DOWNVOTE_REASONS as $rk => $rl): ?>
-                                            <?php if (in_array($rk, \App\Actions\RateReplyAction::TOOL_TURN_REASONS, true) && !$hadTool) continue; ?>
-                                            <button type="button" data-reason="<?php echo htmlspecialchars($rk); ?>" class="text-[10px] px-2 py-1 rounded-full border border-slate-700 bg-slate-800/60 text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors cursor-pointer"><?php echo htmlspecialchars($rl); ?></button>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                <?php include __DIR__ . '/chat-history.php'; ?>
             </div>
 
             <div class="p-4 border-t border-slate-800/80 glass-panel backdrop-blur-md relative z-10">
@@ -371,7 +60,7 @@
                         </div>
                         <div class="flex flex-col pr-2">
                             <span id="file-preview-name" class="text-xs text-slate-300 font-medium truncate max-w-[150px]">File attached</span>
-                            <span id="file-preview-type" class="text-[10px] text-slate-500 uppercase font-bold">Document</span>
+                            <span id="file-preview-type" class="text-xs text-slate-500 normal-case font-bold">Document</span>
                         </div>
                     </div>
 
@@ -381,31 +70,39 @@
                         .effort-btn { transition: all .15s ease; }
                         .effort-btn.effort-active { background: rgba(34,211,238,0.14); color: #67e8f9; border-color: rgba(34,211,238,0.45); }
                     </style>
+<?php
+$grad = $reasoningGraduated ?? false;
+$eff  = $reasoningEffort ?? 'medium';
+$effBtn = 'effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent';
+$effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : '';
+?>
                     <div id="effort-control" class="flex items-center justify-end gap-2 mb-2">
-                        <span class="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Reasoning</span>
-                        <div id="effort-graduated" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
-                            <button type="button" data-effort="low" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Low</button>
-                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Med</button>
-                            <button type="button" data-effort="high" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">High</button>
+                        <span class="text-xs normal-case tracking-normal text-slate-500 font-semibold">Reasoning</span>
+                        <div id="effort-graduated" style="<?php echo $grad ? 'display:flex' : 'display:none'; ?>" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="low" class="<?php echo $effBtn . $effActive('low'); ?>" aria-pressed="<?php echo $eff === 'low' ? 'true' : 'false'; ?>">Low</button>
+                            <button type="button" data-effort="medium" class="<?php echo $effBtn . $effActive('medium'); ?>" aria-pressed="<?php echo $eff === 'medium' ? 'true' : 'false'; ?>">Medium</button>
+                            <button type="button" data-effort="high" class="<?php echo $effBtn . $effActive('high'); ?>" aria-pressed="<?php echo $eff === 'high' ? 'true' : 'false'; ?>">High</button>
                         </div>
-                        <div id="effort-binary" style="display:none" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
-                            <button type="button" data-effort="off" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">Off</button>
-                            <button type="button" data-effort="medium" class="effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-cyan-300 border border-transparent">On</button>
+                        <div id="effort-binary" style="<?php echo $grad ? 'display:none' : 'display:flex'; ?>" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                            <button type="button" data-effort="off" class="<?php echo $effBtn . $effActive('off'); ?>" aria-pressed="<?php echo $eff === 'off' ? 'true' : 'false'; ?>">Off</button>
+                            <button type="button" data-effort="medium" class="<?php echo $effBtn . $effActive('medium'); ?>" aria-pressed="<?php echo $eff === 'medium' ? 'true' : 'false'; ?>">On</button>
                         </div>
                     </div>
-                    <form id="chatForm" onsubmit="event.preventDefault(); if (typeof handleChatSubmit === 'function') { handleChatSubmit(event); } else { console.error('handleChatSubmit is not defined. Intercepted reload to preserve console.'); }" class="relative">
+                    <div id="composer-notices" class="composer-notices"></div>
+                    <form id="chatForm" class="relative">
                         <input type="hidden" name="session_id" value="<?php echo $sessionId; ?>">
-                        <input type="hidden" name="effort" id="effort-input" value="medium">
+                        <input type="hidden" name="effort" id="effort-input" value="<?php echo htmlspecialchars($eff); ?>">
                         <input type="file" id="fileInput" name="file" accept="image/*,.pdf,.docx,.txt,.py,.php,.js,.json,.css,.html,.md,.yml,.yaml,.xml" class="hidden" onchange="previewFile(this)">
                         
                         <div class="flex w-full items-end gap-2 bg-[#0f172a] border border-slate-700 rounded-xl p-1.5 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner" <?php echo $status->all_operational ? '' : 'disabled'; ?>>
-                            <button type="button" class="shrink-0 p-2.5 text-slate-400 hover:text-cyan-400 transition-colors rounded-lg hover:bg-slate-800" onclick="document.getElementById('fileInput').click()" title="Attach File">
-                                <uk-icon icon="paperclip" class="w-5 h-5"></uk-icon>
+                            <button type="button" class="chat-attach-button shrink-0" onclick="document.getElementById('fileInput').click()" title="Attach file" aria-label="Attach file">
+                                <uk-icon icon="paperclip" aria-hidden="true"></uk-icon>
                             </button>
                             
-                            <textarea id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message AI Assistant..." required autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                            <label class="sr-only" for="q">Message</label>
+                            <textarea aria-label="Message" id="q" name="q" rows="1" class="flex-1 bg-transparent border-none text-slate-100 placeholder-slate-500 resize-none py-2.5 focus:outline-none focus:ring-0 max-h-32 min-h-[44px]" placeholder="Message your assistant…" autocomplete="off" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
                             
-                            <button type="submit" id="send-btn" class="send-btn-futuristic shrink-0 w-11 h-11 rounded-full flex items-center justify-center" title="Send">
+                            <button type="submit" id="send-btn" data-ai-action aria-label="Send message" class="send-btn-futuristic shrink-0 w-11 h-11 rounded-full flex items-center justify-center" title="Send">
                                 <span class="send-spinner" aria-hidden="true"></span>
                                 <svg class="w-[18px] h-[18px] send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                                 <svg class="w-[14px] h-[14px] stop-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -418,7 +115,8 @@
         </div> <!-- END LEFT PANE -->
 
         <!-- RIGHT PANE: DRAWER WORKSPACE (Included modularly) -->
-        <?php include 'chat-file-editor-drawer.php'; ?>
+        <?php include __DIR__ . '/context-inspector.php'; ?>
+        <?php include __DIR__ . '/chat-file-editor-drawer.php'; ?>
 
     </div> <!-- END NEW SPLIT-PANE WRAPPER -->
 
@@ -430,30 +128,34 @@
                 <h3 class="text-xl font-bold text-white mb-2">Context Limit Approaching</h3>
                 <p class="text-sm text-slate-400 mb-6">This conversation is getting very long. Would you like me to condense older messages into a summary and extract facts into your long-term memory? This keeps the session fast and light.</p>
                 <div class="flex gap-3 justify-center">
-                    <button type="button" onclick="bypassCondensation()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium">Not now</button>
-                    <button type="button" onclick="confirmCondensation()" class="btn-futuristic px-5 py-2 rounded-lg bg-cyan-600 text-white font-bold cursor-pointer text-sm">Yes, Optimize Memory</button>
+                    <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium">Close</button>
+                    <button type="button" id="condensation-bypass" onclick="bypassCondensation()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-sm font-medium">Send without condensing</button>
+                    <button type="button" onclick="confirmCondensation()" class="btn-futuristic px-5 py-2 rounded-lg bg-cyan-600 text-white font-bold cursor-pointer text-sm">Review condensation</button>
                 </div>
             </div>
 
             <div id="condensation-modal-review" class="hidden text-left flex flex-col items-stretch max-h-[85vh]">
-                <div class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-3">
+                <header class="flex items-center gap-2 mb-4 border-b border-cyan-500/20 pb-3">
                     <uk-icon icon="brain" class="w-6 h-6 text-cyan-400 animate-pulse"></uk-icon>
-                    <h3 class="text-lg font-bold text-white uppercase tracking-wider">Memory Approval Required</h3>
-                </div>
+                    <h3 class="text-lg font-bold text-white normal-case tracking-normal">Review extracted memories</h3>
+                </header>
                 
                 <p class="text-xs text-slate-400 mb-4">
                     The AI has extracted the following insights. Deselect any entries that are redundant, inaccurate, or that you do not wish to store permanently.
                 </p>
 
-                <div class="flex-1 overflow-y-auto pr-1 space-y-3 mb-6 max-h-[350px]" id="condensation-memories-list"></div>
-
-                <div class="flex justify-between items-center border-t border-cyan-500/20 pt-4">
-                    <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs uppercase font-bold tracking-wider">Cancel</button>
-                    <button type="button" onclick="applyCondensation()" class="btn-futuristic px-5 py-2.5 rounded-lg text-white font-bold cursor-pointer text-xs uppercase tracking-wider flex items-center gap-2">
-                        <uk-icon icon="check" class="w-4 h-4 text-cyan-400"></uk-icon>
-                        Commit & Apply
-                    </button>
+                <div class="condensation-review-scroll">
+                    <details id="condensation-summary"><summary>Condensed conversation</summary><div id="condensation-summary-text"></div></details>
+                    <div id="condensation-memories-list"></div>
                 </div>
+
+                <footer class="flex justify-between items-center border-t border-cyan-500/20 pt-4">
+                    <button type="button" onclick="closeCondensationModal()" class="px-4 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs normal-case font-bold tracking-normal">Cancel</button>
+                    <button type="button" onclick="applyCondensation()" class="btn-futuristic px-5 py-2.5 rounded-lg text-white font-bold cursor-pointer text-xs normal-case tracking-normal flex items-center gap-2">
+                        <uk-icon icon="check" class="w-4 h-4 text-cyan-400"></uk-icon>
+                        Save selected memories & condense
+                    </button>
+                </footer>
             </div>
             
             <div id="condensation-modal-loading" class="hidden flex flex-col items-center gap-4 py-4">
@@ -466,7 +168,7 @@
     <template id="tpl-user-message">
         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-end mb-4 chat-message-container">
             <div class="flex items-center gap-2 flex-row-reverse mr-1">
-                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider">You</span>
+                <span class="text-xs text-slate-500 font-semibold normal-case tracking-normal">You</span>
                 <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                 </button>
@@ -475,7 +177,7 @@
                 <img src="" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md hidden upload-img" alt="Upload">
                 <span class="msg-text"></span>
                 <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
-                    <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1" 
+                    <button type="button" class="text-xs text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1"
                             onclick="copyToClipboard(this)" 
                             title="Copy message">
                         <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon> <span>Copy Entire Message</span>
@@ -488,7 +190,7 @@
     <template id="tpl-ai-message">
         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-start mb-4 chat-message-container ai-wrapper">
             <div class="flex items-center gap-2 ml-1">
-                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-2 ai-label-container">
+                <span class="text-xs text-slate-500 font-semibold normal-case tracking-normal flex items-center gap-2 ai-label-container">
                     <?php echo htmlspecialchars(\App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
                 </span>
                 <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
@@ -497,7 +199,7 @@
             </div>
             <div class="chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] bubble-content markdown-content border border-transparent ai-bubble w-full flex flex-col items-stretch" data-raw="">
                 <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
-                    <button type="button" class="text-[10px] text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1" 
+                    <button type="button" class="text-xs text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1"
                             onclick="copyToClipboard(this)" 
                             title="Copy message">
                         <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon> <span>Copy Entire Message</span>

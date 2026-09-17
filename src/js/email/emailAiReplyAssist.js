@@ -1,51 +1,22 @@
-/**
- * @file js/email/emailAiReplyAssist.js
- * @description AI-assisted email reply suggestion.
- */
-
-export function triggerAiReplyAssist() {
-    const aiBtn = document.getElementById('ai-assist-btn');
-    if (!aiBtn) return;
-
-    const originalText = aiBtn.innerHTML;
-    aiBtn.disabled = true;
-    aiBtn.textContent = "THINKING...";
-
-    const iframe = document.getElementById('email-body-iframe');
-    const originalBody = iframe.contentDocument ? iframe.contentDocument.body.innerText : '';
-    const userDraft = document.getElementById('reply-body-input').value;
-
-    const formData = new FormData();
-    formData.append('action', 'ai_reply_assist');
-    formData.append('original_subject', document.getElementById('read-subject').textContent);
-    formData.append('original_from', document.getElementById('read-from').textContent);
-    formData.append('original_body', originalBody);
-    formData.append('user_draft', userDraft);
-
-    fetch('index.php?api_action=ai_reply_assist', {
-        method: 'POST',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-        },
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === 'success') {
-            document.getElementById('reply-body-input').value = data.suggested_reply;
-            const textarea = document.getElementById('reply-body-input');
-            textarea.style.height = '';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        } else {
-            alert(`AI Assist failed: ${data.message}`);
-        }
-    })
-    .catch(err => {
-        alert(`AI Assist connection error: ${err.message}`);
-    })
-    .finally(() => {
-        aiBtn.disabled = false;
-        aiBtn.innerHTML = originalText;
-    });
+import { ensureAIAvailable } from '../workspace/availability.js';
+import { requestJson, notify, withPending, confirmAction } from '../workspace/feedback.js';
+export async function triggerAiReplyAssist() {
+    const button = document.getElementById('ai-assist-btn');
+    const form = document.getElementById('email-reply-form');
+    if (!button || !ensureAIAvailable(form)) return;
+    const key = `${window.selectedEmailAccountId}:${window.selectedEmailUid}`;
+    const textarea = document.getElementById('reply-body-input'); const draft = textarea.value;
+    const data = new FormData();
+    let body = '';
+    try { body = document.getElementById('email-body-iframe').contentDocument?.body?.innerText || ''; } catch {}
+    data.append('action', 'ai_reply_assist'); data.append('original_subject', document.getElementById('read-subject').textContent); data.append('original_from', document.getElementById('read-from').textContent); data.append('original_body', body); data.append('user_draft', draft);
+    await withPending(button, async () => {
+        const result = await requestJson('index.php?api_action=ai_reply_assist', { method: 'POST', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: data });
+        const apply = async () => {
+            if (`${window.selectedEmailAccountId}:${window.selectedEmailUid}` !== key) { notify('Open the original email to use this suggestion.'); return; }
+            if (textarea.value !== draft && !await confirmAction('Replace the edits you made while the AI was working?', { confirmLabel: 'Use suggestion' })) return;
+            textarea.value = result.suggested_reply; textarea.dispatchEvent(new Event('input', { bubbles: true })); textarea.focus();
+        };
+        notify('Reply suggestion ready. Review it before sending.', { target: form, kind: 'info', action: 'Use suggestion', onAction: apply });
+    }, { target: form });
 }

@@ -7,7 +7,7 @@ import { state } from './state.js';
 
 export function initTabs() {
     window.addEventListener('beforeunload', function (e) {
-        if (state.isGenerating) {
+        if (state.isGenerating || state.jobRun || state.memoryConsolidating || window.hasUnsavedEditor?.() || document.getElementById('q')?.value || document.querySelector('form[data-dirty="true"]')) {
             e.preventDefault();
             e.returnValue = '';
         }
@@ -49,32 +49,23 @@ export function switchSidebarTab(tabId) {
         }
     });
 
-    const chatWorkspace = document.getElementById('chat-workspace');
-    const galleryWorkspace = document.getElementById('gallery-workspace');
-    const emailWorkspace = document.getElementById('email-workspace');
-    const jobWorkspace = document.getElementById('job-workspace');
-
-    if (tabId === 'uploads') {
-        if (chatWorkspace) chatWorkspace.classList.add('hidden');
-        if (emailWorkspace) emailWorkspace.classList.add('hidden');
-        if (jobWorkspace) jobWorkspace.classList.add('hidden');
-        if (galleryWorkspace) galleryWorkspace.classList.remove('hidden');
-        document.dispatchEvent(new CustomEvent('gallery-opened'));
-    } else if (tabId === 'emails') {
-        if (chatWorkspace) chatWorkspace.classList.add('hidden');
-        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
-        if (jobWorkspace) jobWorkspace.classList.add('hidden');
-        if (emailWorkspace) emailWorkspace.classList.remove('hidden');
-    } else if (tabId === 'jobs') {
-        if (chatWorkspace) chatWorkspace.classList.add('hidden');
-        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
-        if (emailWorkspace) emailWorkspace.classList.add('hidden');
-        if (jobWorkspace) jobWorkspace.classList.remove('hidden');
-        document.dispatchEvent(new CustomEvent('jobs-opened'));
-    } else {
-        if (galleryWorkspace) galleryWorkspace.classList.add('hidden');
-        if (emailWorkspace) emailWorkspace.classList.add('hidden');
-        if (jobWorkspace) jobWorkspace.classList.add('hidden');
-        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+    const workspaceForTab = { chats: 'chat-workspace', uploads: 'gallery-workspace', emails: 'email-workspace', jobs: 'job-workspace', memories: 'chat-workspace' };
+    state.activeTab = workspaceForTab[tabId] ? tabId : 'chats';
+    const activeWorkspace = workspaceForTab[state.activeTab];
+    Object.values(workspaceForTab).forEach(id => document.getElementById(id)?.classList.toggle('hidden', id !== activeWorkspace));
+    document.querySelectorAll('.workspace-nav-button').forEach(button => {
+        if (button.id === 'tab-btn-' + state.activeTab) button.setAttribute('aria-current', 'page');
+        else button.removeAttribute('aria-current');
+    });
+    if (state.activeTab === 'uploads') document.dispatchEvent(new CustomEvent('gallery-opened'));
+    if (state.activeTab === 'jobs') document.dispatchEvent(new CustomEvent('jobs-opened'));
+    if (state.activeTab === 'memories') {
+        document.body.classList.remove('sidebar-collapsed');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-expanded', 'true');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-label', 'Collapse sidebar');
+    } else if (matchMedia('(max-width: 760px)').matches) {
+        document.body.classList.add('sidebar-collapsed');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-expanded', 'false');
+        document.getElementById('sidebar-toggle')?.setAttribute('aria-label', 'Expand sidebar');
     }
 }
