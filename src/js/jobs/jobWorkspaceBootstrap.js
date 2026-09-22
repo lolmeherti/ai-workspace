@@ -37,7 +37,8 @@ document.addEventListener('job-setup-opened', () => {
 });
 document.getElementById('job-setup-open')?.addEventListener('click', () => switchJobView('cvs'));
 document.getElementById('job-setup-close')?.addEventListener('click', closeJobSetup);
-document.getElementById('job-setup-footer-close')?.addEventListener('click', closeJobSetup);
 document.getElementById('job-setup')?.addEventListener('cancel', e => { e.preventDefault(); closeJobSetup(); });
 document.getElementById('job-setup')?.addEventListener('input', e => { const form = e.target.closest('form'); if (form) form.dataset.dirty = 'true'; });
 document.getElementById('job-activity-back')?.addEventListener('click', clearDetails);
+document.getElementById('job-tab-details')?.addEventListener('click', () => switchJobView('details'));
+document.getElementById('job-tab-logs')?.addEventListener('click', () => window.openRunLogs?.());

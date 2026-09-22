@@ -9,7 +9,8 @@ declare(strict_types=1);
  * verify the hard inference budget on the FIRST pass:
  *   - exactly 1 LLM inference per turn;
  *   - normal turns: finish_reason=stop, no tool_calls, answer streams;
- *   - tool turns: tool_calls assembled, pre-decision reasoning DISCARDED;
+ *   - tool turns: tool_calls assembled, reasoning STREAMED (shown in the
+ *     thought window; the answer-pass reasoning appends to it);
  *   - content_before_tool is detected and reported.
  *
  * Run: docker exec ai_php_web php /var/www/html/tests/live/integrated-first-pass.php
@@ -106,7 +107,7 @@ foreach ($cases as [$query, $expectedTool]) {
         check('normal turn: finish=stop, no tool_calls', $finish === 'stop' && $toolName === null);
     } else {
         check("tool turn: selected {$expectedTool}", $toolName === $expectedTool);
-        check('tool turn: pre-decision reasoning discarded', !$reasoningReleased);
+        check('tool turn: reasoning streamed (shown in thought window)', $reasoningReleased);
     }
 
     echo "\n";

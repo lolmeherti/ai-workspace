@@ -74,14 +74,16 @@ export async function runJobSearch() {
             for (const part of parts) {
                 const text = part.trim(); if (!text.startsWith('data:')) continue;
                 const event = JSON.parse(text.slice(5).trim());
-                if (event.event === 'run_start') { activeRunUuid = event.data.run_uuid; setRun({ uuid: activeRunUuid }); }
+                if (event.event === 'run_start') { activeRunUuid = event.data.run_uuid; setRun({ uuid: activeRunUuid }); initLiveLogFeed(activeRunUuid); }
                 else if (event.event === 'progress') updateProgress(event.data);
                 else if (event.event === 'run_log') appendLogLine(event.data);
+                else if (event.event === 'fetching') appendLogLine({ run_uuid: activeRunUuid, level: 'info', message: `Fetching candidate ${Number(event.data.done) + 1}/${event.data.total}`, created_at: nowStamp() });
                 else if (event.event === 'error') throw new Error(event.data.message || 'Search failed.');
                 else if (event.event === 'run_complete') {
                     terminal = true; const summary = event.data.summary || {};
                     document.getElementById('job-run-status').textContent = summary.cancelled ? 'Cancelled' : 'Complete';
                     showSummaryBanner(`${summary.cancelled ? 'Search cancelled' : 'Search complete'} · ${summary.jobs_selected || 0} selected of ${summary.jobs_scraped || 0} found · ${summary.sources_failed || 0} sources failed.`);
+                    await loadRunLogs();
                 }
             }
         }
@@ -118,39 +120,44 @@ async function loadRunLogs() {
     const data = await getJson('list_run_logs');
     if (data.status !== 'success') return;
 
+    const meta = document.getElementById('job-run-meta');
+    const statusEl = document.getElementById('job-run-status');
+
     if (!data.run) {
         delete container.dataset.runUuid;
-        container.innerHTML = '<div class="text-center py-20 text-slate-600 flex flex-col items-center justify-center gap-3 select-none"><uk-icon icon="activity" class="w-10 h-12 text-slate-700 opacity-30"></uk-icon><p class="text-xs tracking-normal normal-case font-bold">No job runs yet</p></div>';
+        if (meta) meta.innerHTML = '';
+        if (statusEl) statusEl.textContent = 'No active search';
+        container.innerHTML = '<div class="run-log-empty"><uk-icon icon="activity"></uk-icon><p>No job runs yet</p></div>';
         return;
     }
 
     const run = data.run;
     container.dataset.runUuid = run.uuid;
     const status = run.status === 'completed' ? 'complete' : run.status;
-    const logRows = (data.logs || []).map(logRow).join('');
+    const rows = (data.logs || []).map(logRow).join('');
+    if (statusEl) statusEl.textContent = status === 'complete' ? 'Complete' : status === 'cancelled' ? 'Cancelled' : 'Running';
 
-    container.innerHTML = `
-        <div class="mb-4 p-4 rounded-xl border border-slate-850 bg-[#0a0f1d]/60">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold normal-case tracking-normal text-slate-300">Latest run</span>
-                <span class="text-xs font-bold normal-case ${status === 'complete' ? 'text-emerald-400' : 'text-amber-400'}">${esc(status)}</span>
-            </div>
-            <div class="text-xs text-slate-400 font-mono space-y-0.5">
-                <div>Started: ${esc(fmtDate(run.started_at))}</div>
-                <div>Scraped ${run.jobs_scraped ?? 0} · Selected ${run.jobs_selected ?? 0} · Listings ${run.sources_attempted ?? 0} (${run.sources_failed ?? 0} failed)</div>
-            </div>
-        </div>
-        <div id="job-logs-rows" class="space-y-0.5">${logRows || '<div class="text-center py-8 text-slate-600 text-xs normal-case">No log entries</div>'}</div>`;
+    if (meta) {
+        meta.innerHTML = `
+            <div class="run-meta-grid">
+                <div class="run-meta-tile"><span class="run-meta-label">Execution ID</span><span class="run-meta-value">#${esc(run.uuid.slice(0, 8))}</span><span class="run-meta-sub">Started: ${esc(fmtDate(run.started_at))}</span></div>
+                <div class="run-meta-tile"><span class="run-meta-label">Yield Stats</span><span class="run-meta-value run-meta-value--emerald">Scraped ${run.jobs_scraped ?? 0} · Selected ${run.jobs_selected ?? 0}</span><span class="run-meta-sub">${run.sources_attempted ?? 0} listings, ${run.sources_failed ?? 0} failed</span></div>
+                <div class="run-meta-tile"><span class="run-meta-label">Status</span><span class="run-meta-value ${status === 'complete' ? 'run-meta-value--emerald' : status === 'cancelled' ? 'run-meta-value--rose' : 'run-meta-value--amber'}">${esc(status)}</span>${run.completed_at ? `<span class="run-meta-sub">Finished: ${esc(fmtDate(run.completed_at))}</span>` : ''}</div>
+            </div>`;
+    }
+
+    container.innerHTML = `<div class="run-log-feed"><div class="run-log-feed-head"><span>LIVE TELEMETRY STREAM</span><span>${run.jobs_scraped ?? 0} scraped · ${run.jobs_selected ?? 0} selected</span></div><div id="job-logs-rows" class="run-log-rows">${rows || '<div class="run-log-empty"><p>No log entries</p></div>'}</div></div>`;
 
     scrollLogsToBottom();
 }
 
 function logRow(l) {
+    const time = String(l.created_at ?? '').slice(11, 19);
     return `
-        <div class="flex gap-2 py-1 border-b border-slate-900">
-            <span class="shrink-0 font-mono text-slate-600">${esc(fmtDate(l.created_at))}</span>
-            <span class="shrink-0 w-12 font-bold normal-case ${levelColor(l.level)}">${esc(l.level)}</span>
-            <span class="${levelColor(l.level)} break-all">${esc(l.message)}</span>
+        <div class="run-log-row">
+            <span class="run-log-time">${esc(time)}</span>
+            <span class="run-log-level ${levelColor(l.level)}">[${esc(l.level)}]</span>
+            <span class="run-log-msg">${esc(l.message)}</span>
         </div>`;
 }
 
@@ -161,10 +168,23 @@ function appendLogLine(log) {
     if (!view || !container || !rows) return;
     if (view.classList.contains('hidden')) return;
     if (container.dataset.runUuid !== log.run_uuid) return;
-    const empty = rows.querySelector('.text-center');
+    const empty = rows.querySelector('.run-log-empty');
     if (empty) empty.remove();
     rows.insertAdjacentHTML('beforeend', logRow(log));
     scrollLogsToBottom();
+}
+
+function initLiveLogFeed(runUuid) {
+    const container = document.getElementById('job-logs-container');
+    if (!container) return;
+    container.dataset.runUuid = runUuid;
+    container.innerHTML = `<div class="run-log-feed"><div class="run-log-feed-head"><span>LIVE TELEMETRY STREAM</span><span>Streaming…</span></div><div id="job-logs-rows" class="run-log-rows"></div></div>`;
+}
+
+function nowStamp() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function scrollLogsToBottom() {

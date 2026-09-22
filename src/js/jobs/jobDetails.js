@@ -47,6 +47,7 @@ export async function selectJob(uuid) {
 export function clearDetails() {
     currentJobUuid = null; currentJob = null; requestSequence++; paintJobSelection();
     document.querySelector('.jobs-results')?.classList.remove('has-activity', 'has-selection');
+    switchJobView('details');
     const container = document.getElementById('job-details-container');
     if (container) container.innerHTML = placeholder('Select a job to view its details.');
 }
@@ -204,7 +205,7 @@ function actionButtonsHtml(job) {
         ],
     }[job.state] ?? [];
 
-    return actions.map(a => `<button type="button" class="job-action-btn px-3 py-2 rounded-lg text-xs font-bold normal-case tracking-normal bg-transparent hover:bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50 transition-all cursor-pointer outline-none" data-action="${a.key}" data-uuid="${esc(job.uuid)}">${esc(a.label)}</button>`).join('');
+    return actions.map(a => `<button type="button" class="job-action-btn" data-action="${a.key}" data-uuid="${esc(job.uuid)}">${esc(a.label)}</button>`).join('');
 }
 
 function stateHistoryHtml(job) {
@@ -285,17 +286,34 @@ function cancelApply() {
 function showReadView() {
     const j = currentJob; if (!j) return;
     const container = document.getElementById('job-details-container');
-    const fields = [['Location', j.location], ['Work mode', j.work_mode?.replaceAll('_', ' ')], ['Employment', j.employment_type], ['Salary', j.salary], ['Posted', fmtDate(j.posted_at)], ['Applicants', j.applicant_count], ['Source', j.source_domain], ['Applied', fmtDate(j.applied_at)], ['Interviews', j.interview_timestamps?.join(', ')], ['Offer compensation', j.offer_compensation], ['Offer deadline', fmtDate(j.offer_deadline)], ['Offer notes', j.offer_notes]];
-    const listing = /^https?:\/\//i.test(j.url || '') ? `<a class="ui-button" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open listing ↗</a>` : '';
     const stateHistory = stateHistoryHtml(j);
     const metadata = metadataHtml(j);
+    const listing = /^https?:\/\//i.test(j.url || '') ? `<a class="job-action-open" href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">Open listing ↗</a>` : '';
+    const facts = [
+        ['Location', j.city || j.location, ''],
+        ['Employment', j.employment_type, ''],
+        ['Salary', j.salary, ' job-meta-tile--salary'],
+        ['Posted', String(j.posted_at ?? '').slice(0, 10), ''],
+        ['Applicants', j.applicant_count, ''],
+        ['Source', j.source_domain, ''],
+    ].filter(([, v]) => v !== null && v !== undefined && v !== '');
     container.innerHTML = `<article class="job-read-view">
-        <div class="job-detail-heading"><div><span class="context-badge">${esc(STATE_LABELS[j.state] || j.state)}${j.history_reason ? ' · ' + esc(j.history_reason.replaceAll('_', ' ')) : ''}</span><h2>${esc(j.title)}</h2><p>${esc(j.company)}</p></div><button type="button" class="ui-button" data-job-edit>Edit details</button></div>
-        <div class="flex flex-wrap gap-2 mb-5">${listing}${actionButtonsHtml(j)}</div>
-        <dl class="job-facts">${fields.filter(([,v]) => v !== null && v !== undefined && v !== '').map(([k,v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-        <section><h3>Why the AI selected this job</h3><div class="job-md markdown-content" data-md="${esc(j.ai_selection_comment)}" data-empty="No selection comment available."></div></section>
-        <section><h3>Job description</h3><div class="job-md markdown-content" data-md="${esc(j.description)}" data-empty="No description available."></div></section>
-        ${stateHistory || metadata ? `<details><summary>Activity and source data</summary>${stateHistory}${metadata}</details>` : ''}
+        <div class="job-main-header">
+            <div class="job-main-header-top">
+                <div class="job-main-header-meta">
+                    <span class="job-state-badge">${esc(STATE_LABELS[j.state] || j.state)}${j.history_reason ? ' · ' + esc(j.history_reason.replaceAll('_', ' ')) : ''}</span>
+                    ${j.source_domain ? `<span class="job-source-note">Scraped from ${esc(j.source_domain)}</span>` : ''}
+                </div>
+                <button type="button" class="job-btn job-btn--ghost" data-job-edit>Edit details</button>
+            </div>
+            <h1 class="job-main-title">${esc(j.title)}</h1>
+            <p class="job-main-company">${esc(j.company)}</p>
+            <div class="job-main-actions">${listing}${actionButtonsHtml(j)}</div>
+        </div>
+        ${facts.length ? `<div class="job-meta-grid">${facts.map(([k, v, cls]) => `<div class="job-meta-tile${cls}"><span class="job-meta-label">${esc(k)}</span><span class="job-meta-value">${esc(v)}</span></div>`).join('')}</div>` : ''}
+        ${j.ai_selection_comment ? `<div class="job-ai-callout"><div class="job-ai-callout-head"><span class="job-ai-callout-icon"><uk-icon icon="sparkles"></uk-icon></span><h3>Why the AI selected this job</h3></div><div class="job-md markdown-content" data-md="${esc(j.ai_selection_comment)}"></div></div>` : ''}
+        <section class="job-description"><div class="job-description-head"><h2>Job description</h2></div><div class="job-md markdown-content" data-md="${esc(j.description)}" data-empty="No description available."></div></section>
+        ${stateHistory || metadata ? `<details class="job-activity-data"><summary>Activity and source data</summary>${stateHistory}${metadata}</details>` : ''}
         <button type="button" class="job-delete-btn ui-button ui-button--danger" data-uuid="${esc(j.uuid)}">Delete job</button>
     </article>`;
     renderJobMarkdown(container); document.dispatchEvent(new Event('workspace-content-ready'));

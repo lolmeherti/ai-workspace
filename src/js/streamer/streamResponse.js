@@ -231,8 +231,15 @@ class TypewriterEffect {
             }
             return;
         }
-        this.displayed += this.buffer;
-        this.buffer = '';
+        // Type a bounded chunk per frame instead of dumping the whole buffer,
+        // so a single large reasoning chunk (the first pass flushes buffered
+        // reasoning as ONE reasoning event on a normal turn) streams gradually
+        // instead of appearing all at once. Min rate keeps up with streamed
+        // reasoning (~6 chars/frame); the proportional term drains a very large
+        // buffer faster so it never lags far behind.
+        const step = Math.max(6, Math.ceil(this.buffer.length / 100));
+        this.displayed += this.buffer.slice(0, step);
+        this.buffer = this.buffer.slice(step);
         this.textEl.textContent = this.displayed;
         if (this.peekEl) {
             this.peekEl.scrollTop = this.peekEl.scrollHeight;
@@ -941,15 +948,11 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'tool_start') {
-                            // First-pass planning reasoning is superseded by tool
-                            // execution — reset so the second-pass answer reasoning
-                            // starts fresh (avoids stale typewriter textEl + double
-                            // reasoning concatenation).
-                            if (reasoningSeen) {
-                                reasoningSeen = false;
-                                thinkingTypewriter.reset();
-                                thinkingAccordion.classList.add('hidden');
-                            }
+                            // Tool-planning reasoning stays in the thought window;
+                            // the answer-pass reasoning appends to it (one
+                            // continuous chain of thought). No reset here — hiding
+                            // it would flash the planning thought and lose the
+                            // continuity the user asked for.
                             const tool = data.tool;
                             const t = TOOL_DISPLAY[tool];
                             if (t) {
@@ -1099,6 +1102,13 @@ export async function streamResponse(formData, originalMessage) {
                         if (event === 'reasoning') {
                             if (!reasoningSeen) {
                                 reasoningSeen = true;
+                                if (data.t0 !== undefined && data.t0 !== null) {
+                                    const now = Date.now() / 1000;
+                                    const deltaMs = (now - Number(data.t0)) * 1000;
+                                    console.log(`[CoT timing] first thought window render +${deltaMs.toFixed(0)}ms after backend first reasoning token (server t0=${Number(data.t0).toFixed(3)}s, client now=${now.toFixed(3)}s)`);
+                                } else {
+                                    console.log(`[CoT timing] first thought window render (no t0 in event data)`);
+                                }
                                 thinkingTypewriter.reset();
                                 const summaryLabel = thinkingAccordion.querySelector('.thinking-summary span:first-of-type');
                                 const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');

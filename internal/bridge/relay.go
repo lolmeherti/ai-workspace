@@ -3,11 +3,13 @@ package bridge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,6 +83,28 @@ func (r *Relay) ServeWS(w http.ResponseWriter, req *http.Request) {
 	r.lastPing = time.Now()
 	r.mu.Unlock()
 
+	// Keepalive: a killed/abandoned extension worker leaves ReadMessage blocked
+	// forever with no deadline, holding a phantom r.conn. A read deadline plus
+	// WS-level ping/pong lets us detect and clean up a dead connection promptly.
+	_ = ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+	ws.SetPongHandler(func(string) error {
+		_ = ws.SetReadDeadline(time.Now().Add(90 * time.Second))
+		return nil
+	})
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
+	go func() {
+		for range pingTicker.C {
+			r.mu.Lock()
+			err := ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			r.mu.Unlock()
+			if err != nil {
+				_ = ws.Close()
+				return
+			}
+		}
+	}()
+
 	defer func() {
 		r.mu.Lock()
 		if r.conn == ws {
@@ -104,6 +128,7 @@ func (r *Relay) ServeWS(w http.ResponseWriter, req *http.Request) {
 			}
 			return
 		}
+		_ = ws.SetReadDeadline(time.Now().Add(90 * time.Second))
 
 		var msg struct {
 			Type       string          `json:"type"`
@@ -197,7 +222,7 @@ func (r *Relay) Fetch(ctx context.Context, urlStr, requestID string) (*FetchResu
 		"request_id": requestID,
 	}, requestID)
 	if err != nil {
-		return &FetchResult{Status: "timeout", Error: err.Error()}, nil
+		return &FetchResult{Status: fetchStatusFor(err), Error: err.Error()}, nil
 	}
 
 	var result FetchResult
@@ -216,7 +241,7 @@ func (r *Relay) Search(ctx context.Context, query, requestID string) (*SearchRes
 		"request_id": requestID,
 	}, requestID)
 	if err != nil {
-		return &SearchResult{Status: "timeout", Error: err.Error()}, nil
+		return &SearchResult{Status: fetchStatusFor(err), Error: err.Error()}, nil
 	}
 
 	var result SearchResult
@@ -224,6 +249,28 @@ func (r *Relay) Search(ctx context.Context, query, requestID string) (*SearchRes
 		return &SearchResult{Status: "parse_failed", Error: "invalid search_result payload"}, nil
 	}
 	return &result, nil
+}
+
+// fetchStatusFor maps a dispatch error to a distinct, truthful status so the
+// PHP pipeline (and its event log) can distinguish "we lost the extension and
+// never navigated" from a real page-load hang. The error string is kept for
+// diagnostics. Retry safety hinges on this split: disconnected/ws_error mean
+// the browser never hit the target site (retry-safe), while deadline means the
+// browser did navigate and the page hung.
+func fetchStatusFor(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline"
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "no extension connected"),
+		strings.Contains(msg, "extension disconnected"):
+		return "disconnected"
+	case strings.Contains(msg, "ws write"):
+		return "ws_error"
+	default:
+		return "error"
+	}
 }
 
 // ── DNS / IP safety ──────────────────────────────────────────────

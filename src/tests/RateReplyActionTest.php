@@ -113,5 +113,7 @@ class RateReplyActionTest
         $this->test('bad_tool_args is tool-turn only', in_array('bad_tool_args', RateReplyAction::TOOL_TURN_REASONS, true));
         $this->test('wrong is NOT tool-turn only', !in_array('wrong', RateReplyAction::TOOL_TURN_REASONS, true));
         $this->test('other is a known reason', array_key_exists('other', RateReplyAction::DOWNVOTE_REASONS));
+        $this->test('bad_vision is a known reason', array_key_exists('bad_vision', RateReplyAction::DOWNVOTE_REASONS));
+        $this->test('bad_vision is NOT tool-turn only', !in_array('bad_vision', RateReplyAction::TOOL_TURN_REASONS, true));
     }
 }

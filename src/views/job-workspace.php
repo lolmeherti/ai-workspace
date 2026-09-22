@@ -24,30 +24,47 @@
             </details>
         </section>
         <section class="jobs-detail" aria-label="Job details and search activity">
-            <details id="job-run-activity" class="job-run-activity">
-                <summary>Search activity <span id="job-run-status" class="ui-muted">and run history</span></summary>
+            <header class="jobs-detail-tabs" role="tablist" aria-label="Right pane views">
+                <button type="button" id="job-tab-details" class="job-tab is-active" role="tab" aria-selected="true" aria-controls="job-view-details">
+                    <uk-icon icon="file-text"></uk-icon><span>Job Details</span>
+                </button>
+                <button type="button" id="job-tab-logs" class="job-tab" role="tab" aria-selected="false" aria-controls="job-view-activity">
+                    <uk-icon icon="terminal"></uk-icon><span>Run Details</span>
+                </button>
+            </header>
+            <div id="job-view-details" class="job-panel" role="tabpanel" aria-labelledby="job-tab-details">
+                <button type="button" class="ui-button jobs-back" id="job-details-back">← Back to jobs</button>
+                <div id="job-details-container"></div>
+            </div>
+            <div id="job-view-activity" class="job-panel hidden" role="tabpanel" aria-labelledby="job-tab-logs">
                 <button type="button" class="ui-button jobs-back" id="job-activity-back">← Back to jobs</button>
+                <div class="run-console-head">
+                    <div class="run-console-title">
+                        <span class="run-console-icon"><uk-icon icon="terminal"></uk-icon></span>
+                        <div class="run-console-title-text">
+                            <div class="run-console-title-row">
+                                <h2>Search Activity Console</h2>
+                                <span class="run-status-badge"><span class="run-status-dot"></span><span id="job-run-status">No active search</span></span>
+                            </div>
+                            <p>Execution logs and scraper diagnostics.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="job-btn job-btn--ghost" onclick="window.openRunLogs()"><uk-icon icon="history"></uk-icon> Load run history</button>
+                </div>
                 <div id="job-run-summary"></div>
-                <div id="job-view-progress" class="job-view hidden h-full overflow-y-auto">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between mb-5">
-                            <h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2"><uk-icon icon="search" class="w-4 h-4 text-cyan-400"></uk-icon> Finding Jobs</h2>
+                <div id="job-run-meta"></div>
+                <div id="job-view-progress" class="job-run-panel hidden">
+                    <div class="job-run-panel-inner">
+                        <div class="job-run-panel-head">
+                            <h2><uk-icon icon="search"></uk-icon> Finding Jobs</h2>
                             <button id="job-run-cancel" class="ui-button ui-button--danger">Cancel</button>
                         </div>
                         <div id="job-progress-body"></div>
                     </div>
                 </div>
-                <button type="button" class="ui-button" onclick="window.openRunLogs()">Load run history</button>
-                <div id="job-view-logs" class="job-view hidden h-full overflow-y-auto">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between mb-5"><h2 class="text-sm font-bold text-slate-100 normal-case tracking-normal flex items-center gap-2"><uk-icon icon="activity" class="w-4 h-4 text-cyan-400"></uk-icon> Run Logs</h2></div>
-                        <div id="job-logs-container"><div class="jobs-empty">No job runs yet</div></div>
-                    </div>
+                <div id="job-view-logs" class="job-run-panel hidden">
+                    <div id="job-logs-container"><div class="jobs-empty">No job runs yet</div></div>
                 </div>
-            </details>
-            <div id="job-view-details" class="job-view">
-                <button type="button" class="ui-button jobs-back" id="job-details-back">← Back to jobs</button>
-                <div id="job-details-container"></div>
             </div>
         </section>
     </div>
@@ -198,7 +215,6 @@
 
         <footer class="jobs-setup-footer">
             <span class="jobs-setup-sync"><span class="jobs-setup-sync-dot"></span> Saves apply per section</span>
-            <button type="button" id="job-setup-footer-close" class="job-btn job-btn--primary">Done</button>
         </footer>
     </dialog>
 </div>

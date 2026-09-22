@@ -97,6 +97,9 @@ final class SearchPipeline
         $sourceId = $this->sourceStartSeq - 1;
         $allChunks = [];
         $fetchedUrls = [];
+        // Transport/disconnect failures only — the browser never navigated, so a
+        // retry carries no shadow-ban risk. Never retry challenge/consent/timeout.
+        $retryableStatuses = ['disconnected', 'ws_error', 'error'];
 
         foreach ($candidates as $candidate) {
             $sourceId++;
@@ -110,6 +113,11 @@ final class SearchPipeline
 
             $result = $bridge->fetch($candidate->url);
 
+            if (!$result->isSuccess() && in_array($result->status, $retryableStatuses, true)) {
+                usleep(400_000);
+                $result = $bridge->fetch($candidate->url);
+            }
+
             $totalBodyLen = 0;
             $entityCount = 0;
             if ($result->isSuccess() && $result->content) {
@@ -118,7 +126,7 @@ final class SearchPipeline
                 }
                 $entityCount = count($result->content['entities'] ?? []);
             }
-            BridgeFetchLogger::record($candidate->url, $result->status, $totalBodyLen, $entityCount);
+            BridgeFetchLogger::record($candidate->url, $result->status, $totalBodyLen, $entityCount, $result->error, $result->content);
 
             if (!$result->isSuccess()) {
                 $this->emitProgress('scraping_done', "Scraped {$shortUrl} ({$result->status})", $emit, $candidate->url);

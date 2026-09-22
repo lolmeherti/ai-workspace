@@ -12,12 +12,12 @@ let currentPage = 1;
 let categoryCounts = {};
 
 const CATEGORY_META = {
-    unread:     { icon: 'mail',    text: 'text-slate-300',   border: 'border-slate-700',      hover: 'hover:border-slate-500',      iconColor: 'text-slate-400' },
-    interested: { icon: 'star',    text: 'text-cyan-400',    border: 'border-cyan-500/30',    hover: 'hover:border-cyan-500/60',    iconColor: 'text-cyan-400' },
-    applied:    { icon: 'send',    text: 'text-blue-400',    border: 'border-blue-500/30',    hover: 'hover:border-blue-500/60',    iconColor: 'text-blue-400' },
-    interview:  { icon: 'user',    text: 'text-amber-400',   border: 'border-amber-500/30',   hover: 'hover:border-amber-500/60',   iconColor: 'text-amber-400' },
-    offer:      { icon: 'check',   text: 'text-emerald-400', border: 'border-emerald-500/30', hover: 'hover:border-emerald-500/60', iconColor: 'text-emerald-400' },
-    history:    { icon: 'history', text: 'text-slate-500',   border: 'border-slate-800',      hover: 'hover:border-slate-600',      iconColor: 'text-slate-600' },
+    unread:     { icon: 'mail',    iconColor: 'text-slate-400' },
+    interested: { icon: 'star',    iconColor: 'text-cyan-400' },
+    applied:    { icon: 'send',    iconColor: 'text-blue-400' },
+    interview:  { icon: 'user',    iconColor: 'text-amber-400' },
+    offer:      { icon: 'check',   iconColor: 'text-emerald-400' },
+    history:    { icon: 'history', iconColor: 'text-slate-600' },
 };
 
 export function initInbox() {
@@ -169,14 +169,13 @@ function renderJobsError() {
 function categoryCardHtml(state, count) {
     const meta = CATEGORY_META[state] ?? CATEGORY_META.history;
     const active = state === activeCategory;
-    const border = active ? 'border-cyan-400/70 bg-cyan-500/[0.07]' : `${meta.border} bg-[#0a0f1d]/60`;
     return `
-        <button class="job-category-card w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${border} ${meta.hover} transition-colors cursor-pointer outline-none text-left" data-state="${state}" aria-pressed="${active}">
-            <span class="flex items-center gap-2.5 min-w-0">
-                <uk-icon icon="${meta.icon}" class="w-4 h-4 shrink-0 ${active ? 'text-cyan-400' : meta.iconColor}"></uk-icon>
-                <span class="text-xs font-bold normal-case tracking-normal ${meta.text} truncate">${esc(STATE_LABELS[state] ?? state)}</span>
+        <button class="job-category-card${active ? ' is-active' : ''}" data-state="${state}" aria-pressed="${active}">
+            <span class="job-category-main">
+                <uk-icon icon="${meta.icon}" class="job-category-icon ${active ? 'text-cyan-400' : meta.iconColor}"></uk-icon>
+                <span class="job-category-label">${esc(STATE_LABELS[state] ?? state)}</span>
             </span>
-            <span class="px-2 py-0.5 rounded-full text-xs font-extrabold tabular-nums border shrink-0 ${count > 0 ? 'bg-cyan-950/60 text-cyan-400 border-cyan-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'}">${count}</span>
+            <span class="job-category-count${count > 0 ? ' has-count' : ''}">${count}</span>
         </button>`;
 }
 
@@ -185,8 +184,11 @@ function cardHtml(job) {
     return `
         <div role="button" tabindex="0" aria-label="${esc(job.title)} at ${esc(job.company)}" class="job-card" data-uuid="${esc(job.uuid)}">
             <label class="job-select-label"><input type="checkbox" aria-label="Select ${esc(job.title)}" class="job-select" data-uuid="${esc(job.uuid)}" data-state="${esc(job.state)}"></label>
-            <div class="min-w-0"><h3 class="job-card-title">${esc(job.title)}</h3><p class="job-card-meta">${meta}</p><div class="job-card-footer"><span>${dateOnly(job.posted_at)}</span>${job.salary ? `<span>${esc(job.salary)}</span>` : ''}</div></div>
-            <span aria-hidden="true" class="ui-muted">›</span>
+            <div class="job-card-body">
+                <div class="job-card-head"><h3 class="job-card-title">${esc(job.title)}</h3><span class="job-card-chevron" aria-hidden="true">›</span></div>
+                <p class="job-card-meta">${meta}</p>
+                <div class="job-card-footer">${job.salary ? `<span class="job-card-salary">${esc(job.salary)}</span>` : ''}<span class="job-card-date">${dateOnly(job.posted_at)}</span></div>
+            </div>
         </div>`;
 }
 

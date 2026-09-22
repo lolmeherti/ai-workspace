@@ -477,7 +477,17 @@
     }
     return null;
   }
-})();
+})().catch(err => {
+  chrome.runtime.sendMessage({
+    type: "localsy_fetch_result",
+    status: "extract_error",
+    content: {
+      _error: String((err && err.message) || err),
+      _stack: String((err && err.stack) || "").slice(0, 800),
+      _debug: { url: location.href, readyState: document.readyState, title: document.title }
+    }
+  }).catch(() => {});
+});
 
 // CAPTCHA poll listener
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
