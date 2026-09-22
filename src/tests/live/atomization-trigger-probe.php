@@ -53,7 +53,7 @@ final class TimingAgent extends AgentManager
         ];
     }
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null, ?array $tools = null, ?string $toolChoice = null): string
     {
         $sys = $messages[0]['content'] ?? '';
         $type = (is_string($sys) && str_contains($sys, CONDENSER_MARKER)) ? 'condenser' : 'chat';

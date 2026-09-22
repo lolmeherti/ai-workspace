@@ -196,10 +196,8 @@ class ChatManager
 
         $isEditorMode = !empty($activeEditFile);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, $isEditorMode);
-        // Date + knowledge cutoff keeps tool selection accurate (Phase 2 finding),
-        // folded into the integrated first pass so the model knows when to search.
-        $systemPrompt .= $this->promptAssemblyService->dateContextLine();
-        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history);
+        $currentTime = $this->promptAssemblyService->currentTimeContextLine();
+        $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], $currentTime);
 
         $contextMessageCount = count($currentMessages) - 1;
 
@@ -335,7 +333,7 @@ class ChatManager
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
             // Immediate answer uses rich evidence for this turn's fresh rows;
             // atoms (durable compact context) replace rich evidence on later turns.
-            $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], $freshRowIds);
+            $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $freshRowIds, $currentTime);
 
             // Inject transient session-evidence retrieval for this turn only.
             foreach ($transientEvidence as $te) {
@@ -344,6 +342,14 @@ class ChatManager
                     $currentMessages[] = $block;
                 }
             }
+
+            // Repeated-request reminder keeps the user's instruction as the
+            // final semantic instruction before answer generation, after the
+            // evidence tail.
+            $currentMessages[] = [
+                'role' => 'user',
+                'content' => "RUNTIME REMINDER:\nAnswer the user's original request:\n\"{$query}\"",
+            ];
         }
 
         if (!empty($sourceMap)) {
@@ -354,7 +360,7 @@ class ChatManager
 
         if (!empty($first['tool_calls'])) {
             // Tool turn: single second inference over the acquired evidence.
-            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit, $reasoningMode, $reasoningEffort);
+            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit, $reasoningMode, $reasoningEffort, $this->buildToolSchemas($isEditorMode));
         } else {
             // Normal turn: the first pass already streamed the answer live.
             $aiRawResponse = $first['content'] ?? '';
@@ -754,7 +760,7 @@ class ChatManager
         return $result;
     }
 
-    public function streamAgentResponse(array $messages, callable $emit, ?string $mode = null, ?string $effort = null): string
+    public function streamAgentResponse(array $messages, callable $emit, ?string $mode = null, ?string $effort = null, ?array $tools = null): string
     {
         $aiResponse = '';
         $utf8_buffer = '';
@@ -936,7 +942,7 @@ class ChatManager
                 $emit('token', ['chunk' => $clean]);
                 $utf8_buffer = '';
             }
-        }, null, 'answer', $mode, $effort, $answerMaxTokens);
+        }, null, 'answer', $mode, $effort, $answerMaxTokens, $tools, 'none');
 
         // Drain any leftover content from the pre-thought buffer.
         // If the stream ends while the buffer is still < MAX_OPEN_TAG_LEN

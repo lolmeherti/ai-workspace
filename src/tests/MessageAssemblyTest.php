@@ -23,6 +23,7 @@ class MessageAssemblyTest
     {
         $this->runPreprocessHistory();
         $this->runBuildMessagesArray();
+        $this->runStableSystemPrompt();
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);
@@ -166,8 +167,8 @@ class MessageAssemblyTest
         $this->test('ordering preserved: first block before second', $posFirst !== -1 && $posSecond !== -1 && $posFirst < $posSecond);
 
         $posHello = $this->findContentPos($out3, 'hello');
-        $this->test('evidence injected before conversation (current turn last)',
-            $posFirst !== -1 && $posHello !== -1 && $posFirst < $posHello && $posSecond < $posHello);
+        $this->test('evidence injected after conversation (current turn before evidence)',
+            $posFirst !== -1 && $posHello !== -1 && $posFirst > $posHello && $posSecond > $posHello);
 
         $roles = array_values(array_unique(array_map(fn($m) => $m['role'], $out3)));
         $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
@@ -186,6 +187,70 @@ class MessageAssemblyTest
         } else {
             $_ENV['CHAT_ROLLING_WINDOW_LIMIT'] = $this->origWindow;
         }
+    }
+
+    // ===================================================================
+    // stable system prompt + runtime timestamp (cheap-fix regression)
+    // ===================================================================
+    private function runStableSystemPrompt(): void
+    {
+        echo "\n=== stable system prompt + runtime timestamp ===\n";
+
+        $a = $this->prompt->buildSystemPrompt('hello', false);
+        $b = $this->prompt->buildSystemPrompt('hello', false);
+        $this->test('buildSystemPrompt is byte-stable across calls', $a === $b);
+        $this->test('buildSystemPrompt has no date/time line', !str_contains($a, "Today's date"));
+        $this->test('buildSystemPrompt carries runtime-timestamp statement',
+            str_contains($a, 'current time is supplied to you as a runtime timestamp'));
+        $this->test('buildSystemPrompt carries untrusted-data rule',
+            str_contains($a, 'untrusted reference material'));
+
+        $line = $this->prompt->currentTimeContextLine();
+        $this->test('currentTimeContextLine returns exact timestamp',
+            (bool)preg_match('/^current_time = \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n$/', $line));
+
+        // System message identical with and without evidence (no guard mutation).
+        $sys = 'SYS';
+        $withEvidence = [
+            ['role' => 'system', 'message' => 'EV1', 'message_type' => 'data_fetching'],
+            ['role' => 'user', 'message' => 'hi', 'message_type' => 'text'],
+        ];
+        $noEvidence = [
+            ['role' => 'user', 'message' => 'hi', 'message_type' => 'text'],
+        ];
+        $m1 = $this->prompt->buildMessagesArray($sys, $withEvidence);
+        $m2 = $this->prompt->buildMessagesArray($sys, $noEvidence);
+        $this->test('system message identical with/without evidence',
+            $m1[0]['content'] === $m2[0]['content'] && $m1[0]['content'] === $sys);
+
+        // current_time injected into the current user turn, not the system prompt.
+        $t = "current_time = 2026-09-22T19:00:00+02:00\n";
+        $m3 = $this->prompt->buildMessagesArray($sys, $noEvidence, [], $t);
+        $this->test('current_time not in system prompt', !str_contains($m3[0]['content'], 'current_time ='));
+        $lastUser = null;
+        foreach ($m3 as $msg) {
+            if ($msg['role'] === 'user') {
+                $lastUser = $msg['content'];
+            }
+        }
+        $this->test('current_time prepended to current user turn',
+            is_string($lastUser) && str_starts_with($lastUser, 'current_time ='));
+
+        // Evidence wrapped with valid_sources + fetched_at when present.
+        $ev = [
+            ['role' => 'system', 'message' => '<source id="S1">x</source>', 'message_type' => 'data_fetching', 'created_at' => '2026-09-22 19:00:00'],
+            ['role' => 'user', 'message' => 'hi', 'message_type' => 'text'],
+        ];
+        $m4 = $this->prompt->buildMessagesArray($sys, $ev);
+        $evidenceBlock = null;
+        foreach ($m4 as $msg) {
+            if (is_string($msg['content']) && str_contains($msg['content'], 'valid_sources="S1"')) {
+                $evidenceBlock = $msg['content'];
+            }
+        }
+        $this->test('evidence carries valid_sources', $evidenceBlock !== null);
+        $this->test('evidence carries fetched_at',
+            $evidenceBlock !== null && str_contains($evidenceBlock, 'fetched_at="2026-09-22 19:00:00"'));
     }
 
     private function countContent(array $messages, string $needle): int

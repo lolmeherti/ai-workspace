@@ -97,7 +97,7 @@ for ($p = 1; $p <= $passes; $p++) {
     echo "\n--- PASS {$p} ---\n";
     foreach ($cases as [$label, $query, $expect]) {
         $messages = [
-            ['role' => 'system', 'content' => $pas->buildSystemPrompt($query) . $pas->dateContextLine()],
+            ['role' => 'system', 'content' => $pas->buildSystemPrompt($query)],
             ['role' => 'user', 'content' => $query],
         ];
         $emit = function (string $event, array $data = []) {
