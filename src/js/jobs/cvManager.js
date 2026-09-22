@@ -151,8 +151,21 @@ function renderCvCard(cv) {
                 <button onclick="window.deleteCv('${cv.uuid}')" class="px-2.5 py-1 rounded-md text-xs font-bold normal-case tracking-normal border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 hover:bg-rose-900/20 transition-all cursor-pointer outline-none">Delete</button>
             </div>
         </div>
-        ${hasMarkdown ? `<pre class="mt-3 text-xs text-slate-300 whitespace-pre-wrap bg-[#060b13] border border-slate-900 p-3 rounded-lg max-h-48 overflow-y-auto leading-relaxed">${esc(cv.extracted_markdown)}</pre>` : '<p class="text-xs text-slate-500 mt-3 italic">Not extracted yet &mdash; click <span class="text-cyan-400 not-italic font-bold">Extract Details</span> to prepare this CV for searches.</p>'}
+        ${hasMarkdown ? `<div class="cv-md mt-3 text-slate-300 bg-[#060b13] border border-slate-900 p-3 rounded-lg max-h-48 overflow-y-auto" data-md="${esc(cv.extracted_markdown)}"></div>` : '<p class="text-xs text-slate-500 mt-3 italic">Not extracted yet &mdash; click <span class="text-cyan-400 not-italic font-bold">Extract Details</span> to prepare this CV for searches.</p>'}
     `;
+
+    if (hasMarkdown) {
+        const mdEl = card.querySelector('.cv-md');
+        if (mdEl) {
+            const raw = mdEl.getAttribute('data-md') || '';
+            if (typeof marked !== 'undefined') {
+                mdEl.innerHTML = marked.parse(raw, { breaks: true });
+            } else {
+                mdEl.textContent = raw;
+            }
+        }
+    }
+
     return card;
 }
 

@@ -1,6 +1,6 @@
 const BRIDGE_URL = "ws://127.0.0.1:8765/";
 const RECONNECT_ALARM = "localsy-search-bridge-reconnect";
-const SEARCH_TIMEOUT_MS = 12_000;
+const SEARCH_TIMEOUT_MS = 20_000;
 const FETCH_NAV_TIMEOUT_MS = 45_000;
 const FETCH_HUMAN_TIMEOUT_MS = 75_000;
 const CAPTCHA_POLL_MS = 1_000;
@@ -9,6 +9,8 @@ let socket = null;
 let reconnectTimer = null;
 let heartbeatTimer = null;
 let activeJob = null;
+let reconnectDelayMs = 2_000;
+const RECONNECT_MAX_MS = 30_000;
 
 // tabId -> cf-mitigated header value from the latest main_frame navigation.
 const cfMitigatedByTab = new Map();
@@ -19,12 +21,13 @@ function send(message) {
   return true;
 }
 
-function scheduleReconnect(delayMs = 2_000) {
+function scheduleReconnect() {
   if (reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
-  }, delayMs);
+  }, reconnectDelayMs);
+  reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_MAX_MS);
 }
 
 function startHeartbeat() {
@@ -52,6 +55,7 @@ function connect() {
   }
 
   socket.onopen = () => {
+    reconnectDelayMs = 2_000;
     send({
       type: "hello",
       bridge_version: "0.1.0",
@@ -114,7 +118,7 @@ async function startSearch(message) {
     requestId,
     query,
     tabId: tab.id,
-    timeout: setTimeout(() => finishJob("timeout", null), SEARCH_TIMEOUT_MS)
+    navTimeout: setTimeout(() => finishJob("timeout", null), SEARCH_TIMEOUT_MS)
   };
 
   await chrome.tabs.update(tab.id, { url, active: false });
@@ -293,9 +297,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 // Cloudflare-native challenge detection
-// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 
 // Capture the cf-mitigated response header from each tab's top-level navigation
 // so the content script can use it as the authoritative challenge signal (status
@@ -314,9 +318,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   cfMitigatedByTab.delete(tabId);
 });
 
-// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 // Lifecycle
-// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
 
 chrome.runtime.onInstalled.addListener(() => connect());
 chrome.runtime.onStartup.addListener(() => connect());

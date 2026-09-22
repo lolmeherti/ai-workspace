@@ -196,17 +196,13 @@ TEXT;
             $hasImage = false;
             $messageContent = $row['message'];
             $imageParts = [];
-            $docBlocks  = [];
 
             if (preg_match_all('/\\[File:\\s*([a-zA-Z0-9._-]+)\\]/', $messageContent, $matches, PREG_SET_ORDER)) {
                 foreach ($matches as $m) {
                     $name = $m[1];
                     $full = $this->uploadDir . $name;
-                    $txt  = $full . '.txt';
 
-                    if (file_exists($txt)) {
-                        $docBlocks[] = "[Referenced File Content for {$name}]:\n" . file_get_contents($txt) . "\n[End]";
-                    } elseif (file_exists($full) && str_starts_with(@mime_content_type($full) ?: '', 'image/')) {
+                    if (file_exists($full) && str_starts_with(@mime_content_type($full) ?: '', 'image/')) {
                         $imageParts[] = [
                             'type' => 'image_url',
                             'image_url' => ['url' => 'data:' . @mime_content_type($full) . ';base64,' . base64_encode(file_get_contents($full))]
@@ -227,10 +223,6 @@ TEXT;
                 continue;
             }
 
-            if ($docBlocks !== []) {
-                $messageContent .= "\n\n" . implode("\n\n", $docBlocks);
-            }
-
             if (!$hasImage) {
                 if (!empty($row['image_path']) && file_exists(__DIR__ . '/../../' . $row['image_path'])) {
                     $fullFilePath = __DIR__ . '/../../' . $row['image_path'];
@@ -247,15 +239,6 @@ TEXT;
                                 ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$base64}"]]
                             ]
                         ];
-                    } else {
-                        $txtPath = $fullFilePath . '.txt';
-                        if (file_exists($txtPath)) {
-                            $docText = file_get_contents($txtPath);
-                            $cleanFileName = preg_replace('/^[a-z0-9]+_/', '', basename($row['image_path']));
-                            $messageContent = <<<TEXT
-[Attached Document: {$cleanFileName}] {$docText} {$messageContent}
-TEXT;
-                        }
                     }
                 }
             }
@@ -349,7 +332,18 @@ TEXT;
         if ($atoms !== '') {
             $parts[] = $atoms;
         }
-        return implode("\n", $parts);
+        $content = implode("\n", $parts);
+
+        // Attached/referenced files carry an explicit label so the model treats
+        // the content as the user's attached document — not generic reference
+        // material it may otherwise ignore in favor of stale search instructions
+        // (e.g. "click Append to Chat").
+        if (($row['tool_name'] ?? '') === 'file' && $content !== '') {
+            $title = trim((string)($row['search_query'] ?? 'file'));
+            $content = "[Attached File: {$title}]\n{$content}\n[End of Attached File]";
+        }
+
+        return $content;
     }
 
     /**

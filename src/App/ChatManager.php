@@ -12,6 +12,7 @@ use App\Search\TokenCounter;
 use App\Search\WebChunk;
 use App\Services\AtomizationStats;
 use App\Services\FileAttachmentService;
+use App\Services\FileContextService;
 use App\Services\ModelLock;
 use App\Services\PromptAssemblyService;
 use App\Services\ToolExecutionService;
@@ -24,6 +25,7 @@ class ChatManager
     private Database $db;
     private AgentManager $agent;
     private FileAttachmentService $fileAttachmentService;
+    private FileContextService $fileContext;
     private PromptAssemblyService $promptAssemblyService;
     private ToolExecutionService $toolExecutionService;
     private AtomizationStats $atomizationStats;
@@ -42,9 +44,23 @@ class ChatManager
         $this->uploadDir = __DIR__ . '/../uploads/';
 
         $this->fileAttachmentService = new FileAttachmentService($db, $agent, $this->uploadDir);
+        $this->fileContext = new FileContextService($db, $this->uploadDir);
         $this->promptAssemblyService = new PromptAssemblyService($this->db, $this->uploadDir);
         $this->toolExecutionService = new ToolExecutionService($db, $agent, $this->uploadDir);
         $this->atomizationStats = new AtomizationStats($db);
+    }
+
+    /**
+     * @return string[] physical names referenced as [File: ...] markers.
+     * Mirrors PromptAssemblyService's marker regex (physical_name is the
+     * uploads/ filename, e.g. timestamp_uniqid_original.pdf).
+     */
+    private function extractFileRefs(string $query): array
+    {
+        if (preg_match_all('/\[File:\s*([a-zA-Z0-9._-]+)\]/', $query, $m)) {
+            return array_map(fn($n) => basename(str_replace('uploads/', '', $n)), $m[1]);
+        }
+        return [];
     }
 
     public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?string $effort = null, ?callable $streamCallback = null): array
@@ -138,6 +154,40 @@ class ChatManager
             'has_image' => $imagePath !== null,
         ], 'info', 'ChatManager::processLocked');
 
+        // Persist attached/referenced file content as managed Context Data.
+        // Content is the raw original (document .txt sidecar) or image OCR text,
+        // injected via the evidence path on this turn. The [File: ...] marker and
+        // image_path stay untouched on the stored user message (UI flow unchanged).
+        $fileRefs = $this->extractFileRefs($query);
+        if ($imagePath !== null) {
+            $fileRefs[] = basename($imagePath);
+        }
+        foreach (array_unique($fileRefs) as $physicalName) {
+            $file = $this->fileContext->lookupContent($physicalName);
+            if ($file === null) {
+                continue;
+            }
+            $this->db->insert('chat_history', [
+                'session_id'     => $sessionId,
+                'role'           => 'system',
+                'message'        => $file['content'],
+                'message_type'   => 'data_fetching',
+                'tool_name'      => 'file',
+                'search_query'   => $file['title'],
+                'atomic_context' => null,
+                'token_estimate' => ($this->countTokens)($file['content']),
+            ]);
+            $historyId = (int) $this->db->getConnection()->lastInsertId();
+            $emit('context_data_added', [
+                'id' => $historyId,
+                'label' => $file['title'],
+                'tool_name' => 'file',
+                'query' => $file['title'],
+                'token_estimate' => ($this->countTokens)($file['content']),
+                'active' => true,
+            ]);
+        }
+
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         $updatedTitle = null;
         if (count($history) === 1) {
@@ -176,8 +226,8 @@ class ChatManager
         $transientSourceIds = [];
 
         // Integrated first pass: the normal assistant with tools attached. On a
-        // no-tool turn the answer streams live (pre-decision reasoning buffered
-        // then released); on a tool turn it assembles tool_calls, we execute
+        // no-tool turn the answer streams live (reasoning streams via the
+        // reasoning SSE); on a tool turn it assembles tool_calls, we execute
         // them, then run a single second inference over the acquired evidence.
         [$reasoningMode, $reasoningEffort] = $this->reasoningModeEffort($effort);
 
@@ -634,40 +684,32 @@ class ChatManager
     }
 
     /**
-     * Integrated first pass: one tool-capable streaming inference. Buffers
-     * pre-decision reasoning, releases it (via the reasoning SSE) when normal
-     * content begins, and discards it on a tool turn. Returns the structured
-     * result from AgentManager::chatToolCapable.
+     * Integrated first pass: one tool-capable streaming inference. Streams
+     * reasoning live (via the reasoning SSE) so the thought window runs on
+     * BOTH normal and tool turns — the tool-planning thought is shown and the
+     * answer-pass reasoning appends to it. Returns the structured result from
+     * AgentManager::chatToolCapable.
      *
      * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
      */
     private function firstPass(array $messages, callable $emit, bool $isEditorMode = false, ?string $mode = null, ?string $effort = null): array
     {
         $utf8Buffer = '';
-        $reasoningBuffer = '';
         $contentEmitted = false;
         $contentChars = 0;
         $thoughtCompleteSent = false;
-
-        // Pre-decision reasoning is BUFFERED, not streamed live. It is released
-        // only once real content begins (a normal answer turn); on a tool turn
-        // (tool_calls only, no content) it is discarded — so the frontend never
-        // creates a Thinking Process accordion for the model's tool planning.
-        $flushReasoning = function () use ($emit, &$reasoningBuffer) {
-            if ($reasoningBuffer === '') {
-                return;
-            }
-            $emit('reasoning', ['chunk' => $reasoningBuffer]);
-            $reasoningBuffer = '';
-        };
+        $firstReasoningTs = null;
 
         $result = $this->agent->chatToolCapable(
             $messages,
             $this->buildToolSchemas($isEditorMode),
             'auto',
-            function ($chunk, $type) use ($emit, &$utf8Buffer, &$reasoningBuffer, &$contentEmitted, &$contentChars, &$thoughtCompleteSent, $flushReasoning) {
+            function ($chunk, $type) use ($emit, &$utf8Buffer, &$contentEmitted, &$contentChars, &$thoughtCompleteSent, &$firstReasoningTs) {
                 if ($type === 'reasoning') {
-                    $reasoningBuffer .= $chunk;
+                    if ($firstReasoningTs === null) {
+                        $firstReasoningTs = microtime(true);
+                    }
+                    $emit('reasoning', ['chunk' => $chunk, 't0' => $firstReasoningTs]);
                     return;
                 }
 
@@ -676,7 +718,6 @@ class ChatManager
                     return;
                 }
 
-                $flushReasoning();
                 if (!$thoughtCompleteSent) {
                     $emit('thought_complete', []);
                     $thoughtCompleteSent = true;
@@ -694,7 +735,6 @@ class ChatManager
         );
 
         if ($utf8Buffer !== '') {
-            $flushReasoning();
             if (!$thoughtCompleteSent) {
                 $emit('thought_complete', []);
                 $thoughtCompleteSent = true;
@@ -703,10 +743,6 @@ class ChatManager
             $emit('token', ['chunk' => mb_convert_encoding($utf8Buffer, 'UTF-8', 'UTF-8')]);
             $utf8Buffer = '';
         }
-
-        // A tool turn (or empty first pass) leaves any buffered reasoning
-        // unreleased on purpose — no 'reasoning'/'thought_complete' is emitted,
-        // so no thinking accordion is created for it.
 
         if ($contentEmitted && !empty($result['tool_calls'])) {
             \App\Logger::logEvent('content_before_tool', 'Content emitted before tool_calls in the integrated first pass', [
@@ -729,6 +765,7 @@ class ChatManager
         $preThoughtBuffer = '';
         $isStartOfResponse = true;
         $nativeReasoningSeen = false;
+        $firstReasoningTs = null;
 
         // Context-aware output budget (Part B): the answer pass must leave
         // content headroom beyond the reasoning budget so a full-budget
@@ -736,10 +773,13 @@ class ChatManager
         // Clamped by actual context headroom (prompt size vs LLM_CTX_SIZE).
         $answerMaxTokens = $this->resolveAnswerMaxTokens($messages);
 
-        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThought, &$thoughtBuffer, &$preThoughtBuffer, &$isStartOfResponse, &$nativeReasoningSeen) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThought, &$thoughtBuffer, &$preThoughtBuffer, &$isStartOfResponse, &$nativeReasoningSeen, &$firstReasoningTs) {
             if ($type === 'reasoning') {
                 $nativeReasoningSeen = true;
-                $emit('reasoning', ['chunk' => $chunk]);
+                if ($firstReasoningTs === null) {
+                    $firstReasoningTs = microtime(true);
+                }
+                $emit('reasoning', ['chunk' => $chunk, 't0' => $firstReasoningTs]);
                 return;
             }
 

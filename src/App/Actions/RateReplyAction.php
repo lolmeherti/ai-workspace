@@ -26,6 +26,7 @@ class RateReplyAction extends BaseAction
         'wrong_tool'    => 'Chose the wrong tool',
         'bad_tool_args' => 'Malformed / irrelevant tool arguments',
         'other'         => 'Other',
+        'bad_vision'    => 'Image-to-text was weak / misread the image',
     ];
 
     /** Subset of DOWNVOTE_REASONS shown only for tool-use turns. */
