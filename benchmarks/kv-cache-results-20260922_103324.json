@@ -1,0 +1,695 @@
+[
+  {
+    "scenario": "D[D1] medium answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "medium -> instruct",
+    "prompt_n": 4682,
+    "cache_n": 4645,
+    "uncached_n": 37,
+    "cache_hit_ratio": 0.9921,
+    "prompt_ms": 191.654,
+    "prompt_tps": 193.1,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.21,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4653
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1067,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] medium answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "medium -> instruct",
+    "prompt_n": 4939,
+    "cache_n": 4904,
+    "uncached_n": 35,
+    "cache_hit_ratio": 0.9929,
+    "prompt_ms": 171.154,
+    "prompt_tps": 204.5,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.19,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4910
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1195,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] low answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "low -> instruct",
+    "prompt_n": 4698,
+    "cache_n": 0,
+    "uncached_n": 4698,
+    "cache_hit_ratio": 0.0,
+    "prompt_ms": 1663.831,
+    "prompt_tps": 2823.6,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 1.89,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4669
+    },
+    "verdicts": {
+      "end system": false,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1131,
+      "answer_chars": 70,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] low answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "low -> instruct",
+    "prompt_n": 4939,
+    "cache_n": 0,
+    "uncached_n": 4939,
+    "cache_hit_ratio": 0.0,
+    "prompt_ms": 1734.376,
+    "prompt_tps": 2847.7,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 1.92,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4910
+    },
+    "verdicts": {
+      "end system": false,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1065,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] xhigh answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "xhigh -> instruct",
+    "prompt_n": 4682,
+    "cache_n": 0,
+    "uncached_n": 4682,
+    "cache_hit_ratio": 0.0,
+    "prompt_ms": 1665.908,
+    "prompt_tps": 2810.5,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 1.87,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4653
+    },
+    "verdicts": {
+      "end system": false,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1148,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] xhigh answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "xhigh -> instruct",
+    "prompt_n": 4939,
+    "cache_n": 0,
+    "uncached_n": 4939,
+    "cache_hit_ratio": 0.0,
+    "prompt_ms": 1757.714,
+    "prompt_tps": 2809.9,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 1.92,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4910
+    },
+    "verdicts": {
+      "end system": false,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1205,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] medium answer -> medium atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "medium -> medium",
+    "prompt_n": 4680,
+    "cache_n": 4645,
+    "uncached_n": 35,
+    "cache_hit_ratio": 0.9925,
+    "prompt_ms": 198.615,
+    "prompt_tps": 176.2,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.22,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4653
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1149,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] medium answer -> medium atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "medium -> medium",
+    "prompt_n": 4937,
+    "cache_n": 4904,
+    "uncached_n": 33,
+    "cache_hit_ratio": 0.9933,
+    "prompt_ms": 185.01,
+    "prompt_tps": 178.4,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.2,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4910
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1249,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] low answer -> low atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "low -> low",
+    "prompt_n": 4741,
+    "cache_n": 4671,
+    "uncached_n": 70,
+    "cache_hit_ratio": 0.9852,
+    "prompt_ms": 200.22,
+    "prompt_tps": 349.6,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.22,
+    "boundaries": {
+      "end system": 123,
+      "end conversation": 3139,
+      "end raw evidence": 4650,
+      "end U4": 4670,
+      "end assistant": 4714
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1021,
+      "answer_chars": 155,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] low answer -> low atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "low -> low",
+    "prompt_n": 4962,
+    "cache_n": 4930,
+    "uncached_n": 32,
+    "cache_hit_ratio": 0.9936,
+    "prompt_ms": 173.115,
+    "prompt_tps": 184.8,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.19,
+    "boundaries": {
+      "end system": 123,
+      "end conversation": 3139,
+      "end raw evidence": 4650,
+      "end U4": 4670,
+      "end assistant": 4935
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1092,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] xhigh answer -> xhigh atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "xhigh -> xhigh",
+    "prompt_n": 4718,
+    "cache_n": 4683,
+    "uncached_n": 35,
+    "cache_hit_ratio": 0.9926,
+    "prompt_ms": 195.324,
+    "prompt_tps": 179.2,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.21,
+    "boundaries": {
+      "end system": 135,
+      "end conversation": 3151,
+      "end raw evidence": 4662,
+      "end U4": 4682,
+      "end assistant": 4691
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1335,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D2] xhigh answer -> xhigh atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "xhigh -> xhigh",
+    "prompt_n": 4975,
+    "cache_n": 4942,
+    "uncached_n": 33,
+    "cache_hit_ratio": 0.9934,
+    "prompt_ms": 180.357,
+    "prompt_tps": 183.0,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.2,
+    "boundaries": {
+      "end system": 135,
+      "end conversation": 3151,
+      "end raw evidence": 4662,
+      "end U4": 4682,
+      "end assistant": 4948
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 1298,
+      "answer_chars": 0,
+      "reasoning_present": true
+    }
+  },
+  {
+    "scenario": "D[D1] instruct answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4859,
+    "cache_n": 4828,
+    "uncached_n": 31,
+    "cache_hit_ratio": 0.9936,
+    "prompt_ms": 180.163,
+    "prompt_tps": 172.1,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.21,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4830
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 0,
+      "answer_chars": 777,
+      "reasoning_present": false
+    }
+  },
+  {
+    "scenario": "D[D2] instruct answer -> instruct atomizer",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4914,
+    "cache_n": 4883,
+    "uncached_n": 31,
+    "cache_hit_ratio": 0.9937,
+    "prompt_ms": 171.851,
+    "prompt_tps": 180.4,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.21,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644,
+      "end assistant": 4885
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true,
+      "end assistant": false
+    },
+    "extra": {
+      "reasoning_chars": 0,
+      "answer_chars": 998,
+      "reasoning_present": false
+    }
+  },
+  {
+    "scenario": "baseline identical repeat",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4651,
+    "cache_n": 4647,
+    "uncached_n": 4,
+    "cache_hit_ratio": 0.9991,
+    "prompt_ms": 71.307,
+    "prompt_tps": 56.1,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": true,
+      "end U4": true
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "front mutation (current Localsy)",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4960,
+    "cache_n": 97,
+    "uncached_n": 4863,
+    "cache_hit_ratio": 0.0196,
+    "prompt_ms": 1655.119,
+    "prompt_tps": 2938.2,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4933,
+      "end U4": 4953
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "evidence at tail (added after conversation)",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4651,
+    "cache_n": 3113,
+    "uncached_n": 1538,
+    "cache_hit_ratio": 0.6693,
+    "prompt_ms": 634.977,
+    "prompt_tps": 2422.1,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": true,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "atoms at front -> changed atoms",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 3598,
+    "cache_n": 97,
+    "uncached_n": 3501,
+    "cache_hit_ratio": 0.027,
+    "prompt_ms": 1232.633,
+    "prompt_tps": 2840.3,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 3571,
+      "end U4": 3591
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "atoms at tail -> changed atoms",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 3598,
+    "cache_n": 3015,
+    "uncached_n": 583,
+    "cache_hit_ratio": 0.838,
+    "prompt_ms": 365.588,
+    "prompt_tps": 1594.7,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 3571,
+      "end U4": 3591
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "XOR raw -> atoms",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 3531,
+    "cache_n": 97,
+    "uncached_n": 3434,
+    "cache_hit_ratio": 0.0275,
+    "prompt_ms": 1227.352,
+    "prompt_tps": 2797.9,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 3504,
+      "end U4": 3524
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "XOR atoms -> restored raw",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 4651,
+    "cache_n": 3015,
+    "uncached_n": 1636,
+    "cache_hit_ratio": 0.6482,
+    "prompt_ms": 691.521,
+    "prompt_tps": 2365.8,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {
+      "end system": 97,
+      "end conversation": 3113,
+      "end raw evidence": 4624,
+      "end U4": 4644
+    },
+    "verdicts": {
+      "end system": true,
+      "end conversation": false,
+      "end raw evidence": false,
+      "end U4": false
+    },
+    "extra": {}
+  },
+  {
+    "scenario": "tool schemas present -> absent",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 3140,
+    "cache_n": 0,
+    "uncached_n": 3140,
+    "cache_hit_ratio": 0.0,
+    "prompt_ms": 1210.519,
+    "prompt_tps": 2593.9,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {},
+    "verdicts": {
+      "full reuse": false
+    },
+    "extra": {
+      "tools": "tool schemas present -> absent"
+    }
+  },
+  {
+    "scenario": "tool schemas present -> identical schemas",
+    "model": "Qwen3.8 27B UD_Q5_K_XL (unsloth)",
+    "mode_pair": "instruct -> instruct",
+    "prompt_n": 3504,
+    "cache_n": 3500,
+    "uncached_n": 4,
+    "cache_hit_ratio": 0.9989,
+    "prompt_ms": 69.598,
+    "prompt_tps": 57.5,
+    "pred_n": 1,
+    "pred_ms": 0.001,
+    "total_elapsed_s": 0.0,
+    "boundaries": {},
+    "verdicts": {
+      "full reuse": false
+    },
+    "extra": {
+      "tools": "tool schemas present -> identical schemas"
+    }
+  }
+]

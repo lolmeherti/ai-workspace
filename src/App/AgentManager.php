@@ -88,7 +88,9 @@ class AgentManager
         ?string $purpose = null,
         ?string $mode = null,
         ?string $effort = null,
-        ?int $maxTokens = null
+        ?int $maxTokens = null,
+        ?array $tools = null,
+        ?string $toolChoice = null
     ): string
     {
         $endpoint = $this->apiUrl . '/chat/completions';
@@ -109,6 +111,11 @@ class AgentManager
             if (isset($sampling[$key])) {
                 $payload[$key] = $sampling[$key];
             }
+        }
+
+        if (!empty($tools)) {
+            $payload['tools'] = $tools;
+            $payload['tool_choice'] = $toolChoice ?? 'none';
         }
 
         // Reasoning control: PHP asks only mode/effort; the runtime policy

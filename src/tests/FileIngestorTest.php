@@ -12,7 +12,7 @@ class StubAgentManager extends AgentManager
     public array $responses = [];
     public array $calls = [];
 
-    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null): string
+    public function chat(array $messages, bool $stream = true, callable $streamCallback = null, ?float $temperature = null, ?string $purpose = null, ?string $mode = null, ?string $effort = null, ?int $maxTokens = null, ?array $tools = null, ?string $toolChoice = null): string
     {
         $this->calls[] = ['temperature' => $temperature];
         return array_shift($this->responses) ?? '';
