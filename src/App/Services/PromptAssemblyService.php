@@ -161,12 +161,13 @@ TEXT;
 
     /**
      * Assemble the message array for one inference: static system prompt, the
-     * rolling conversation window (with the runtime timestamp attached to the
-     * current user turn), then all data_fetching rows as untrusted evidence
-     * blocks at the tail.
+     * rolling conversation window, then all data_fetching rows as untrusted
+     * evidence blocks at the tail, then the runtime timestamp as a trailing
+     * note. The timestamp never sits in the conversation prefix (which would
+     * change every turn and bust cross-turn KV reuse).
      *
      * @param array<int> $richRowIds IDs of this turn's fresh tool-result rows (render full raw).
-     * @param string|null $currentTime Runtime timestamp line to attach to the current user turn.
+     * @param string|null $currentTime Runtime timestamp line to append as the trailing message.
      */
     public function buildMessagesArray(string $systemPrompt, array $history, array $richRowIds = [], ?string $currentTime = null): array
     {
@@ -185,22 +186,9 @@ TEXT;
         $rollingLimit = (int) Config::get('CHAT_ROLLING_WINDOW_LIMIT', 15);
         $recentHistory = array_slice($conversationRows, -$rollingLimit);
 
-        // Locate the current user turn (the last user row) so the runtime
-        // timestamp can be attached to it and the reminder can repeat it.
-        $currentUserIdx = null;
-        for ($i = count($recentHistory) - 1; $i >= 0; $i--) {
-            if (($recentHistory[$i]['role'] ?? '') === 'user') {
-                $currentUserIdx = $i;
-                break;
-            }
-        }
-
-        foreach ($recentHistory as $idx => $row) {
+        foreach ($recentHistory as $row) {
             $hasImage = false;
             $messageContent = $row['message'];
-            if ($idx === $currentUserIdx && $currentTime !== null && $currentTime !== '') {
-                $messageContent = $currentTime . "\n\n" . $messageContent;
-            }
             $imageParts = [];
 
             if (preg_match_all('/\\[File:\\s*([a-zA-Z0-9._-]+)\\]/', $messageContent, $matches, PREG_SET_ORDER)) {
@@ -276,6 +264,13 @@ TEXT;
                 continue;
             }
             $messages[] = $block;
+        }
+
+        if ($currentTime !== null && $currentTime !== '') {
+            $messages[] = [
+                'role' => 'user',
+                'content' => $currentTime,
+            ];
         }
 
         return $messages;

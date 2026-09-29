@@ -223,18 +223,16 @@ class MessageAssemblyTest
         $this->test('system message identical with/without evidence',
             $m1[0]['content'] === $m2[0]['content'] && $m1[0]['content'] === $sys);
 
-        // current_time injected into the current user turn, not the system prompt.
+        // current_time appended as a trailing message, not in the system prompt
+        // or the user turn (so it can't bust cross-turn prefix reuse).
         $t = "current_time = 2026-09-22T19:00:00+02:00\n";
         $m3 = $this->prompt->buildMessagesArray($sys, $noEvidence, [], $t);
         $this->test('current_time not in system prompt', !str_contains($m3[0]['content'], 'current_time ='));
-        $lastUser = null;
-        foreach ($m3 as $msg) {
-            if ($msg['role'] === 'user') {
-                $lastUser = $msg['content'];
-            }
-        }
-        $this->test('current_time prepended to current user turn',
-            is_string($lastUser) && str_starts_with($lastUser, 'current_time ='));
+        $this->test('current_time not prepended to the user turn',
+            isset($m3[1]) && is_string($m3[1]['content']) && !str_starts_with($m3[1]['content'], 'current_time ='));
+        $last = end($m3);
+        $this->test('current_time appended as the trailing message',
+            is_array($last) && ($last['role'] ?? null) === 'user' && ($last['content'] ?? '') === $t);
 
         // Evidence wrapped with valid_sources + fetched_at when present.
         $ev = [
