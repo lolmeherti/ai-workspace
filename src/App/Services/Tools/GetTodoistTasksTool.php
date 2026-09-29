@@ -72,7 +72,7 @@ class GetTodoistTasksTool
                         
                         if (count($tasks) > $limit) {
                             $remaining = count($tasks) - $limit;
-                            $instructions .= "- ...and {$remaining} more tasks are on your list.\n";
+                            $instructions .= "- ({$remaining} additional tasks are due later than these; the list above is sorted soonest-first.)\n";
                         }
                     }
                 }

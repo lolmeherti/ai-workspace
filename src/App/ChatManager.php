@@ -348,7 +348,7 @@ class ChatManager
             // evidence tail.
             $currentMessages[] = [
                 'role' => 'user',
-                'content' => "RUNTIME REMINDER:\nAnswer the user's original request:\n\"{$query}\"",
+                'content' => "RUNTIME REMINDER:\nAnswer the user's original request using the evidence above. If the evidence is not enough to answer fully, say what you found and what additional search would help, then ask the user whether they want you to run it — do not emit another tool call. Request: \"{$query}\"",
             ];
         }
 
