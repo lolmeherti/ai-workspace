@@ -17,6 +17,7 @@ use App\Actions\Chat\ChatSessionDeleteAction;
 use App\Actions\Chat\ContextDataToggleAction;
 use App\Actions\Chat\ContextDataViewAction;
 use App\Actions\Chat\ContextDataAtomizeAction;
+use App\Actions\Chat\ChatExportAction;
 
 class ChatController extends BaseController
 {
@@ -73,6 +74,11 @@ class ChatController extends BaseController
     {
         $apiActionVal = $_GET['api_action'] ?? '';
         $apiAction = ApiAction::tryFrom($apiActionVal);
+
+        if ($apiAction === ApiAction::EXPORT_CONVERSATION) {
+            (new ChatExportAction($this->chatSessionRepository, $this->db))->execute();
+            return;
+        }
 
         if ($apiAction === ApiAction::DELETE_CALENDAR_TASK) {
             (new ChatTodoistDeleteAction($this->db, $this->agentManager))->execute();

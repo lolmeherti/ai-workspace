@@ -54,6 +54,8 @@ class Schema
                 role ENUM('user', 'assistant', 'system') NOT NULL,
                 message LONGTEXT NOT NULL,
                 image_path VARCHAR(255) NULL,
+                time_note VARCHAR(16) NULL,
+                turn_reminder TEXT NULL,
                 token_estimate INT DEFAULT 0,
                 search_query VARCHAR(255) NULL,
                 cache_used TINYINT(1) DEFAULT 0,
@@ -328,6 +330,32 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM app_events LIKE 'session_id'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE app_events ADD COLUMN session_id INT NULL AFTER event_type, ADD INDEX idx_session_id (session_id)");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // Migration: add time_note, the coarse runtime-timestamp bucket persisted
+        // with a user turn. Persisted so a later prompt re-emits it in the same
+        // place and the sequence stays a strict extension of the previous one —
+        // an ephemeral trailing timestamp makes every turn diverge and costs the
+        // engine its prefix cache.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'time_note'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN time_note VARCHAR(16) NULL AFTER image_path");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // Migration: add turn_reminder, the repeated-request reminder persisted on
+        // the evidence row it followed. Persisted for the same reason as time_note:
+        // a reminder appended only to the current turn's array is absent from the
+        // next one, so the next prompt diverges exactly there and the engine loses
+        // the whole cached prefix (measured: 1336 of 16225 reused, 8%).
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'turn_reminder'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN turn_reminder TEXT NULL AFTER time_note");
             }
         } catch (PDOException $e) {
         }

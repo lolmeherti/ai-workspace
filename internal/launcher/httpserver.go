@@ -89,6 +89,7 @@ type switchStatus struct {
 	// switch reaches "starting".
 	Sampling        string `json:"sampling"`
 	RuntimePolicy   string `json:"runtime_policy"`
+	APIURL          string `json:"api_url,omitempty"`
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +140,9 @@ func (h *modelsHandler) handleGetModels(w http.ResponseWriter, _ *http.Request) 
 	entries := make([]profileEntry, 0)
 	total, _ := gpu.TotalVRAMBytes()
 	for id, def := range h.defs {
-		if def.Model.File == "" || def.Model.URL == "" {
+		// External-engine entries own their weights, so an empty artifact is not
+		// a reason to hide them from the settings dropdown.
+		if (def.Model.File == "" || def.Model.URL == "") && def.Engine == nil {
 			continue
 		}
 		speculative := def.Speculative != nil
@@ -232,19 +235,23 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 	// the switch if the model can't fit, so the user never downloads an
 	// impossible model. If the header can't be fetched, we log and defer to the
 	// post-download backstop in runModelSwitch.
-	if _, p, ok := models.ResolveProfile(req.ModelID, h.defs, h.hw); ok {
-		kvType := p.KVCacheType
-		if kvType == "" {
-			kvType = "q8_0"
-		}
-		ctx := req.CtxSize
-		if ctx <= 0 {
-			ctx = p.CtxSize
-		}
-		if err := h.preDownloadGate(req.ModelID, ctx, kvType); err != nil {
-			util.LogPrint("[-] model switch to %s refused by VRAM gate: %v\n", req.ModelID, err)
-			writeJSON(w, 409, map[string]string{"error": err.Error()})
-			return
+	// External-engine entries are exempt: they own their weights and size their
+	// own VRAM, so llama.cpp's arithmetic says nothing about them.
+	if h.defs[req.ModelID].Engine == nil {
+		if _, p, ok := models.ResolveProfile(req.ModelID, h.defs, h.hw); ok {
+			kvType := p.KVCacheType
+			if kvType == "" {
+				kvType = "q8_0"
+			}
+			ctx := req.CtxSize
+			if ctx <= 0 {
+				ctx = p.CtxSize
+			}
+			if err := h.preDownloadGate(req.ModelID, ctx, kvType); err != nil {
+				util.LogPrint("[-] model switch to %s refused by VRAM gate: %v\n", req.ModelID, err)
+				writeJSON(w, 409, map[string]string{"error": err.Error()})
+				return
+			}
 		}
 	}
 
@@ -288,6 +295,11 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 // goroutine so the client request returns immediately. Progress and the final
 // outcome are published via h.sw for /api/switch-status to observe.
 func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxSize int) {
+	if def := h.defs[modelID]; def.Engine != nil {
+		h.runEngineSwitch(modelID, def)
+		return
+	}
+
 	resolved, err := models.ResolveModelContext(ctx, modelID, h.defs, h.hw, h.modelDir, func(pct float64) {
 		h.switchMu.Lock()
 		h.sw.Stage = "downloading"
@@ -330,17 +342,28 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 		}
 	}
 
+	// The endpoint follows the runtime, so the llama path has to restate its own:
+	// leaving a previous engine's port in the status would have PHP persist a
+	// URL pointing at an engine that was just stopped.
+	apiURL := fmt.Sprintf("http://%s:1234/v1", util.GetWindowsHostIP())
+
 	h.switchMu.Lock()
 	h.sw.Stage = "starting"
 	h.sw.Progress = 100
 	h.sw.CtxSize = resolved.CtxSize
 	h.sw.Sampling = resolved.SamplingJSON()
 	h.sw.RuntimePolicy = resolved.Runtime.RuntimePolicyJSON()
+	h.sw.APIURL = apiURL
 	h.switchMu.Unlock()
 
-	writeChatTemplate(filepath.Dir(h.modelDir), resolved)
+	writeChatTemplate(h.workDir(), resolved)
 
+	// Unload-then-load: llama-server cannot start while an external engine still
+	// holds most of the card.
 	llama.KillIfRunning(&LlamaProcess)
+	stopOwnedRuntime(h.workDir(), StrataProcess)
+	StrataProcess = nil
+
 	LlamaProcess = llama.StartServerWithFallback(h.binDir, resolved)
 
 	if !llama.Healthy() {
@@ -349,7 +372,7 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 		return
 	}
 
-	h.writeEnvModel(modelID, resolved)
+	h.writeEnvModel(modelID, resolved, apiURL)
 
 	h.switchMu.Lock()
 	h.sw.Active = false
@@ -361,6 +384,63 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 	util.LogPrint("[+] model switch complete: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
 }
 
+// runEngineSwitch starts a catalog entry backed by an external engine. There is
+// nothing to download and no llama.cpp VRAM gate to run: the engine sizes its
+// own VRAM. Same contract as the llama path — unload first, wait for readiness,
+// and only then persist anything.
+func (h *modelsHandler) runEngineSwitch(modelID string, def models.ModelDefinition) {
+	resolved, err := models.ResolveEngineModel(modelID, h.defs, h.hw)
+	if err != nil {
+		h.finishSwitchError("engine model resolution failed: " + err.Error())
+		util.LogPrint("[-] model switch to %s failed: %v\n", modelID, err)
+		return
+	}
+	workDir := h.workDir()
+	apiURL := def.Engine.APIURL(util.GetWindowsHostIP())
+
+	h.switchMu.Lock()
+	h.sw.Stage = "starting"
+	h.sw.Progress = 100
+	h.sw.CtxSize = resolved.CtxSize
+	h.sw.Sampling = resolved.SamplingJSON()
+	h.sw.RuntimePolicy = resolved.Runtime.RuntimePolicyJSON()
+	h.sw.APIURL = apiURL
+	h.switchMu.Unlock()
+
+	// Unload-then-load. Whatever is running has to be off the card before the
+	// engine asks for its ~30 GB.
+	llama.KillIfRunning(&LlamaProcess)
+	stopOwnedRuntime(workDir, StrataProcess)
+	StrataProcess = nil
+
+	cmd := startStrata(def.Engine, workDir)
+	if cmd == nil {
+		h.finishSwitchError(def.Engine.Type + " engine failed to start — check the launcher log")
+		return
+	}
+	StrataProcess = cmd
+
+	if !waitStrataReady(def.Engine.Port, uint32(cmd.Process.Pid)) {
+		// Nothing is loaded: take the half-started tree down rather than leave it
+		// holding the GPU behind an error state.
+		stopOwnedRuntime(workDir, cmd)
+		StrataProcess = nil
+		h.finishSwitchError(def.Engine.Type + " engine did not report the model loaded — check the engine log")
+		return
+	}
+
+	h.writeEnvModel(modelID, resolved, apiURL)
+
+	h.switchMu.Lock()
+	h.sw.Active = false
+	h.sw.Stage = "loaded"
+	h.sw.Progress = 100
+	h.sw.CtxSize = resolved.CtxSize
+	h.switchCancel = nil
+	h.switchMu.Unlock()
+	util.LogPrint("[+] model switch complete: %s (ctx: %d, engine: %s)\n", resolved.Name, resolved.CtxSize, def.Engine.Type)
+}
+
 func (h *modelsHandler) finishSwitchError(errMsg string) {
 	h.switchMu.Lock()
 	h.sw.Active = false
@@ -368,6 +448,12 @@ func (h *modelsHandler) finishSwitchError(errMsg string) {
 	h.sw.Error = errMsg
 	h.switchCancel = nil
 	h.switchMu.Unlock()
+}
+
+// workDir is the launcher's own data directory (the parent of the model dir):
+// it holds the .env the launcher owns and the external-engine state file.
+func (h *modelsHandler) workDir() string {
+	return filepath.Dir(h.modelDir)
 }
 
 // preDownloadGate fetches the model's GGUF header over HTTP Range and runs the
@@ -466,6 +552,12 @@ func (h *modelsHandler) maxContextFor(modelID string, p models.DeploymentProfile
 	if total == 0 {
 		return 0
 	}
+	// An external engine's window is baked into its own config; llama.cpp's
+	// arithmetic (which reads only shard 1 of a split model) would report a
+	// nonsense ceiling for it.
+	if h.defs[modelID].Engine != nil {
+		return p.CtxSize
+	}
 	header, mmprojBytes := h.modelHeader(modelID)
 	if header == nil {
 		return 0
@@ -541,14 +633,19 @@ func (h *modelsHandler) handleSwitchStatus(w http.ResponseWriter, _ *http.Reques
 // writeEnvModel persists the resolved model identity into the launcher's own
 // .env (used for boot-time model selection). The PHP app has its own .env copy
 // that the web layer updates independently.
-func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedModel) {
-	workDir := filepath.Dir(h.modelDir)
+//
+// apiURL is the OpenAI base URL for the runtime that just started (llama-server
+// on :1234, or the external engine's own port — see llmAPIURL). It has to be
+// written here because a switch between llama.cpp and an external engine moves
+// the endpoint, and the boot-time merge only runs on the next launch.
+func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedModel, apiURL string) {
+	workDir := h.workDir()
 	envPath := filepath.Join(workDir, ".env")
 	if existing, err := os.ReadFile(envPath); err == nil {
 		lines := strings.Split(string(existing), "\n")
 		updated := make([]string, 0, len(lines))
 		hasModelID, hasModelName, hasCtxSize := false, false, false
-		hasSampling, hasPolicy := false, false
+		hasSampling, hasPolicy, hasAPIURL := false, false, false
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "LLM_MODEL_ID=") {
@@ -559,6 +656,11 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 			if strings.HasPrefix(trimmed, "LLM_MODEL_NAME=") {
 				updated = append(updated, "LLM_MODEL_NAME="+env.QuoteEnvValue(resolved.Name))
 				hasModelName = true
+				continue
+			}
+			if strings.HasPrefix(trimmed, "LLM_API_URL=") {
+				updated = append(updated, "LLM_API_URL="+env.QuoteEnvValue(apiURL))
+				hasAPIURL = true
 				continue
 			}
 			if strings.HasPrefix(trimmed, "LLM_CTX_SIZE=") {
@@ -583,6 +685,9 @@ func (h *modelsHandler) writeEnvModel(modelID string, resolved *models.ResolvedM
 		}
 		if !hasModelName {
 			updated = append(updated, "LLM_MODEL_NAME="+env.QuoteEnvValue(resolved.Name))
+		}
+		if !hasAPIURL {
+			updated = append(updated, "LLM_API_URL="+env.QuoteEnvValue(apiURL))
 		}
 		if !hasCtxSize && resolved.CtxSize > 0 {
 			updated = append(updated, "LLM_CTX_SIZE="+strconv.Itoa(resolved.CtxSize))

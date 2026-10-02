@@ -203,6 +203,27 @@ class ThoughtExtractionTest
         $r10 = ThoughtExtractor::extract("\n<|channel|>thoughtx<channel|>\nresult");
         $this->testEq('newlines around thought: thought extracted', 'x', $r10['thought']);
         $this->testEq('newlines around thought: content trimmed', 'result', $r10['content']);
+
+        // Multiple thought blocks in one message (tool turns reason again after results)
+        $r11 = ThoughtExtractor::extract('<|channel|>thoughtfirst reasoning<channel|>partial answer<|channel|>thoughtsecond reasoning<channel|>final answer');
+        $this->testEq('multi-block: both thoughts returned', "first reasoning\n\nsecond reasoning", $r11['thought']);
+        $this->testEq('multi-block: content has both parts', 'partial answerfinal answer', $r11['content']);
+
+        // Mixed formats, multiple blocks
+        $r12 = ThoughtExtractor::extract('<think>a</think>x<|channel|>thoughtb<channel|>y<think>c</think>z');
+        $this->testEq('multi-block mixed: all three thoughts', "a\n\nb\n\nc", $r12['thought']);
+        $this->testEq('multi-block mixed: content keeps every part', 'xyz', $r12['content']);
+
+        // Empty thought blocks are ignored, not merged as blank lines
+        $r13 = ThoughtExtractor::extract('<|channel|>thought<channel|>answer');
+        $this->testEq('empty thought block: thought empty', '', $r13['thought']);
+        $this->testEq('empty thought block: content preserved', 'answer', $r13['content']);
+
+        // Unterminated thought block: reasoning is captured, but strip() only removes
+        // closed blocks, so the raw text survives as content (unchanged behaviour).
+        $r14 = ThoughtExtractor::extract('<|channel|>thoughtunterminated');
+        $this->testEq('unterminated thought: thought captured', 'unterminated', $r14['thought']);
+        $this->testEq('unterminated thought: content keeps raw text', '<|channel|>thoughtunterminated', $r14['content']);
     }
 
     // ===================================================================

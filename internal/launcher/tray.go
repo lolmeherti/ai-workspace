@@ -86,6 +86,11 @@ func OnReady() {
 func OnExit() {
 	util.LogPrint("[!] %s: Shut Down initiated. Cleaning up background services...\n", time.Now().Format("2006-01-02 15:04:05"))
 
+	// Stop the external engine's whole tree first (it holds most of the card),
+	// then hand llama-server its usual window.
+	stopOwnedRuntime(filepath.Join(os.Getenv("LOCALAPPDATA"), "localsy"), StrataProcess)
+	StrataProcess = nil
+
 	if LlamaProcess != nil && LlamaProcess.Process != nil {
 		done := make(chan error, 1)
 		go func() {

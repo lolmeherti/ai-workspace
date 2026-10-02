@@ -54,6 +54,28 @@ function pickAnswerCall(calls) {
 }
 
 /**
+ * Reasoning as the backend resolved and applied it for one call: the mode/effort
+ * the request was built with, plus the field/value that actually went on the wire
+ * (recorded by AgentManager::applyReasoning). Deliberately not the value the
+ * front end posted. Returns null when the turn carries no reasoning info.
+ */
+function reasoningLabel(metrics, call, withField = false) {
+    const r = (metrics && metrics.reasoning) || null;
+    // Nothing recorded (turns stored before this was instrumented): say nothing
+    // rather than guess a setting.
+    const known = r || (call && (call.reasoning_mode || call.reasoning_effort || call.reasoning_field));
+    if (!known) return null;
+    const mode = (call && call.reasoning_mode) || (r && r.mode) || null;
+    const effort = (call && call.reasoning_effort != null) ? call.reasoning_effort : (r ? r.effort : null);
+    const effLabel = mode === 'instruct' ? 'off' : (effort || 'default');
+    if (!call) return effLabel;
+    const field = call.reasoning_field;
+    if (!field) return effLabel + ' → template default';
+    return withField ? effLabel + ' → ' + field + '=' + call.reasoning_value
+                     : effLabel + ' → ' + call.reasoning_value;
+}
+
+/**
  * Render a per-turn "metrics" section at the bottom of an assistant bubble.
  * Compact summary line (calls / total / TTFT / reasoning / tok/s / cache%)
  * with an expandable per-call breakdown, so a slow/fast turn is explainable.
@@ -74,6 +96,8 @@ function renderMetricsBubble(bubble, metrics) {
         if (tps > 0) parts.push(Math.round(tps) + ' tok/s');
         if (ac.prompt_tokens > 0) parts.push(Math.round(ac.cache_n / ac.prompt_tokens * 100) + '% cached');
     }
+    const reasonLabel = reasoningLabel(metrics, ac);
+    if (reasonLabel) parts.push('reason ' + reasonLabel);
     const summary = parts.join(' \u00b7 ');
 
     const chain = calls.map(c => PURPOSE_LABELS[c.purpose] || c.purpose).join(' \u2192 ');
@@ -94,7 +118,7 @@ function renderMetricsBubble(bubble, metrics) {
             </span>
         </summary>
         <div class="px-3 pb-3 border-t border-slate-800/60">
-            <div class="text-xs text-slate-500 font-mono py-1.5">${chain}</div>
+            <div class="text-xs text-slate-500 font-mono py-1.5">${chain}${reasonLabel ? ' · reason ' + reasonLabel : ''}</div>
             <table class="w-full text-xs font-mono text-slate-400">
                 <thead><tr class="text-slate-500 text-left">
                     <th class="py-1 pr-2 font-normal">call</th>
@@ -149,6 +173,8 @@ function formatMetricsText(metrics) {
         if (tps > 0) parts.push(Math.round(tps) + ' tok/s');
         if (ac.prompt_tokens > 0) parts.push(Math.round(ac.cache_n / ac.prompt_tokens * 100) + '% cached');
     }
+    const reasonLabel = reasoningLabel(metrics, ac);
+    if (reasonLabel) parts.push('reason ' + reasonLabel);
     lines.push(parts.join(' · '));
     lines.push('');
 
@@ -547,6 +573,12 @@ export async function streamResponse(formData, originalMessage) {
     const traceTimer = aiWrapper.querySelector('.trace-timer');
     let activeTaskStartTs = null;
     let activeTaskTimerId = null;
+    // The trace folds away when the answer starts streaming. It must not fold on
+    // the first token of a tool turn: a model can stream preamble content before
+    // it calls a tool ("I'll look up the latest figures..."), and collapsing
+    // there hid the running task's spinner inside a closed <details> for the
+    // whole tool call. Re-armed when a tool phase ends.
+    let traceCollapseArmed = true;
 
     const TRACE_COLORS = {
         cyan:    { text: 'text-cyan-400',    accent: 'bg-cyan-500/50' },
@@ -589,6 +621,11 @@ export async function streamResponse(formData, originalMessage) {
 
     function setActiveTask(label, color = 'slate') {
         const c = TRACE_COLORS[color] || TRACE_COLORS.slate;
+        // Work in flight is always visible, whatever the trace did earlier in
+        // the turn (see traceCollapseArmed).
+        if (traceAccordion) {
+            traceAccordion.open = true;
+        }
         traceActiveTask.classList.remove('hidden');
         traceActiveTask.className = traceActiveTask.className.replace(/bg-\w+-\d+\/\d+/g, `bg-${color === 'slate' ? 'slate' : color}-500/5`);
         traceActiveTask.className = traceActiveTask.className.replace(/border-\w+-\d+\/\d+/g, `border-${color === 'slate' ? 'slate' : color}-500/20`);
@@ -612,6 +649,38 @@ export async function streamResponse(formData, originalMessage) {
         if (traceScanOverlay) traceScanOverlay.style.display = 'none';
         traceActiveLabel.className = 'trace-active-label text-emerald-300/90';
         stopTaskTimer();
+    }
+
+    /**
+     * Fold the running task row into the entry list as its finished step: one
+     * row per tool, carrying the check and the elapsed time, instead of leaving
+     * the completed spinner row AND appending a "Completed — ..." duplicate.
+     */
+    function commitActiveTask(pastLabel) {
+        if (!traceActiveTask || traceActiveTask.classList.contains('hidden')) return;
+        const elapsed = traceTimer ? traceTimer.textContent : '';
+        const label = pastLabel || (traceActiveLabel ? traceActiveLabel.textContent : '');
+        stopTaskTimer();
+
+        const row = document.createElement('div');
+        row.className = 'flex items-start gap-2 py-1 px-2 rounded hover:bg-slate-800/20 transition-colors duration-150';
+        row.innerHTML = `
+            <span class="w-0.5 self-stretch rounded-full shrink-0 bg-emerald-500/50"></span>
+            <span class="text-[0.7rem] text-emerald-400 mt-px font-medium tracking-normal flex-1 leading-relaxed">\u2713 ${label}</span>
+            <span class="text-[0.7rem] text-slate-500 shrink-0 font-mono pl-2">${elapsed}</span>
+        `;
+        traceContent.appendChild(row);
+
+        traceStepCount++;
+        if (traceStepCounter) {
+            traceStepCounter.textContent = `${traceStepCount} step${traceStepCount !== 1 ? 's' : ''}`;
+        }
+
+        // Step the live row aside; setActiveTask rebuilds it for the next tool.
+        traceActiveTask.classList.add('hidden');
+        if (traceSpinner) traceSpinner.classList.add('hidden');
+        if (traceActiveCheck) traceActiveCheck.classList.add('hidden');
+        if (traceCursor) traceCursor.classList.add('hidden');
     }
 
     function addTraceEntry(label, color = 'slate') {
@@ -972,13 +1041,19 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'tool_done') {
                             completeActiveTask();
+                            // The tool phase is over; the next content token is
+                            // the answer, so it may fold the trace away again.
+                            traceCollapseArmed = true;
                             const ctx = activeToolContext;
                             activeToolContext = null;
+                            // One row per tool: the row that carried the spinner is
+                            // committed as the finished step, so tool_done no longer
+                            // appends a second "Completed — ..." line for the same call.
                             if (!ctx) {
-                                addTraceEntry(`Completed \u2014 ${data.label || 'Done.'}`, 'emerald');
+                                commitActiveTask(data.label || 'Done.');
                             } else if (ctx.tool !== 'create_calendar_task') {
                                 const pastLabel = (ctx.showQuery && ctx.queryText) ? `${ctx.past} for \u201c${ctx.shortQuery}\u201d` : ctx.past;
-                                addTraceEntry(`Completed \u2014 ${pastLabel}`, 'emerald');
+                                commitActiveTask(pastLabel);
                                 renderToolBadge(ctx.tool, pastLabel);
                             }
                             // create_calendar_task: the aggregated calendar_task_created event is the signal.
@@ -1155,9 +1230,15 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'token') {
+                            // Fold the trace when the answer streams, not on the
+                            // first token of the turn: preamble content before a
+                            // tool call is not the answer.
+                            if (traceCollapseArmed) {
+                                traceCollapseArmed = false;
+                                traceAccordion.open = false;
+                            }
                             if (isFirstToken) {
                                 isFirstToken = false;
-                                traceAccordion.open = false;
                                 if (tracePulseDot) tracePulseDot.classList.add('hidden');
                                 if (loadingIndicator && loadingIndicator.parentNode) {
                                     loadingIndicator.remove();

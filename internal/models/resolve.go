@@ -38,6 +38,12 @@ func ResolveModelContext(
 		return nil, err
 	}
 
+	// Engine entries have no Localsy artifact; without this they would "resolve"
+	// to the model directory itself and llama-server would be started on a folder.
+	if defs[modelID].Engine != nil {
+		return nil, fmt.Errorf("model %q runs on an external engine and has no llama.cpp artifacts", modelID)
+	}
+
 	def := defs[modelID]
 	profileID, profile := selectProfile(def.Profiles, hw)
 
@@ -144,13 +150,53 @@ func ValidateModel(modelID string, defs map[string]ModelDefinition, hw Hardware)
 	if !ok {
 		return fmt.Errorf("model %q not found", modelID)
 	}
-	if def.Model.File == "" || def.Model.URL == "" {
+	// External-engine entries own their weights (the engine's own pack), so there
+	// is no Localsy artifact to download or hold.
+	if def.Engine != nil {
+		if err := def.Engine.Validate(); err != nil {
+			return fmt.Errorf("model %q: %w", modelID, err)
+		}
+	} else if def.Model.File == "" || def.Model.URL == "" {
 		return fmt.Errorf("model %q has no artifact configured", modelID)
 	}
 	if profileID, _ := selectProfile(def.Profiles, hw); profileID == "" {
 		return fmt.Errorf("model %q has no profile matching hardware (%.1f GB VRAM)", modelID, hw.VRAMGB)
 	}
 	return nil
+}
+
+// ResolveEngineModel builds the launch-relevant ResolvedModel for a catalog
+// entry backed by an external engine: no artifacts and no download, and the
+// profile's ctx_size is the window the engine has baked into its own config.
+func ResolveEngineModel(modelID string, defs map[string]ModelDefinition, hw Hardware) (*ResolvedModel, error) {
+	def, ok := defs[modelID]
+	if !ok || def.Engine == nil {
+		return nil, fmt.Errorf("model %q is not an external-engine model", modelID)
+	}
+	if err := def.Engine.Validate(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", modelID, err)
+	}
+	profileID, profile := selectProfile(def.Profiles, hw)
+	if profileID == "" {
+		return nil, fmt.Errorf("model %q has no profile matching hardware (%.1f GB VRAM)", modelID, hw.VRAMGB)
+	}
+
+	var runtimeSpec RuntimeSpec
+	if def.Runtime != "" {
+		var err error
+		runtimeSpec, err = ResolveRuntime(def.Runtime)
+		if err != nil {
+			return nil, fmt.Errorf("model %q: %w", modelID, err)
+		}
+	}
+
+	return &ResolvedModel{
+		Name:        def.Name,
+		CtxSize:     profile.CtxSize,
+		KVCacheType: profile.KVCacheType,
+		Runtime:     runtimeSpec,
+		Sampling:    def.Sampling,
+	}, nil
 }
 
 func selectProfile(profiles map[string]DeploymentProfile, hw Hardware) (string, DeploymentProfile) {
@@ -251,6 +297,12 @@ func AutoSelectModelID(defs map[string]ModelDefinition, hw Hardware) string {
 	bestCtx := 0
 	for id, def := range defs {
 		if def.Model.File == "" || def.Model.URL == "" {
+			continue
+		}
+		// External-engine entries report the engine's full baked window (256K on
+		// Flash-Next), so they would always win an auto-selection. Picking one is
+		// a deliberate choice, never a silent default.
+		if def.Engine != nil {
 			continue
 		}
 		profID, prof := selectProfile(def.Profiles, hw)

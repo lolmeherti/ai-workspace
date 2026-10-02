@@ -64,33 +64,49 @@ func Bootstrap() {
 		})
 	}
 
-	resolved, err := resolveModel(modelID)
-	if err != nil {
-		util.LogPrint("[!] persisted model %q failed to resolve: %v\n", modelID, err)
-		fallbackID := models.AutoSelectModelID(defs, hw)
-		if fallbackID == "" || fallbackID == modelID {
-			util.LogPrint("[-] Critical Error: no usable model found\n")
-			systray.Quit()
-			return
-		}
-		util.LogPrint("[+] falling back to auto-selected model: %s\n", fallbackID)
-		resolved, err = resolveModel(fallbackID)
+	// An entry carrying an engine spec is served by that engine, not llama.cpp:
+	// there is no artifact to download and no llama.cpp command line to build.
+	engine := defs[modelID].Engine
+	var resolved *models.ResolvedModel
+	var err error
+	if engine != nil {
+		resolved, err = models.ResolveEngineModel(modelID, defs, hw)
 		if err != nil {
-			util.LogPrint("[-] Critical Error resolving fallback model: %v\n", err)
+			util.LogPrint("[-] Critical Error resolving engine model %s: %v\n", modelID, err)
 			systray.Quit()
 			return
 		}
-		modelID = fallbackID
-	}
+		util.LogPrint("[+] Selected model: %s (ctx: %d, engine: %s on port %d)\n",
+			resolved.Name, resolved.CtxSize, engine.Type, engine.Port)
+	} else {
+		resolved, err = resolveModel(modelID)
+		if err != nil {
+			util.LogPrint("[!] persisted model %q failed to resolve: %v\n", modelID, err)
+			fallbackID := models.AutoSelectModelID(defs, hw)
+			if fallbackID == "" || fallbackID == modelID {
+				util.LogPrint("[-] Critical Error: no usable model found\n")
+				systray.Quit()
+				return
+			}
+			util.LogPrint("[+] falling back to auto-selected model: %s\n", fallbackID)
+			resolved, err = resolveModel(fallbackID)
+			if err != nil {
+				util.LogPrint("[-] Critical Error resolving fallback model: %v\n", err)
+				systray.Quit()
+				return
+			}
+			modelID = fallbackID
+		}
 
-	// Cold-hard VRAM check: clamp the boot ctx to the largest that fits on this
-	// GPU (from the just-downloaded GGUF) so startup can never overflow.
-	if clamped := fitContext(resolved); clamped != resolved.CtxSize {
-		util.LogPrint("[!] boot ctx clamped to fit VRAM: %d -> %d\n", resolved.CtxSize, clamped)
-		resolved.CtxSize = clamped
-	}
+		// Cold-hard VRAM check: clamp the boot ctx to the largest that fits on this
+		// GPU (from the just-downloaded GGUF) so startup can never overflow.
+		if clamped := fitContext(resolved); clamped != resolved.CtxSize {
+			util.LogPrint("[!] boot ctx clamped to fit VRAM: %d -> %d\n", resolved.CtxSize, clamped)
+			resolved.CtxSize = clamped
+		}
 
-	util.LogPrint("[+] Selected model: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
+		util.LogPrint("[+] Selected model: %s (ctx: %d)\n", resolved.Name, resolved.CtxSize)
+	}
 
 	systray.SetTooltip("Localsy is running background services")
 
@@ -107,6 +123,7 @@ func Bootstrap() {
 		resolved.CtxSize,
 		resolved.SamplingJSON(),
 		resolved.Runtime.RuntimePolicyJSON(),
+		llmAPIURL(engine),
 	)
 
 	relay := bridge.NewRelay()
@@ -128,9 +145,27 @@ func Bootstrap() {
 	util.ApplyWslNatRule()
 	docker.StartCompose(workDir, binDir, registry)
 
+	// A launcher that was restarted while an external engine was running leaves
+	// the engine's tree behind (it survives its parent). Reclaim the card before
+	// starting anything.
+	stopOwnedRuntime(workDir, StrataProcess)
+	StrataProcess = nil
+
 	if useLocal {
-		writeChatTemplate(workDir, resolved)
-		LlamaProcess = llama.StartServerWithFallback(binDir, resolved)
+		if engine != nil {
+			cmd := startStrata(engine, workDir)
+			if cmd == nil {
+				util.LogPrint("[-] %s engine could not be started — the app will report the AI as offline\n", engine.Type)
+			} else {
+				StrataProcess = cmd
+				if !waitStrataReady(engine.Port, uint32(cmd.Process.Pid)) {
+					util.LogPrint("[-] %s engine did not report the model loaded — the app will report the AI as offline\n", engine.Type)
+				}
+			}
+		} else {
+			writeChatTemplate(workDir, resolved)
+			LlamaProcess = llama.StartServerWithFallback(binDir, resolved)
+		}
 	}
 
 	_ = ctxSize
@@ -140,6 +175,16 @@ func Bootstrap() {
 	if !DebugMode {
 		OpenBrowser("http://localhost:8080")
 	}
+}
+
+// llmAPIURL is the endpoint the web layer must talk to for a given runtime: the
+// external engine's own port when one is configured, otherwise "" (llama-server
+// on :1234, the default the env merge writes itself).
+func llmAPIURL(engine *models.EngineSpec) string {
+	if engine == nil {
+		return ""
+	}
+	return engine.APIURL(util.GetWindowsHostIP())
 }
 
 // writeChatTemplate materializes the embedded chat template (when the resolved

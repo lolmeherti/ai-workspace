@@ -115,8 +115,26 @@ The Go launcher starts llama.cpp server on port 1234. PHP's `AgentManager.php` c
 
 Three mechanisms handle different aspects of persistent knowledge:
 
-### MemorySelector (`src/App/Agents/MemorySelector.php`)
-Called on every request via PromptAssemblyService.buildSystemPrompt(). Uses MySQL FULLTEXT search against cleaned user prompt + fallback to most recent memories, then sends all candidates (up to 500) through an LLM filter that returns relevant memory IDs. Note: this call happens per-request and may be redundant within a single conversation — consider caching results by recent-messages-hash when optimizing.
+### Memory read path — on demand, never auto-injected
+Raw memories (`memories` table) are NOT injected per request. They enter context only when the model calls
+`search_memories` / `search_local` mid-turn: `MemorySelector::selectRelevantMemories()` (MySQL FULLTEXT on the
+cleaned query, fallback to most recent, then an LLM filter returning relevant IDs) is called from
+`SearchMemoriesTool`, never from `PromptAssemblyService`. Its output arrives as tool output, so
+`buildMessagesArray()` emits it as a `data_fetching` evidence block at the position where it
+entered the prompt — blocks are never re-anchored between turns (`.hermes/plans/cache-optimization.md`).
+
+A per-request auto-injection path was designed on 2026-09-20 and **cancelled** by user decision ("we dont wanna
+contaminate context window") — see `.hermes/plans/2026-09-20_044256-context-data-window.md` §"CANCELLED". Do not
+reintroduce it.
+
+What IS injected every turn is the **distilled profile** (`user_profiles.profile_text`, the "Golden State" that
+MemoryExtractor distills), prepended by `buildSystemPrompt()` as "USER IDENTITY AND CORE CONSTRAINTS". When
+someone says "memories are in the prompt", they almost always mean this profile — raw memories are on-demand only.
+
+`buildSystemPrompt()` therefore takes no query and no memories, and must stay query-independent: the head of the
+prompt must remain byte-stable across turns so cross-turn KV reuse works. Evidence blocks and the runtime
+timestamp are emitted where they first entered the prompt and never move, for the same reason: anything that is
+re-anchored between turns costs the reuse of every token behind it.
 
 ### MemoryExtractor (`src/App/Agents/MemoryExtractor.php`)
 Runs automatically when session token count exceeds ~15K tokens (~60K chars). Extracts 3-5 keywords via LLM, uses those for FULLTEXT search to find candidate memories, then runs a consolidation agent that merges overlapping facts and adds new durable user state. The extraction happens mid-conversation — consider whether event-driven triggers (session end) might produce better context than token-count thresholds.
@@ -166,6 +184,10 @@ Viewer at `/logs` (not linked from UI): event type counts, expandable samples, r
   parallel path; this is the primary guard against accidental rewrites/duplication.
 
 ## Important constraints
+- **Fixes must be model-agnostic — never branch on model identity or name.** Model differences belong in
+  declarative surfaces only: `models.json` catalog entries, runtime profiles (`internal/models/runtime.go`),
+  and `LLM_RUNTIME_POLICY`. Anything the backend decided must be *reported* (metrics/events), never assumed.
+  A fix that works because it recognises one model is a bug handed to the next model.
 - **Never read `.env`** — it may contain credentials; use `.env.example` if needed
 - The binary is self-contained: compose and models config are embedded in the Go binary via `//go:embed`
 - User data lives under `%LOCALAPPDATA%\localsy\` (Windows) or equivalent on other platforms

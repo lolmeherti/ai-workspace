@@ -84,7 +84,7 @@ foreach ($cases as [$query, $expectedTool]) {
         }
     };
 
-    $systemPrompt = $pas->buildSystemPrompt($query);
+    $systemPrompt = $pas->buildSystemPrompt();
     $messages = [
         ['role' => 'system', 'content' => $systemPrompt],
         ['role' => 'user', 'content' => $query],

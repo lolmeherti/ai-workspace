@@ -120,7 +120,7 @@ foreach ($cases as [$label, $query, $expect]) {
     };
 
     $messages = [
-        ['role' => 'system', 'content' => $pas->buildSystemPrompt($query)],
+        ['role' => 'system', 'content' => $pas->buildSystemPrompt()],
         ['role' => 'user', 'content' => $query],
     ];
 

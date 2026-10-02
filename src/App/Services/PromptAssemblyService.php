@@ -20,7 +20,14 @@ class PromptAssemblyService
         $this->countTokens = $countTokens ?? [new TokenCounter(), 'count'];
     }
 
-    public function buildSystemPrompt(string $query, bool $isEditorMode = false): string
+    /**
+     * Static per-mode system prompt: distilled profile + mode guard + fixed rules.
+     * Deliberately query-independent and memory-free — raw memories are on demand
+     * (the search_memories / search_local tools) and arrive as tail evidence.
+     * Keeping this head byte-stable across turns is what lets the engine reuse
+     * its KV prefix; do not add anything per-turn here.
+     */
+    public function buildSystemPrompt(bool $isEditorMode = false): string
     {
         $profileData = $this->db->query("SELECT profile_text FROM user_profiles WHERE id = 1");
         $stableProfile = !empty($profileData) ? $profileData[0]['profile_text'] : '';
@@ -58,7 +65,24 @@ TEXT;
 
     public function currentTimeContextLine(): string
     {
-        return "current_time = " . date('c') . "\n";
+        return "current_time = " . self::timeBucket() . "\n";
+    }
+
+    /**
+     * The runtime timestamp, floored to five minutes ("2026-10-02 06:35").
+     * Coarse on purpose: it is persisted with the user turn and re-emitted in
+     * every later prompt, so a value that changed per turn would change the
+     * sequence and cost the engine its prefix reuse.
+     */
+    public static function timeBucket(?int $ts = null): string
+    {
+        $bucket = (int) (floor(($ts ?? time()) / 300) * 300);
+        try {
+            $tz = new \DateTimeZone((string) Config::get('TZ', date_default_timezone_get()));
+            return (new \DateTime('@' . $bucket))->setTimezone($tz)->format('Y-m-d H:i');
+        } catch (\Exception $e) {
+            return date('Y-m-d H:i', $bucket);
+        }
     }
 
     public function preprocessHistory(array $history): array
@@ -161,13 +185,17 @@ TEXT;
 
     /**
      * Assemble the message array for one inference: static system prompt, the
-     * rolling conversation window, then all data_fetching rows as untrusted
-     * evidence blocks at the tail, then the runtime timestamp as a trailing
-     * note. The timestamp never sits in the conversation prefix (which would
-     * change every turn and bust cross-turn KV reuse).
+     * rolling conversation window with each untrusted evidence block emitted at
+     * the position where it first entered the prompt, then the runtime timestamp
+     * travelling with its user turn. Evidence older than the whole window is
+     * still injected, ahead of the window, in its original order.
+     *
+     * Placement is a cache property, not cosmetics: the engine reuses a prefix
+     * only when the new prompt extends the sequence it still holds, so anything
+     * that moves between turns costs every token behind it.
      *
      * @param array<int> $richRowIds IDs of this turn's fresh tool-result rows (render full raw).
-     * @param string|null $currentTime Runtime timestamp line to append as the trailing message.
+     * @param string|null $currentTime Runtime timestamp line, only for turns written before time_note existed.
      */
     public function buildMessagesArray(string $systemPrompt, array $history, array $richRowIds = [], ?string $currentTime = null): array
     {
@@ -185,8 +213,37 @@ TEXT;
 
         $rollingLimit = (int) Config::get('CHAT_ROLLING_WINDOW_LIMIT', 15);
         $recentHistory = array_slice($conversationRows, -$rollingLimit);
+        $windowStart = max(0, count($conversationRows) - $rollingLimit);
 
-        foreach ($recentHistory as $row) {
+        // A block rides with the turn that produced it: it is emitted at the
+        // position where it first entered the prompt. The history is
+        // chronological, so the count of conversation rows preceding each
+        // evidence row gives that position without needing row ids.
+        // $blocksBefore[$i] = blocks emitted immediately before window row $i;
+        // $blocksBefore[count($recentHistory)] = the tail, which is where this
+        // turn's fresh results belong (they follow every windowed row).
+        $conversationBefore = [];
+        $seenConversation = 0;
+        foreach ($history as $historyRow) {
+            if (($historyRow['message_type'] ?? '') === 'data_fetching') {
+                $conversationBefore[] = $seenConversation;
+            } else {
+                $seenConversation++;
+            }
+        }
+        $blocksBefore = [];
+        foreach ($evidenceRows as $i => $evidenceRow) {
+            $anchor = ($conversationBefore[$i] ?? $seenConversation) - 1 - $windowStart;
+            // Older than the whole window: still injected (retention is
+            // unchanged) but ahead of the window, in its original order, until
+            // the retirement policy is decided.
+            $blocksBefore[$anchor >= 0 ? $anchor + 1 : 0][] = $evidenceRow;
+        }
+
+        foreach ($recentHistory as $idx => $row) {
+            foreach ($blocksBefore[$idx] ?? [] as $evidenceRow) {
+                $this->appendEvidenceBlock($messages, $evidenceRow, $richRowIds);
+            }
             $hasImage = false;
             $messageContent = $row['message'];
             $imageParts = [];
@@ -214,6 +271,7 @@ TEXT;
                         $imageParts
                     )
                 ];
+                $this->appendTimeNote($messages, $row);
                 continue;
             }
 
@@ -243,30 +301,26 @@ TEXT;
                     'content' => $messageContent
                 ];
             }
+
+            $this->appendTimeNote($messages, $row);
         }
 
-        // Inject Context Data at the tail, after the conversation, so the
-        // current user turn is not displaced and the shared prefix stays
-        // byte-stable across the firstpass and answer pass. Rows in
-        // $richRowIds (this turn's fresh tool results) inject the full raw
-        // message; other rows inject raw + atoms per the existing rule.
-        foreach ($evidenceRows as $row) {
-            $content = $this->injectedEvidenceContent($row, $richRowIds);
-            if ($content === '') {
-                continue;
-            }
-            $block = $this->buildEvidenceBlock(
-                $content,
-                self::extractRowSourceIds($row),
-                (string)($row['created_at'] ?? '')
-            );
-            if (($block['content'] ?? '') === '') {
-                continue;
-            }
-            $messages[] = $block;
+        // This turn's fresh tool results follow every windowed row, which is the
+        // seat their turn owns: the answer pass still appends them after the
+        // current user turn, so the firstpass prefix stays byte-stable.
+        foreach ($blocksBefore[count($recentHistory)] ?? [] as $evidenceRow) {
+            $this->appendEvidenceBlock($messages, $evidenceRow, $richRowIds);
         }
 
-        if ($currentTime !== null && $currentTime !== '') {
+        // The runtime timestamp now travels with the user turn it belongs to
+        // (see appendTimeNote), so every later prompt re-emits it in the same
+        // position and the sequence stays a strict extension of the previous one.
+        // This trailing line only covers turns written before that column
+        // existed; once they leave the rolling window it never fires.
+        $lastRow = $recentHistory[count($recentHistory) - 1] ?? null;
+        if ($currentTime !== null && $currentTime !== ''
+            && is_array($lastRow) && ($lastRow['role'] ?? '') === 'user'
+            && empty($lastRow['time_note'])) {
             $messages[] = [
                 'role' => 'user',
                 'content' => $currentTime,
@@ -274,6 +328,56 @@ TEXT;
         }
 
         return $messages;
+    }
+
+    /**
+     * Render one evidence row and append it at its position in the array. Rows
+     * in $richRowIds (this turn's fresh tool results) inject the full raw
+     * message; other rows inject raw + atoms per the existing rule. A row that
+     * renders nothing is skipped, so an evicted source with no atoms contributes
+     * no message at all.
+     */
+    private function appendEvidenceBlock(array &$messages, array $row, array $richRowIds): void
+    {
+        $content = $this->injectedEvidenceContent($row, $richRowIds);
+        if ($content === '') {
+            return;
+        }
+        $block = $this->buildEvidenceBlock(
+            $content,
+            self::extractRowSourceIds($row),
+            (string)($row['created_at'] ?? '')
+        );
+        if (($block['content'] ?? '') === '') {
+            return;
+        }
+        $messages[] = $block;
+
+        // The turn's repeated-request reminder travels with its evidence block.
+        // It is stored, not re-built per call, so every later prompt emits it at
+        // this same position and the sequence stays a strict extension of the
+        // previous one.
+        $reminder = trim((string) ($row['turn_reminder'] ?? ''));
+        if ($reminder !== '') {
+            $messages[] = [
+                'role' => 'user',
+                'content' => $reminder,
+            ];
+        }
+    }
+
+    /**
+     * Re-emit a user turn's persisted runtime timestamp directly after it.
+     * Placement is the whole point: the engine reuses a prefix only when the new
+     * sequence extends the one it still holds, and a timestamp that is appended
+     * fresh per call (or moves between turns) makes every turn diverge instead.
+     */
+    private function appendTimeNote(array &$messages, array $row): void
+    {
+        if (($row['role'] ?? '') !== 'user' || empty($row['time_note'])) {
+            return;
+        }
+        $messages[] = ['role' => 'user', 'content' => 'current_time = ' . $row['time_note'] . "\n"];
     }
 
     /**
@@ -294,10 +398,17 @@ TEXT;
         $systemTokens = $count($systemPrompt);
         // Only count evidence rows that actually inject something — mirror the
         // empty-content skip in buildMessagesArray so the estimate matches reality.
-        $evidenceContent = array_values(array_filter(
-            array_map(fn($r) => $this->injectedEvidenceContent($r), $partition['evidence']),
-            fn($c) => $c !== ''
-        ));
+        // A row contributes its injected content plus the reminder that followed it
+        // (see appendEvidenceBlock); a row that renders nothing contributes nothing.
+        $evidenceContent = [];
+        foreach ($partition['evidence'] as $row) {
+            $content = $this->injectedEvidenceContent($row);
+            if ($content === '') {
+                continue;
+            }
+            $reminder = trim((string) ($row['turn_reminder'] ?? ''));
+            $evidenceContent[] = $reminder === '' ? $content : $content . "\n" . $reminder;
+        }
         $contextDataTokens = $count(implode("\n", $evidenceContent));
         $chatTokens = $count(implode("\n", array_column($recentChat, 'message')));
         $turnTokens = $count($query);

@@ -33,6 +33,97 @@
                     <uk-icon icon="database" class="w-3.5 h-3.5" aria-hidden="true"></uk-icon>
                     <span>Context Data</span> <span id="context-data-count" class="ui-count"><?php echo count(array_filter($history ?? [], fn($m) => ($m['message_type'] ?? '') === 'data_fetching')); ?></span>
                 </button>
+                <div class="relative ml-1.5">
+                    <button type="button" id="export-toggle" aria-controls="export-panel" aria-expanded="false" class="group flex items-center justify-center gap-1.5 bg-transparent border border-slate-800/80 hover:border-cyan-500/40 text-slate-400 hover:text-cyan-400 px-2.5 py-0.5 rounded-full text-xs tracking-normal transition-all duration-300 font-bold cursor-pointer outline-none" title="Export conversation">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>Export</span>
+                    </button>
+                    <div id="export-panel" hidden>
+                        <div class="export-panel-scroll">
+                        <p class="export-panel-title">Conversation</p>
+                        <div class="export-panel-rows">
+                            <div class="export-option" data-export-option="thoughts" role="switch" tabindex="0" aria-checked="false" aria-label="Include reasoning">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Reasoning</span>
+                                    <span class="export-option-hint">model thinking blocks</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                            <div class="export-option" data-export-option="citations" role="switch" tabindex="0" aria-checked="false" aria-label="Include citations">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Citations</span>
+                                    <span class="export-option-hint">source list per answer</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                            <div class="export-option" data-export-option="metrics" role="switch" tabindex="0" aria-checked="false" aria-label="Include metrics">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Metrics</span>
+                                    <span class="export-option-hint">per-turn timing</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                        </div>
+                        <p class="export-panel-title export-panel-title--spaced">Context data</p>
+                        <div class="export-panel-rows">
+                            <div class="export-option" data-export-option="web" role="switch" tabindex="0" aria-checked="false" aria-label="Include web search">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Web search</span>
+                                    <span class="export-option-hint">pages fetched — titles, links, page text</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                            <div class="export-option" data-export-option="files" role="switch" tabindex="0" aria-checked="false" aria-label="Include files">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Files</span>
+                                    <span class="export-option-hint">contents, OCR text, names</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                            <div class="export-option" data-export-option="personal" role="switch" tabindex="0" aria-checked="false" aria-label="Include personal data">
+                                <span class="export-option-text">
+                                    <span class="export-option-label">Personal data</span>
+                                    <span class="export-option-hint">calendar, memories, session evidence</span>
+                                </span>
+                                <span class="context-switch" aria-hidden="true"><span class="context-switch-knob"></span></span>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="export-panel-actions">
+                            <button type="button" id="export-copy" class="export-btn export-btn--primary">
+                                <span id="export-copy-icon" class="export-btn-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </span>
+                                <span id="export-copy-label">Copy to clipboard</span>
+                            </button>
+                            <div class="export-btn-row">
+                                <button type="button" data-export-download="txt" class="export-btn export-btn--ghost">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    <span>.txt</span>
+                                </button>
+                                <button type="button" data-export-download="json" class="export-btn export-btn--ghost">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    <span>.json</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </header>

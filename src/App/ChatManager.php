@@ -145,6 +145,7 @@ class ChatManager
             'role' => 'user',
             'message' => $query,
             'image_path' => $imagePath,
+            'time_note' => \App\Services\PromptAssemblyService::timeBucket(),
             'token_estimate' => (int)(mb_strlen($query) / 4)
         ]);
 
@@ -195,7 +196,7 @@ class ChatManager
         }
 
         $isEditorMode = !empty($activeEditFile);
-        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, $isEditorMode);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($isEditorMode);
         $currentTime = $this->promptAssemblyService->currentTimeContextLine();
         $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, [], $currentTime);
 
@@ -426,6 +427,14 @@ class ChatManager
             'total_ms' => (int) round((microtime(true) - $turnStart) * 1000),
             'ttft_ms' => $firstTokenTs !== null ? (int) round(($firstTokenTs - $turnStart) * 1000) : null,
             'calls' => $this->agent->callLog,
+            // Reasoning as the backend resolved and applied it. 'requested' is
+            // what arrived with the request, kept only so a divergence between
+            // the two is visible; the resolved/applied pair is the truth.
+            'reasoning' => [
+                'requested' => $effort,
+                'mode' => $reasoningMode,
+                'effort' => $reasoningEffort,
+            ],
         ];
         $this->db->update('chat_history', [
             'perf_metrics' => json_encode($perfMetrics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -437,6 +446,7 @@ class ChatManager
             'total_ms' => $perfMetrics['total_ms'],
             'ttft_ms' => $perfMetrics['ttft_ms'],
             'calls' => $perfMetrics['calls'],
+            'reasoning' => $perfMetrics['reasoning'],
             'assistant_row_id' => $assistantRowId,
         ], 'info', 'ChatManager::processLocked');
 
@@ -500,7 +510,7 @@ class ChatManager
         }
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($query, $isEditorMode);
+        $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($isEditorMode);
         $breakdown = $this->promptAssemblyService->estimatePromptTokens($systemPrompt, $history, $query);
 
         if (!PromptAssemblyService::projectsOverflow($breakdown, self::OUTPUT_RESERVE_TOKENS, $ctxSize, self::SAFETY_MARGIN_TOKENS)) {

@@ -43,6 +43,7 @@ require_once __DIR__ . '/RuntimeSamplingTest.php';
 require_once __DIR__ . '/ModelPerformanceReportTest.php';
 require_once __DIR__ . '/RateReplyActionTest.php';
 require_once __DIR__ . '/ReasoningEffortTest.php';
+require_once __DIR__ . '/ExportRenderTest.php';
 
 use App\Config;
 use App\Database;
@@ -81,6 +82,7 @@ use App\Tests\RuntimeSamplingTest;
 use App\Tests\ModelPerformanceReportTest;
 use App\Tests\RateReplyActionTest;
 use App\Tests\ReasoningEffortTest;
+use App\Tests\ExportRenderTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -199,6 +201,9 @@ $allOk = (new RateReplyActionTest())->run() && $allOk;
 
 echo "\n=== Phase 34: Reasoning Effort Tests ===\n";
 $allOk = (new ReasoningEffortTest())->run() && $allOk;
+
+echo "\n=== Phase 35: Conversation Export Tests ===\n";
+$allOk = (new ExportRenderTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

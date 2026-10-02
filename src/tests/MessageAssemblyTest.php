@@ -167,8 +167,38 @@ class MessageAssemblyTest
         $this->test('ordering preserved: first block before second', $posFirst !== -1 && $posSecond !== -1 && $posFirst < $posSecond);
 
         $posHello = $this->findContentPos($out3, 'hello');
-        $this->test('evidence injected after conversation (current turn before evidence)',
-            $posFirst !== -1 && $posHello !== -1 && $posFirst > $posHello && $posSecond > $posHello);
+        // A block rides with the turn that produced it. FIRST_SENTINEL precedes
+        // the only conversation row in this fixture, so its turn is older than
+        // the whole window and it keeps that place, ahead of the window;
+        // SECOND_SENTINEL follows the turn that produced it.
+        $this->test('evidence older than the window keeps its chronological place (ahead of the window)',
+            $posFirst !== -1 && $posHello !== -1 && $posFirst < $posHello);
+        $this->test('evidence whose turn is inside the window follows that turn',
+            $posSecond !== -1 && $posHello !== -1 && $posSecond > $posHello);
+
+        // The point of the placement: a later turn's array must be a strict
+        // extension of the previous turn's, so the engine extends the sequence it
+        // still holds instead of re-reading the evidence on every turn.
+        $turnN = [
+            ['role' => 'user', 'message' => 'q1'],
+            ['role' => 'system', 'message' => 'EVIDENCE_ONE', 'message_type' => 'data_fetching'],
+            ['role' => 'assistant', 'message' => 'a1'],
+            ['role' => 'user', 'message' => 'q2'],
+        ];
+        $turnN1 = array_merge($turnN, [
+            ['role' => 'assistant', 'message' => 'a2'],
+            ['role' => 'user', 'message' => 'q3'],
+            ['role' => 'system', 'message' => 'EVIDENCE_TWO', 'message_type' => 'data_fetching'],
+        ]);
+        $arrN = $this->prompt->buildMessagesArray($sys, $turnN);
+        $arrN1 = $this->prompt->buildMessagesArray($sys, $turnN1);
+        $extends = count($arrN1) > count($arrN);
+        for ($i = 0; $extends && $i < count($arrN); $i++) {
+            $extends = json_encode($arrN[$i]) === json_encode($arrN1[$i]);
+        }
+        $this->test('later turn strictly extends the previous array (evidence not re-anchored)', $extends);
+        $this->test('fresh tool results stay last, after the current user turn',
+            $this->findContentPos($arrN1, 'EVIDENCE_TWO') === count($arrN1) - 1);
 
         $roles = array_values(array_unique(array_map(fn($m) => $m['role'], $out3)));
         $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
@@ -196,8 +226,8 @@ class MessageAssemblyTest
     {
         echo "\n=== stable system prompt + runtime timestamp ===\n";
 
-        $a = $this->prompt->buildSystemPrompt('hello', false);
-        $b = $this->prompt->buildSystemPrompt('hello', false);
+        $a = $this->prompt->buildSystemPrompt(false);
+        $b = $this->prompt->buildSystemPrompt(false);
         $this->test('buildSystemPrompt is byte-stable across calls', $a === $b);
         $this->test('buildSystemPrompt has no date/time line', !str_contains($a, "Today's date"));
         $this->test('buildSystemPrompt carries runtime-timestamp statement',
@@ -206,8 +236,18 @@ class MessageAssemblyTest
             str_contains($a, 'untrusted reference material'));
 
         $line = $this->prompt->currentTimeContextLine();
-        $this->test('currentTimeContextLine returns exact timestamp',
-            (bool)preg_match('/^current_time = \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n$/', $line));
+        $this->test('currentTimeContextLine carries a five-minute bucket (not a second-accurate stamp)',
+            (bool)preg_match('/^current_time = \d{4}-\d{2}-\d{2} \d{2}:[0-5][05]\n$/', $line));
+
+        // The bucket is persisted with the user turn and re-emitted by every later
+        // prompt, so it has to be stable inside its window and change only on the
+        // next one: a value that drifted per call is what cost the prefix cache.
+        $t = time();
+        $left = 300 - ($t % 300);
+        $this->test('timeBucket is stable to the last second of its window',
+            \App\Services\PromptAssemblyService::timeBucket($t + $left - 1) === \App\Services\PromptAssemblyService::timeBucket($t));
+        $this->test('timeBucket changes on the next window',
+            \App\Services\PromptAssemblyService::timeBucket($t + $left) !== \App\Services\PromptAssemblyService::timeBucket($t));
 
         // System message identical with and without evidence (no guard mutation).
         $sys = 'SYS';

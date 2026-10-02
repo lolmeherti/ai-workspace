@@ -73,7 +73,7 @@ echo "  atom tokens        : {$atomTokens}\n";
 echo '  shrink             : ' . ($rawTokens > 0 ? round((1 - $atomTokens / $rawTokens) * 100, 1) . '%' : 'n/a') . "\n\n";
 
 // 3. Build the next-turn messages in both configs (identical except evidence block).
-$systemPrompt = $pas->buildSystemPrompt($followUp);
+$systemPrompt = $pas->buildSystemPrompt();
 $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
 $msgsAtoms = $pas->buildMessagesArray($systemPrompt, $history, [], []);

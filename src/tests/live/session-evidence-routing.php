@@ -207,7 +207,7 @@ function firstPassToolNames(array $messages, ReflectionMethod $firstPass, ChatMa
 
 function buildMessages(PromptAssemblyService $pas, Database $db, int $sid, string $query): array
 {
-    $systemPrompt = $pas->buildSystemPrompt($query);
+    $systemPrompt = $pas->buildSystemPrompt();
     $history = $db->selectSafe('chat_history', ['session_id' => $sid]);
     return $pas->buildMessagesArray($systemPrompt, $history);
 }

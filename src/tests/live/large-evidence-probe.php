@@ -367,7 +367,7 @@ foreach ($brackets as $targetTokens) {
     ]);
     $rowId = (int) $db->getConnection()->lastInsertId();
 
-    $systemPrompt = $pas->buildSystemPrompt($followUp);
+    $systemPrompt = $pas->buildSystemPrompt();
     $history = $db->selectSafe('chat_history', ['session_id' => $sessionId]);
 
     $msgsAtoms = $pas->buildMessagesArray($systemPrompt, $history, [], []);

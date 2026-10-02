@@ -203,6 +203,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Reloading is not a user decision: the workspace has to re-read .env (model
+    // name, ctx, sampling, endpoint) for the change to be visible at all, so a
+    // button asking "shall I reload?" was asking about the only possible outcome.
+    function reloadWorkspace(message, delayMs) {
+        statusLabel.textContent = message;
+        setBusy(false);
+        setTimeout(() => window.location.reload(), delayMs);
+    }
+
     function pollSwitchStatus() {
         if (polling) return;
         polling = true;
@@ -215,10 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (st.active === false) {
                     polling = false;
                     if (st.stage === 'loaded') {
-                        statusLabel.textContent = 'Saved. Reload the workspace to display the updated settings.';
-                        setBusy(false);
-                        let reload = document.getElementById('settings-reload');
-                        if (!reload) { reload = document.createElement('button'); reload.id = 'settings-reload'; reload.type = 'button'; reload.className = 'ui-button'; reload.textContent = 'Reload workspace'; reload.addEventListener('click', () => window.location.reload()); statusLabel.parentElement.append(reload); }
+                        reloadWorkspace('Model switched. Reloading the workspace…', 1200);
                     } else {
                         showError(st.error || 'Model switch failed.');
                     }
@@ -261,10 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgress({ stage: data.stage || 'downloading', progress: data.progress || 0 });
                 pollSwitchStatus();
             } else if (status === 'saved') {
-                statusLabel.textContent = 'Saved. Reload the workspace to display the updated settings.';
-                        setBusy(false);
-                        let reload = document.getElementById('settings-reload');
-                        if (!reload) { reload = document.createElement('button'); reload.id = 'settings-reload'; reload.type = 'button'; reload.className = 'ui-button'; reload.textContent = 'Reload workspace'; reload.addEventListener('click', () => window.location.reload()); statusLabel.parentElement.append(reload); }
+                reloadWorkspace('Saved. Reloading the workspace…', 600);
             } else {
                 showError(data.message || 'Failed to save settings.');
             }
