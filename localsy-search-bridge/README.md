@@ -1,9 +1,8 @@
 # Localsy Search Bridge MVP
 
-> **Superseded — Aug 2026.** SearXNG and snippet-only mode were removed. `search_web`
-> is bridge-only now; a bridge outage surfaces as an explicit "web search unavailable
-> / no results" message instead of degrading to snippets. See
-> `.hermes/plans/searxng-removal-handoff.md`.
+> **Superseded — Aug 2026.** `search_web`
+> is bridge-only; a bridge outage surfaces as an explicit "web search unavailable
+> / no results" message instead of degrading to a lower-quality answer.
 
 ## Load into Edge
 
@@ -93,9 +92,7 @@ User clicks search card
       │         Level 3: SourceCondenser → per-source LLM condensation → hard-capped evidence ledger
       │    7. Return {evidence: XML block with <source>/<claim> citations, sourceIds, sourceUrls}
       │
-      └─ Bridge disconnected? ──→ runSnippetMode()
-            SearXNG → 12 candidates → dedup → EvidenceBuilder::fromSnippets()
-            Returns {evidence: XML <source>/<snippet> block, sourceIds: [], sourceUrls: []}
+      └─ Bridge disconnected? ──→ "web search unavailable" message, nothing fetched
 ```
 
 ### Early stopping (CoverageTracker)
@@ -148,8 +145,7 @@ answer step — the model either has enough evidence or says what's missing.
 
 ## Session checkpoint (August 11, 2026)
 
-Architecture is locked. The browser is the primary crawler — SearXNG stays as
-SERP fallback in snippet-only mode. FlareSolverr is removed entirely.
+Architecture is locked. The browser is the primary crawler and the only SERP source.
 
 ### What we decided
 
@@ -159,7 +155,6 @@ SERP fallback in snippet-only mode. FlareSolverr is removed entirely.
 - **Entity-based schema**: one page → multiple entities (post, comments, replies), each with own canonical URL
 - **Entity-level citations**: S1 = post, S2 = comment, S3 = reply — each maps to its own permalink
 - **Single blocking CAPTCHA**: extension polls internally, no PHP retry loop
-- **No bridge = snippet-only**: SearXNG SERP, no crawling, snippets as evidence
 
 ### Files to know
 
@@ -176,7 +171,6 @@ SERP fallback in snippet-only mode. FlareSolverr is removed entirely.
 2. Extension page extraction — Reddit extractor, then generic
 3. PHP BridgeFetcher + SearchPipeline mode switch
 4. Snippet-only fallback + entity-aware citations
-5. FlareSolverr cleanup (last)
 
 ### Handoff prompt for next session
 
@@ -184,7 +178,7 @@ SERP fallback in snippet-only mode. FlareSolverr is removed entirely.
 Continue the Localsy Search Bridge implementation. The full plan is at
 .hermes/plans/localsy-search-bridge.md. The architecture is locked —
 browser as primary crawler, Go relay on :8765/:9876, entity-based citations,
-single blocking CAPTCHA handling, no FlareSolverr.
+single blocking CAPTCHA handling, no HTTP fallback.
 
 Start with Phase 1: Go relay bridge. Create internal/bridge/relay.go with
 WebSocket server on :8765 and HTTP endpoints /bridge/status + /bridge/fetch

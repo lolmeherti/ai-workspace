@@ -90,6 +90,10 @@ type switchStatus struct {
 	Sampling        string `json:"sampling"`
 	RuntimePolicy   string `json:"runtime_policy"`
 	APIURL          string `json:"api_url,omitempty"`
+
+	// Boot-time engine failure, published only when no switch is in flight, so the
+	// web layer can explain why the AI is offline (see engineerror.go).
+	EngineError *EngineStartError `json:"engine_error,omitempty"`
 }
 
 func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +300,7 @@ func (h *modelsHandler) handleModelSwitch(w http.ResponseWriter, r *http.Request
 // outcome are published via h.sw for /api/switch-status to observe.
 func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxSize int) {
 	if def := h.defs[modelID]; def.Engine != nil {
-		h.runEngineSwitch(modelID, def)
+		h.runEngineSwitch(ctx, modelID, def)
 		return
 	}
 
@@ -388,7 +392,12 @@ func (h *modelsHandler) runModelSwitch(ctx context.Context, modelID string, ctxS
 // nothing to download and no llama.cpp VRAM gate to run: the engine sizes its
 // own VRAM. Same contract as the llama path — unload first, wait for readiness,
 // and only then persist anything.
-func (h *modelsHandler) runEngineSwitch(modelID string, def models.ModelDefinition) {
+func (h *modelsHandler) runEngineSwitch(ctx context.Context, modelID string, def models.ModelDefinition) {
+	// This switch owns the engine from here on, so the boot-time policy must stop being
+	// reported: a failed or cancelled load would otherwise leave the web layer describing a
+	// model that is no longer up.
+	BootSampling, BootRuntimePolicy = "", ""
+
 	resolved, err := models.ResolveEngineModel(modelID, h.defs, h.hw)
 	if err != nil {
 		h.finishSwitchError("engine model resolution failed: " + err.Error())
@@ -397,6 +406,13 @@ func (h *modelsHandler) runEngineSwitch(modelID string, def models.ModelDefiniti
 	}
 	workDir := h.workDir()
 	apiURL := def.Engine.APIURL(util.GetWindowsHostIP())
+
+	// Cancelled before anything was unloaded: leave the running engine untouched.
+	if ctx.Err() != nil {
+		h.finishSwitchError("Model switch cancelled.")
+		util.LogPrint("[!] model switch to %s cancelled before the engine was started\n", modelID)
+		return
+	}
 
 	h.switchMu.Lock()
 	h.sw.Stage = "starting"
@@ -420,11 +436,17 @@ func (h *modelsHandler) runEngineSwitch(modelID string, def models.ModelDefiniti
 	}
 	StrataProcess = cmd
 
-	if !waitStrataReady(def.Engine.Port, uint32(cmd.Process.Pid)) {
+	if !waitStrataReadyCtx(ctx, def.Engine.Port, uint32(cmd.Process.Pid)) {
 		// Nothing is loaded: take the half-started tree down rather than leave it
-		// holding the GPU behind an error state.
+		// holding the GPU behind an error state. A cancel lands here too, so the
+		// user's "stop" does not leave a half-loaded engine on the card.
 		stopOwnedRuntime(workDir, cmd)
 		StrataProcess = nil
+		if ctx.Err() != nil {
+			h.finishSwitchError("Model switch cancelled.")
+			util.LogPrint("[!] model switch to %s cancelled while the engine was loading\n", modelID)
+			return
+		}
 		h.finishSwitchError(def.Engine.Type + " engine did not report the model loaded — check the engine log")
 		return
 	}
@@ -627,6 +649,24 @@ func (h *modelsHandler) handleSwitchStatus(w http.ResponseWriter, _ *http.Reques
 	h.switchMu.Lock()
 	s := h.sw
 	h.switchMu.Unlock()
+	// A boot-time failure has no switch to ride on, so publish it here: the web
+	// layer reads this payload to explain why the AI is offline instead of guessing
+	// (see engineerror.go). An in-flight switch reports its own error.
+	if failure := EngineStartFailure(); failure != nil && !s.Active {
+		s.EngineError = failure
+	}
+
+	// The switch state only carries sampling/policy while a switch is in flight, and after one
+	// completes. On a cold start it is empty, so fall back to what the launcher resolved for the
+	// model it booted: without this the web layer cannot resolve the Reasoning control's
+	// graduated levels and silently shows Off/On.
+	if !s.Active && s.RuntimePolicy == "" {
+		s.RuntimePolicy = BootRuntimePolicy
+	}
+	if !s.Active && s.Sampling == "" {
+		s.Sampling = BootSampling
+	}
+
 	writeJSON(w, 200, s)
 }
 

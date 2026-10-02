@@ -1,16 +1,17 @@
 <!-- Settings Modal -->
 <div id="settings-modal" class="uk-modal animate-fade-in" uk-modal>
-    <!-- Added "relative" class to dialog to position the close button absolutely in the top-left -->
     <div class="uk-modal-dialog glass-modal rounded-xl overflow-hidden text-slate-200 uk-width-large w-full max-w-2xl relative">
         
-        <!-- FIX: Relocated to top-left, enlarged target area, using custom styling & native UIKit modal close support -->
-        <button class="absolute top-5 left-5 close-btn-futuristic uk-modal-close" type="button" aria-label="Close">&times;</button>
+        <!-- One close affordance, top-right: positioned by .close-btn-futuristic in styles.css,
+             not by a generated utility class (those aren't all present in the shipped bundle).
+             A real icon instead of the &times; text glyph — a glyph never sits centred in its box. -->
+        <button class="ui-icon-button close-btn-futuristic uk-modal-close" type="button" aria-label="Close"><uk-icon icon="x" class="w-4 h-4" aria-hidden="true"></uk-icon></button>
         
         <form method="POST" action="index.php?session_id=<?php echo $sessionId; ?>&tab=<?php echo $activeTab; ?>" class="flex flex-col h-[85vh] max-h-[700px]">
             <input type="hidden" name="save_settings" value="1">
             
-            <!-- FIX: Added pl-14 to prevent header title overlapping the new top-left close button -->
-            <div class="p-6 border-b border-slate-800/80 bg-slate-900/40 shrink-0 pl-14">
+            <!-- pr-16 keeps the title clear of the close button in the top-right corner. -->
+            <div class="p-6 pr-16 border-b border-slate-800/80 bg-slate-900/40 shrink-0">
                 <h2 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
                     <uk-icon icon="settings" class="w-5 h-5 text-cyan-400"></uk-icon> Environment Setup
                 </h2>
@@ -85,17 +86,22 @@
                             continue;
                         }
                         $label = ucwords(strtolower(str_replace('_', ' ', $key)));
+                        // Structured values are resolved by the launcher at boot (LLM_SAMPLING,
+                        // LLM_RUNTIME_POLICY). A one-line text field cannot round-trip JSON, and a
+                        // mangled write silently degraded the Reasoning control to Off/On, so these
+                        // are shown read-only instead of pretending to be editable.
+                        $isStructured = json_decode((string) $value, true) !== null;
                     ?>
                     <div>
                         <label class="block text-xs font-semibold text-slate-400 normal-case tracking-normal mb-1.5" for="<?php echo htmlspecialchars($key); ?>">
-                            <?php echo htmlspecialchars($label); ?>
+                            <?php echo htmlspecialchars($label); ?><?php if ($isStructured): ?> <span class="text-slate-600 font-normal">· set by the launcher</span><?php endif; ?>
                         </label>
                         <input type="text" 
                                id="<?php echo htmlspecialchars($key); ?>" 
                                name="<?php echo htmlspecialchars($key); ?>" 
-                               class="input-futuristic w-full rounded-lg px-3 py-2 text-sm" 
+                               class="input-futuristic w-full rounded-lg px-3 py-2 text-sm<?php echo $isStructured ? ' opacity-60 cursor-not-allowed' : ''; ?>" 
                                value="<?php echo htmlspecialchars($value); ?>" 
-                               required>
+                               <?php if ($isStructured): ?>readonly title="Resolved by the launcher at boot (per model). Edit it there, not here."<?php else: ?>required<?php endif; ?>>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -110,7 +116,6 @@
                 </div>
                 <div id="switch-error" class="hidden text-xs text-red-400 mb-3"></div>
                 <div class="flex justify-end items-center gap-3">
-                    <button type="button" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors uk-modal-close">Cancel</button>
                     <button type="submit" id="save-settings-btn" name="save_settings" value="1" 
                             class="btn-futuristic px-5 py-2 rounded-lg text-sm font-semibold">Save Configuration</button>
                 </div>

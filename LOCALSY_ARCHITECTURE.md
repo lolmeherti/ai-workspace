@@ -112,7 +112,7 @@ Inference
 ## 7. Web search (deepest feature)
 
 - Single implementation: browser bridge (real browser Google SERP + full-page extraction).
-  SearXNG, snippet mode, and FlareSolverr all fully removed from the stack — no fallback.
+  Single engine, single crawler — no fallback path.
 - Pipeline (SearchPipeline::run -> runBridgeMode): splitQueries -> bridge SERP -> fetch
   per URL -> chunk (WebChunk) -> Bm25Retriever::rankRaw incremental early-stop -> diversity
   rank -> three-level evidence fit.
@@ -413,9 +413,9 @@ End-user prerequisites (Windows only)
 
 Browser bridge (what it actually gates)
 - Web search (`search_web`) has NO fallback — the bridge is the single implementation
-  (SearXNG/snippet mode removed). Bridge disconnected → explicit "web search unavailable —
+  Bridge disconnected → explicit "web search unavailable —
   browser bridge not connected", not a degraded answer.
-- Jobs module is ALSO bridge-only (no Scraper/FlareSolverr — both removed). Without the
+- Jobs module is ALSO bridge-only. Without the
   bridge, job detail fetch and listing fetch fail outright (parse fails / listing skipped).
 - Everything else — chat, memory, files, email, briefing, settings, health — runs untouched.
 - Net: the app boots and "runs" without the bridge, but web search is a no-op. First Google

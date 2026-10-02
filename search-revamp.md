@@ -10,9 +10,9 @@ The current search pipeline produces answers that feel untrustworthy. The root c
 User clicks search card
   → LLM formulates search_web QUERY:<terms>
   → SemanticCacheEvaluator checks Redis (AUTO_USE / ASK_USER / NONE)
-  → Search::query() hits SearXNG → 3 URLs
+  → Search::query() hits the search backend → 3 URLs
   → calculateScrapeBudgetStatic() → per-URL token cap
-  → For each URL: Scraper::fetchAndClean (FlareSolverr → strip_tags → truncate)
+  → For each URL: legacy fetch + clean (headless render → strip_tags → truncate)
   → ContextCondenser::condense (iterative LLM summarization: summarize(page1) → update(page2) → update(page3))
   → Result cached as ctx_<md5(query . time())>
   → Injected as [LIVE WEB SEARCH CONTEXT] appended to last user message
@@ -29,9 +29,9 @@ User clicks search card
 
 4. **strip_tags() destroys structure.** Tables become ambiguous word soup. Heading hierarchy is lost. `<tr><th>Battery</th><td>22 hours</td></tr>` becomes `Battery 22 hours` — works until a table contains multiple products.
 
-5. **Top-3 blind fetch.** SearXNG ranking is not relevance to the question. The first three results might be an Apple product page, an SEO comparison page, and a duplicated syndicated article. All are fetched with equal status.
+5. **Top-3 blind fetch.** SERP ranking is not relevance to the question. The first three results might be an Apple product page, an SEO comparison page, and a duplicated syndicated article. All are fetched with equal status.
 
-6. **FlareSolverr is the default HTTP client.** Every URL launches a full Chromium instance regardless of whether the page needs JavaScript. Most documentation, blogs, and static articles work fine with a direct GET.
+6. **The headless browser is the default HTTP client.** Every URL launches a full Chromium instance regardless of whether the page needs JavaScript. Most documentation, blogs, and static articles work fine with a direct GET.
 
 7. **Cache stores the least reusable artifact.** Caching query-specific condensed prose means a related query re-fetches everything. Raw HTML, extracted markdown, and chunks are more reusable across queries.
 
@@ -56,7 +56,7 @@ User clicks search card
 ```
 One search query (colon format, no JSON)
     ↓
-One SearXNG request → 10–15 candidates
+One SERP request → 10–15 candidates
     ↓
 Local candidate deduplication + ranking
     ↓
@@ -106,7 +106,7 @@ Save frozen artifacts to `src/tests/search-eval/<query-id>/`:
 ```
 original-question.txt          # raw user question
 search-query.txt               # what the model output for search_web
-searxng-response.json          # complete SearXNG JSON response
+serp-response.json             # complete SERP JSON response
 urls-selected.txt              # which URLs were fetched
 raw-pages/
   <sha256(url)>.json           # {requested_url, final_url, http_status, headers, content_type, charset,
@@ -144,7 +144,7 @@ Each fixture must capture response metadata alongside the raw body (status, head
 
 **Important for Phase 1 live comparison**: fetch once and run both old and new information-reduction paths over the same newly captured responses. Do not independently repeat the complete live search for each pipeline — that doubles your external traffic and introduces input variance.
 
-Without offline replay, Phase 1 comparison is noisy and potentially misleading because SearXNG rankings, page content, and site accessibility all change between runs.
+Without offline replay, Phase 1 comparison is noisy and potentially misleading because SERP rankings, page content, and site accessibility all change between runs.
 
 ---
 
@@ -273,7 +273,6 @@ $score =
 
 - **Chunker**: oversized structural units (Wikipedia References section, 154K chars) not split — poisons condenser budget. Fix: split any structural unit exceeding 50K chars regardless of type.
 - **two-facts fixture**: 0B answer (transient LLM dead call). Evidence block is valid (5363B). Re-running produces correct output.
-- **content_type**: FlareSolverr response headers don't consistently include Content-Type. Phase 2 content-type router will need to sniff from HTML head or response body.
 - **Pipeline not wired**: The new search pipeline classes aren't called from the live search path yet. `SearchWebTool` and `WebSearchService` still use the old condenser. Integration happens when the orchestration layer is built.
 
 ### Domain-specific adapters
@@ -326,22 +325,7 @@ Planned adapters:
 
 `FetchSafety::isUseful()` — 2xx status + 200+ chars + not challenge page
 
-`FetchSafety::resolveFetchStrategy()` — decision tree for when to escalate to FlareSolverr vs skip:
-- Escalate when: user explicitly requested that URL, it's uniquely authoritative, or it's the last candidate
-- Skip otherwise — move to next candidate instead of spending browser overhead
-
 `FetchResult` value object: statusCode, body, finalUrl, resolvedIp, contentType.
-
-### 2b. HTTP-first fetcher
-
-`Scraper::fetchAndClean()` updated:
-1. Try direct curl via `FetchSafety::safeFetchUrl()` first
-2. If useful (200, enough content, no challenge) → proceed
-3. `UnsafeUrlException` (private IP, bad scheme) → return empty immediately
-4. `FetchException` (DNS failure, timeout, too many redirects) → fall through to FlareSolverr
-5. FlareSolverr path extracted as `fetchViaFlareSolverr()` private method
-6. New `$fetchMethod` out-param ('curl' or 'flaresolverr') for coverage measurement
-7. Backward compat: existing callers (SearchWebTool, WebSearchService) unaffected
 
 ### 2c. Request pacing — Redis-backed and atomic
 
@@ -351,7 +335,7 @@ Planned adapters:
 - `acquireGlobalLock()` — NX token-based lock with configurable PX lease
 - `releaseGlobalLock()` — Lua check-then-delete, only releases if caller owns the token (TOCTOU-safe)
 - `acquireWithWait()` — convenience: wait → lock (retry 100ms backoff) → return token
-- Delays: 800ms global, 1500ms per-host, 4000ms SearXNG, max 700ms jitter
+- Delays: 800ms global, 1500ms per-host, 4000ms search service, max 700ms jitter
 
 Lock acquired AFTER waiting for slot, not before — acquiring before a long wait risks lease expiry.
 
@@ -359,16 +343,9 @@ Lock acquired AFTER waiting for slot, not before — acquiring before a long wai
 
 ## Phase 3: Better candidate selection ✅ DONE
 
-### 3a. SearXNG engine profiles
+### 3a. Engine profiles
 
-Minimal engine set per intent — avoids fanning out to every enabled engine from one IP:
-
-| Intent | Engines |
-|---|---|
-| SoftwareDocs | duckduckgo, github, stackoverflow |
-| Academic | duckduckgo, arxiv, pubmed |
-| News | bing, duckduckgo, google_news |
-| Default | duckduckgo, bing |
+Superseded — the bridge searches a single engine, so per-intent engine sets no longer apply.
 
 ### 3b. SearchIntent enum
 
@@ -414,7 +391,7 @@ Minimal engine set per intent — avoids fanning out to every enabled engine fro
 **Progress events** (for pipeline implementation):
 | Stage | Event |
 |---|---|
-| SearXNG query | search_querying |
+| SERP query | search_querying |
 | Candidate ranking | search_ranking |
 | Fetching URL | scraping_start |
 | Extraction | search_extracting |
@@ -424,7 +401,7 @@ Minimal engine set per intent — avoids fanning out to every enabled engine fro
 
 ### 3g. Follow-up search (only when needed)
 
-Second SearXNG request only when first result set has a measurable gap: no primary source found, required coverage target unmatched, wrong entity results, stale results, or unresolved contradiction.
+Second SERP request only when the first result set has a measurable gap: no primary source found, required coverage target unmatched, wrong entity results, stale results, or unresolved contradiction.
 
 ---
 
@@ -484,7 +461,7 @@ doc:url:<sha256(url)>:negative
 
 **Do NOT cache answers in v1.** The final answer depends on conversational context, language, tone, and what the user is contrasting against. `question + evidence_hash` is not enough. Cache evidence first; add answer caching later only with model version, prompt version, language, and normalized standalone question.
 
-**Negative cache entries are method-specific**: `curl: challenge_detected` does not prevent the intentional `flaresolverr: not_attempted` fallback. Each fetch method gets its own negative entry.
+**Negative cache entries are method-specific**: a challenge detected on one transport does not prevent an intentional retry on another. Each fetch method gets its own negative entry.
 
 ### 4b. TTL policies
 
@@ -535,7 +512,7 @@ None of these are mandatory for v1. Add only when evaluation reveals a specific 
 |---|---|
 | Dense embeddings + hybrid retrieval | Lexical-only retrieval fails on queries using different vocabulary than pages (e.g. "how long unplugged" vs "18 hours video playback") |
 | Qdrant | Embedding corpus or retrieval requirements outgrow in-memory BM25 |
-| Playwright middle tier | Logs show recurring pattern: HTTP succeeds, status 200, extracted content is empty, FlareSolverr works but is unnecessarily expensive (JS-rendered but not bot-protected) |
+| Playwright middle tier | Logs show recurring pattern: HTTP succeeds, status 200, extracted content is empty, while a full browser render works but is unnecessarily expensive (JS-rendered but not bot-protected) |
 | Per-source query decomposition | Multi-aspect questions consistently fail because model can't split targets across sources |
 | Claim-level citation verification | Answers cite sources that don't actually support the claim |
 | Hostile-content classifier | Prompt-injection pages regularly affect answers despite prompt-level guardrails |
@@ -570,7 +547,7 @@ None of these are mandatory for v1. Add only when evaluation reveals a specific 
 | 1B | ✅ Done | Token counting, global budget, extractive compression | `src/App/Search/`: TokenCounter (llama.cpp /tokenize), ExtractiveCompressor (prose/table/list). Three-level evidence fitting wired. 9/10 exact, 0 extractive, 1 condenser (news-event). |
 | 1C | ✅ Done | Per-source LLM condenser, deterministic post-fitting | `src/App/Search/SourceCondenser`. Per-source isolation, parseable [S1-C4] chunk references, validated output. Covers the 1/10 case where extractive doesn't suffice. Post-fitting trims lowest-claim sources until budget fits. |
 | 1D | ✅ Done | Evidence-role placement, citation rendering, search externalization | `src/App/Search/`: CitationValidator (strips hallucinated [SX]), SearchArtifactManager (Redis+FS storage, BM25 rehydration). `PromptAssemblyService` refactored: evidence as separate message (tool/user role), untrusted guard in system prompt. `ChatManager` no longer injects as system role, CitationValidator post-processing on final answer. |
-| 2 | ✅ Done | HTTP-first + Redis-backed pacing + fetch safety | `src/App/Search/`: FetchSafety (safeFetchUrl with DNS pinning, redirect loop, byte limit), FetchResult, OutboundScheduler (atomic Lua slot acquisition + token-based lock). `Scraper` refactored: curl-first with FlareSolverr fallback, fetchMethod out-param for coverage measurement. |
+| 2 | ✅ Done | Redis-backed pacing + fetch safety | `src/App/Search/`: OutboundScheduler (atomic Lua slot acquisition + token-based lock). SSRF checks live in `BridgeFetcher::validateFetchUrl()` + the Go relay + declarativeNetRequest rules + extension `isPrivateHost()`. |
 | 3 | ✅ Done | Broad candidates → rerank → sequential with coverage-based early stop | `src/App/Enums/SearchIntent` (regex classification, 6 intents). `src/App/Search/`: Candidate, CandidateDeduplicator (URL canonicalization, tracking-param stripping, per-domain cap), CandidateRanker (deterministic scoring + optional LLM rerank), CoverageTracker (target extraction, coverage gate, shouldFetchAnother). `Search::queryCandidates()` with engine profiles. `Search::query()` kept as backward-compat wrapper. |
 | 4 | ✅ Done | Layered caching (SERP, raw body, extraction, chunks, evidence) | `src/App/Search/`: CacheKeyBuilder (normalization + 12 key formats), CacheTTL (intent-based TTLs + volatility estimation), CacheStorage (gzipped FS bodies + Redis ref-counting + LRU eviction), SearchCacheManager (read-through/write-through for 6 cache layers, version constants, conditional revalidation), AskUserPolicy (metadata-driven AUTO_USE/ASK_USER/NONE). |
 | 5 | ⏸️ Deferred | Additions only when measurements justify | Embeddings, Qdrant, Playwright, domain quality model — all triggers require live pipeline data. Deferred until Phase 0-4 integration is complete and evaluation reveals specific deficiencies. |
@@ -578,7 +555,6 @@ None of these are mandatory for v1. Add only when evaluation reveals a specific 
 ### Known issues
 
 - **Chunker**: oversized structural units (Wikipedia References section, 154K chars) not split — poisons condenser budget. Fix: split any structural unit exceeding 50K chars regardless of type.
-- **content_type**: FlareSolverr response headers don't consistently include Content-Type. Raw pages saved with `"unknown"`. Phase 2 content-type router will need to sniff from HTML head or response body.
 - **two-facts fixture**: population data not in frozen pages. Pipeline correctly reports missing data for one aspect. Not a pipeline bug — fixture needs a population-specific URL to fully test multi-aspect retrieval.
 - **conflicting fixture**: original captured pages were reCAPTCHA blocks (stale). Replaced with synthetic HTML containing genuine contradictory claims about dark chocolate. Pipeline correctly preserves disagreement with [S1]/[S2] citations. Live re-capture needed for production fidelity.
 
@@ -590,13 +566,12 @@ None of these are mandatory for v1. Add only when evaluation reveals a specific 
 
 **Known runtime issues** (discovered during live testing):
 - Pipeline throws on first real query, falls back to legacy condenser. Root cause unknown — check PHP error log for `SearchPipeline failed` message.
-- `fetchViaFlareSolverr` was broken by orphaned `/**` from patch — FIXED. Method properly declared.
 - No source IDs flow through tool-turn path. `$validSourceIds` only populated in `force_live` handler. Tool-turn returns bare evidence string, so `CitationValidator` never fires and model is never prompted to cite.
 - `liveSearchLegacy` return type changed to `array` (was `string`). The `doLiveSearch()` caller extracts `$result['evidence']` — need to verify the `execute()` multi-query path also handles array correctly (lines 74-82 in SearchWebTool).
 
 **Not yet done**:
 - Phase O2: Wire `SearchCacheManager` + `AskUserPolicy` into live path (replace search_ledger)
-- Phase O3: Wire `OutboundScheduler` into `Scraper` + `SearchPipeline` fetch loop
+- Phase O3: Wire `OutboundScheduler` into the search fetch loop
 - Fix ChatManager pre-existing brace gap (117/116 — from Phase 1D)
 - Fix sourceIds flowing through tool-turn path
 
@@ -615,7 +590,7 @@ Tool turn path:
       → SearchWebTool::execute()
         → liveSearch() [static, line 90]
           → Search::query()           → URLs as strings
-          → Scraper::fetchAndClean()  → cleaned truncated text
+          → legacy fetch + clean     → cleaned truncated text
           → ContextCondenser::condense() → anonymous prose blob
           → Cache::set() + addToLedger()
 
@@ -639,7 +614,7 @@ All three paths:
     → CandidateDeduplicator::deduplicate()
     → CandidateRanker::scoreDeterministic()
     → CoverageTracker (sequential fetch + early stop)
-        → Scraper::fetchAndClean()        → raw HTML (need raw, not cleaned)
+        → legacy fetch                    → raw HTML (need raw, not cleaned)
         → ContentExtractor::extract()     → ExtractedDocument
         → StructuralChunker::chunk()      → WebChunk[]
     → Bm25Retriever::rank()               → selected WebChunk[]
@@ -661,7 +636,7 @@ SearchPipeline::run(query, messages, emit): array
     2. Search::queryCandidates(query, 12, intent)
     3. CandidateDeduplicator + CandidateRanker
     4. CoverageTracker drives sequential fetch loop
-       → Scraper::fetchAndClean(url) but we need raw HTML
+       → legacy fetch(url) but we need raw HTML
        → ContentExtractor::extract(html, ...)
        → StructuralChunker::chunk(doc, sourceId)
     5. Bm25Retriever::rank(allChunks, question, query, policy)
@@ -671,23 +646,11 @@ SearchPipeline::run(query, messages, emit): array
     9. Return {evidence, sourceIds}
 ```
 
-**Scraper raw-return problem**: `Scraper::fetchAndClean()` calls `cleanAndTruncate()` which strips tags + truncates. The new pipeline needs raw HTML for `ContentExtractor`. Solution: add `Scraper::fetchRaw(string $url): ?FetchResult` — calls `FetchSafety::safeFetchUrl()` directly, returns the `FetchResult` with raw body. Falls back to FlareSolverr same way. No new fetch logic — just exposes what `fetchAndClean()` already does internally before the strip+truncate step.
-
 ### Changes to existing files
 
-**1. `src/App/Scraper.php` — add `fetchRaw()`**
+**1. `src/App/Services/Tools/SearchWebTool.php` — replace `liveSearch()` body**
 
-```php
-// New static method — returns raw FetchResult instead of cleaned text.
-// Uses same HTTP-first + FlareSolverr fallback as fetchAndClean().
-public static function fetchRaw(string $targetUrl, ?string &$fetchMethod = null): ?FetchResult
-```
-
-Implementation: identical to `fetchAndClean()` lines 22-37 but returns `FetchResult` on success instead of passing body through `cleanAndTruncate()`. FlareSolverr path wraps response in a synthetic `FetchResult`. ~15 lines extracted from existing code.
-
-**2. `src/App/Services/Tools/SearchWebTool.php` — replace `liveSearch()` body**
-
-`liveSearch()` currently does: `Search::query()` → `Scraper::fetchAndClean()` → `ContextCondenser::condense()` → `Cache::set()` (lines 91-129). Replace body with:
+`liveSearch()` currently does: `Search::query()` → legacy fetch + clean → `ContextCondenser::condense()` → `Cache::set()` (lines 91-129). Replace body with:
 
 ```php
 public static function liveSearch(string $searchQuery, array $messages, callable $emit,
@@ -774,11 +737,10 @@ If `SearchPipeline::run()` fails, `liveSearch()` falls back to old `ContextConde
 
 ### What shipped this session
 - **Phase 4** (layered caching): 5 classes — CacheKeyBuilder, CacheTTL, CacheStorage, SearchCacheManager, AskUserPolicy. Built, verified, not yet wired into live path.
-- **Phase O1** (pipeline orchestration): 1 new class (SearchPipeline) + 4 files updated (Scraper, SearchWebTool, ChatManager, WebSearchService). Connects all 19 pipeline classes into the live search path. Legacy condenser kept as try/catch fallback.
+- **Phase O1** (pipeline orchestration): 1 new class (SearchPipeline) + 4 existing files updated. Connects all 19 pipeline classes into the live search path. Legacy condenser kept as try/catch fallback.
 
 ### Files changed this session (most recent first)
 ```
-src/App/Scraper.php                      — +fetchRaw(), +fetchViaFlareSolverrRaw(), fixed orphaned /**
 src/App/Search/SearchPipeline.php        — new: class SearchPipeline (274 lines, orchestrator)
 src/App/Services/Tools/SearchWebTool.php — liveSearch() return type string→array, calls SearchPipeline
 src/App/ChatManager.php                  — force_live handler extracts $validSourceIds from result array
@@ -797,7 +759,7 @@ src/App/Search/AskUserPolicy.php         — new: metadata-driven AUTO_USE/ASK_U
 
 ### What's not done
 - **Phase O2**: Wire SearchCacheManager + AskUserPolicy (content-addressed caching, replace search_ledger)
-- **Phase O3**: Wire OutboundScheduler into Scraper fetch loop (Redis-backed pacing — class built, never called)
+- **Phase O3**: Wire OutboundScheduler into the search fetch loop (Redis-backed pacing — class built, never called)
 - **ChatManager brace gap**: 117/116 mismatch pre-existing from Phase 1D CitationValidator work. Not blocking but will bite eventually.
 - **Chunker oversized-unit bug**: Wikipedia References sections (154K chars) not split, poisons condenser budget. Fix: split any unit > 50K chars.
 - **Phase 5**: Deferred — all additions require live pipeline evaluation data first.

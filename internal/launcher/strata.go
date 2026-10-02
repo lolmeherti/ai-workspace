@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,9 +85,21 @@ func strataArgs(e *models.EngineSpec) []string {
 // A wrapper that dies while we wait (a busy port, a bad config) fails the switch
 // instead of being mistaken for a healthy server.
 func waitStrataReady(port int, pid uint32) bool {
+	return waitStrataReadyCtx(context.Background(), port, pid)
+}
+
+// waitStrataReadyCtx is waitStrataReady with a cancellation boundary. A switch the user
+// cancelled must not keep the launcher blocked for the full boot wait on an engine it has
+// already abandoned; the caller takes the half-started tree down. Blocks the same way the
+// boot path does when ctx is never cancelled.
+func waitStrataReadyCtx(ctx context.Context, port int, pid uint32) bool {
 	deadline := time.Now().Add(strataLoadWait)
 	client := http.Client{Timeout: 3 * time.Second}
 	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			util.LogPrint("[!] engine wait on port %d cancelled\n", port)
+			return false
+		}
 		if pid != 0 && !processAliveByID(pid) {
 			util.LogPrint("[-] engine wrapper (pid %d) exited before the model was ready\n", pid)
 			return false
@@ -95,7 +108,14 @@ func waitStrataReady(port int, pid uint32) bool {
 			util.LogPrint("[+] engine ready on port %d (%s)\n", port, info)
 			return true
 		}
-		time.Sleep(strataPollPeriod)
+		// Wait in cancellable slices so a cancel lands immediately instead of after the
+		// whole boot timeout.
+		select {
+		case <-ctx.Done():
+			util.LogPrint("[!] engine wait on port %d cancelled\n", port)
+			return false
+		case <-time.After(strataPollPeriod):
+		}
 	}
 	util.LogPrint("[-] engine on port %d did not report the model loaded within %s\n", port, strataLoadWait)
 	return false

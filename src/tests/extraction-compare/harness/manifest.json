@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Localsy Extraction Compare Harness",
+  "version": "0.1.0",
+  "description": "Standalone capture harness for the deterministic-vs-model-guided extraction comparison. NOT part of the production search bridge.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "permissions": [
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8790/*",
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://*.reddit.com/*"
+      ],
+      "js": [
+        "deterministic-extractor.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.reddit.com/*",
+        "https://old.reddit.com/*"
+      ],
+      "js": [
+        "reddit-extractor.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "capture-dom.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

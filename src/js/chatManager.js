@@ -163,15 +163,17 @@ export function toggleChatEditMode() {
 
     if (state.isChatEditMode) {
         chatsList.classList.add('in-edit-mode');
-        manageBtn.innerHTML = '<uk-icon icon="close" class="w-3.5 h-3.5"></uk-icon> Cancel';
-        manageBtn.className = "text-xs text-rose-400 hover:text-rose-300 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1";
+        // Only the label and a state class change here: the box (padding, radius, hover,
+        // focus) belongs to .sidebar-inline-action, so the two states cannot drift apart.
+        manageBtn.innerHTML = '<uk-icon icon="x" class="w-3.5 h-3.5"></uk-icon> Cancel';
+        manageBtn.classList.add('is-danger');
         deleteBar.classList.remove('translate-y-full');
         state.selectedChatIds = [];
         updateSelectedChatsUI();
     } else {
         chatsList.classList.remove('in-edit-mode');
         manageBtn.innerHTML = '<uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage';
-        manageBtn.className = "text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1";
+        manageBtn.classList.remove('is-danger');
         deleteBar.classList.add('translate-y-full');
         
         document.querySelectorAll('.chat-session-item').forEach(item => {

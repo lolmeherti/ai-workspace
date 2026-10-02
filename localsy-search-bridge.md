@@ -1,14 +1,11 @@
 # Localsy Search Bridge
 
-> **Superseded — Aug 2026.** SearXNG and snippet-only mode were removed. `search_web`
-> is bridge-only now; a bridge outage surfaces as an explicit "web search unavailable
-> / no results" message instead of degrading to snippets. See
-> `.hermes/plans/searxng-removal-handoff.md`.
+> **Superseded — Aug 2026.** `search_web`
+> is bridge-only; a bridge outage surfaces as an explicit "web search unavailable
+> / no results" message instead of degrading to a lower-quality answer.
 
 Browser-based search and retrieval. The user's Edge browser handles SERP extraction,
-page rendering, and site-specific structured extraction. SearXNG provides SERP when
-the bridge is unavailable. FlareSolverr is removed entirely — it never worked
-reliably and has no place in a single-user local agent.
+page rendering, and site-specific structured extraction — the only fetch path.
 
 ## Architecture
 
@@ -29,10 +26,7 @@ User asks question
       │     │           → EvidenceBuilder → answer with citations
       │     │
       │     └── BRIDGE NOT ALIVE:
-      │           ├── SERP via SearXNG queryCandidates()
-      │           ├── NO crawling — URLs are not fetched
-      │           ├── Evidence = SERP snippets only
-      │           └── Answer cites snippets as untrusted evidence
+      │           └── Explicit "web search unavailable" — nothing fetched, no fallback
       │
       └── EvidenceBuilder → answer
 ```
@@ -42,12 +36,9 @@ User asks question
 | Mode | Condition | SERP | Crawling | Evidence quality |
 |------|-----------|------|----------|-----------------|
 | Full | Bridge connected | Browser Google search | Extension opens tabs, site-specific JS extraction | Full page content, structured |
-| Snippet-only | Bridge not connected | SearXNG | None — snippets only | Title + URL + snippet per result |
+| None | Bridge not connected | — | — | Explicit "unavailable" message; nothing fetched |
 
-Snippet-only is the cost of not having the bridge. The model still gets ranked
-candidates with titles and snippets. It can't verify claims against full page
-content, but it has more than nothing. This is intentional — don't build
-infrastructure that doesn't work (FlareSolverr) just to say you have it.
+There is no degraded mode: without the bridge, `search_web` reports itself unavailable and nothing is fetched.
 
 ## Component roles
 
@@ -56,7 +47,6 @@ infrastructure that doesn't work (FlareSolverr) just to say you have it.
 | Edge extension | SERP extraction, page rendering, site-specific JS extraction, generic fallback extraction |
 | Go binary | Persistent WebSocket relay bridge: PHP HTTP → Go → extension WS → response. Bridge presence tracking. |
 | PHP pipeline | Sequential orchestration: candidate → fetch → chunk → BM25 → condense → next candidate |
-| SearXNG | SERP source when bridge is unavailable. No page fetching. |
 
 ## Go relay bridge
 
@@ -269,18 +259,10 @@ if ($bridgeAvailable) {
         // ... BM25, evidence fitting, coverage check
     }
 } else {
-    // Snippet-only mode: SearXNG SERP, no crawling
-    $candidates = Search::queryCandidates($query, 12, $intent);
-    // Build evidence from snippets directly
-    $evidence = EvidenceBuilder::fromSnippets($candidates);
-    return ['evidence' => $evidence, 'sourceIds' => [...]];
+    // No bridge: report unavailable, fetch nothing
+    return emptyResult('Web search is unavailable: the browser bridge is not connected.');
 }
 ```
-
-`EvidenceBuilder::fromSnippets()` is new — takes `Candidate[]` and builds an
-evidence block from snippets alone, with source URLs and titles. The model
-gets ranked results with extracted snippets but no verified page content.
-This is the dumbed-down fallback.
 
 ## What's built
 
@@ -300,9 +282,8 @@ This is the dumbed-down fallback.
 
 ## Not in scope (v1)
 
-- FlareSolverr — removed
 - Firefox support (Chromium MV3 first)
 - Multiple simultaneous browser bridges
 - Browser launch / CDP
 - Moving pipeline orchestration to Go (blocking PHP model is intentional)
-- Scraper / FetchSafety / OutboundScheduler — kept for historical reference, not used in active paths
+- `OutboundScheduler` is live (per-host pacing for bridge fetches); nothing else from the old fetch stack remains.

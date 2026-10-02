@@ -68,7 +68,11 @@ try {
         $reasoningEffort = (new AppSettingsRepository($db))->get('reasoning_effort', 'medium');
     }
     $runtimePolicy = json_decode((string) Config::get('LLM_RUNTIME_POLICY', '{}'), true) ?: [];
-    $reasoningGraduated = !empty($runtimePolicy['reasoning']['effort_map'] ?? []);
+    // The launcher serializes the request-side policy flat (field / path / default_effort /
+    // effort_map); a nested `reasoning` object is the older shape. Accept either — looking for
+    // only the nested one is why this control silently degraded to the on/off toggle.
+    $effortMap = $runtimePolicy['effort_map'] ?? ($runtimePolicy['reasoning']['effort_map'] ?? []);
+    $reasoningGraduated = !empty($effortMap);
     if ($reasoningGraduated) {
         if (!in_array($reasoningEffort, ['low', 'medium', 'high'], true)) {
             $reasoningEffort = 'medium';

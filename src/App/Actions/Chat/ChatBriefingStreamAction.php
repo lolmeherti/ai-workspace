@@ -178,6 +178,9 @@ class ChatBriefingStreamAction extends BaseAction
         $briefingTitle = 'Daily Briefing - ' . date('l d/m/Y');
         $totalSessionTokens = 0;
         if ($this->db) {
+            // This action writes chat_history by hand. Without the parent row the insert
+            // violates fk_chat_history_session_id (1452) and kills the stream mid-turn.
+            (new \App\Repositories\ChatSessionRepository($this->db))->ensureExists($sessionId);
             $this->db->update('chat_sessions', ['title' => $briefingTitle], ['id' => $sessionId]);
             $this->db->insert('chat_history', [
                 'session_id'     => $sessionId,
@@ -227,6 +230,8 @@ class ChatBriefingStreamAction extends BaseAction
         }
         try {
             $tokens = $tokenCounter->count($message);
+            // Same guarantee as the synthesis write below: this row needs its parent session.
+            (new \App\Repositories\ChatSessionRepository($this->db))->ensureExists($sessionId);
             $this->db->insert('chat_history', [
                 'session_id'     => $sessionId,
                 'role'           => 'system',

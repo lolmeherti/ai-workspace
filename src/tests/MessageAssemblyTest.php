@@ -200,6 +200,32 @@ class MessageAssemblyTest
         $this->test('fresh tool results stay last, after the current user turn',
             $this->findContentPos($arrN1, 'EVIDENCE_TWO') === count($arrN1) - 1);
 
+        // The repeated-request reminder is stored on the evidence row it followed,
+        // so it must be re-emitted in place on every later turn. Appending it to
+        // the current turn's array only would make the next turn diverge there and
+        // cost the whole cached prefix behind it.
+        $turnR = [
+            ['role' => 'user', 'message' => 'q1'],
+            ['role' => 'system', 'message' => 'EVIDENCE_R', 'message_type' => 'data_fetching', 'turn_reminder' => 'REMINDER_SENTINEL'],
+            ['role' => 'assistant', 'message' => 'a1'],
+            ['role' => 'user', 'message' => 'q2'],
+        ];
+        $arrR = $this->prompt->buildMessagesArray($sys, $turnR);
+        $posBlock = $this->findContentPos($arrR, 'EVIDENCE_R');
+        $posReminder = $this->findContentPos($arrR, 'REMINDER_SENTINEL');
+        $this->test('stored reminder is emitted directly after its evidence block',
+            $posBlock !== -1 && $posReminder === $posBlock + 1);
+
+        $arrR1 = $this->prompt->buildMessagesArray($sys, array_merge($turnR, [
+            ['role' => 'assistant', 'message' => 'a2'],
+            ['role' => 'user', 'message' => 'q3'],
+        ]));
+        $extendsR = count($arrR1) > count($arrR);
+        for ($i = 0; $extendsR && $i < count($arrR); $i++) {
+            $extendsR = json_encode($arrR[$i]) === json_encode($arrR1[$i]);
+        }
+        $this->test('a turn carrying a reminder still extends the next turn (append-only)', $extendsR);
+
         $roles = array_values(array_unique(array_map(fn($m) => $m['role'], $out3)));
         $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
 

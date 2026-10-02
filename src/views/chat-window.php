@@ -260,7 +260,7 @@ $effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : ''
         <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 items-end mb-4 chat-message-container">
             <div class="flex items-center gap-2 flex-row-reverse mr-1">
                 <span class="text-xs text-slate-500 font-semibold normal-case tracking-normal">You</span>
-                <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
+                <button type="button" class="copy-affordance copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                 </button>
             </div>
@@ -268,7 +268,7 @@ $effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : ''
                 <img src="" class="max-w-xs rounded-lg mb-3 border border-white/20 shadow-md hidden upload-img" alt="Upload">
                 <span class="msg-text"></span>
                 <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
-                    <button type="button" class="text-xs text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1"
+                    <button type="button" class="copy-affordance"
                             onclick="copyToClipboard(this)" 
                             title="Copy message">
                         <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon> <span>Copy Entire Message</span>
@@ -284,13 +284,13 @@ $effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : ''
                 <span class="text-xs text-slate-500 font-semibold normal-case tracking-normal flex items-center gap-2 ai-label-container">
                     <?php echo htmlspecialchars(\App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
                 </span>
-                <button type="button" class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center copy-btn" onclick="copyToClipboard(this)" title="Copy message">
+                <button type="button" class="copy-affordance copy-btn" onclick="copyToClipboard(this)" title="Copy message">
                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
                 </button>
             </div>
             <div class="chat-assistant rounded-2xl rounded-tl-sm px-5 py-4 text-[0.95rem] leading-relaxed max-w-[85%] bubble-content markdown-content border border-transparent ai-bubble w-full flex flex-col items-stretch" data-raw="">
                 <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 hidden bottom-copy-container mt-auto">
-                    <button type="button" class="text-xs text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 flex items-center gap-1"
+                    <button type="button" class="copy-affordance"
                             onclick="copyToClipboard(this)" 
                             title="Copy message">
                         <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon> <span>Copy Entire Message</span>

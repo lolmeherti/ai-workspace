@@ -100,7 +100,13 @@ function renderMetricsBubble(bubble, metrics) {
     if (reasonLabel) parts.push('reason ' + reasonLabel);
     const summary = parts.join(' \u00b7 ');
 
-    const chain = calls.map(c => PURPOSE_LABELS[c.purpose] || c.purpose).join(' \u2192 ');
+    const perCallReason = calls.map(c => reasoningLabel(metrics, c));
+    // The summary line already states the turn's reasoning, so a column is only worth
+    // the space when the calls disagree (or carry something the summary doesn't) —
+    // otherwise a single-pass turn would print the same label twice.
+    const distinctReason = [...new Set(perCallReason.filter(Boolean))];
+    const showReasonCol = distinctReason.length > 1
+        || (distinctReason.length === 1 && distinctReason[0] !== reasonLabel);
 
     const details = document.createElement('details');
     details.className = 'metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40';
@@ -118,27 +124,28 @@ function renderMetricsBubble(bubble, metrics) {
             </span>
         </summary>
         <div class="px-3 pb-3 border-t border-slate-800/60">
-            <div class="text-xs text-slate-500 font-mono py-1.5">${chain}${reasonLabel ? ' · reason ' + reasonLabel : ''}</div>
-            <table class="w-full text-xs font-mono text-slate-400">
+            <table class="metrics-table w-full text-xs font-mono text-slate-400">
                 <thead><tr class="text-slate-500 text-left">
                     <th class="py-1 pr-2 font-normal">call</th>
                     <th class="py-1 pr-2 font-normal">time</th>
                     <th class="py-1 pr-2 font-normal">prefill</th>
                     <th class="py-1 pr-2 font-normal">think</th>
-                    <th class="py-1 font-normal">text</th>
+                    <th class="${showReasonCol ? 'py-1 pr-2' : 'py-1'} font-normal">text</th>
+                    ${showReasonCol ? '<th class="py-1 font-normal">reason</th>' : ''}
                 </tr></thead>
                 <tbody>
-                    ${calls.map(c => {
+                    ${calls.map((c, i) => {
                         const label = PURPOSE_LABELS[c.purpose] || c.purpose;
-                        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} \u00b7 ${c.prompt_n} tok${c.cache_n > 0 ? ' \u00b7 ' + c.cache_n + ' cached' : ''}` : '\u2014';
+                        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} \u00b7 ${c.prompt_n} new${c.cache_n > 0 ? ' \u00b7 ' + c.cache_n + ' cached' : ''}` : '\u2014';
                         const think = c.reasoning_ms > 0 ? `${fmtMs(c.reasoning_ms)} \u00b7 ${c.reasoning_tok} tok` : '\u2014';
                         const text = c.content_ms > 0 ? `${fmtMs(c.content_ms)} \u00b7 ${c.content_tok} tok` : '\u2014';
                         return `<tr class="border-t border-slate-800/40">
-                            <td class="py-1 pr-2">${label}</td>
-                            <td class="py-1 pr-2">${fmtMs(c.elapsed_ms)}</td>
+                            <td class="py-1 pr-2 whitespace-nowrap">${label}</td>
+                            <td class="py-1 pr-2 whitespace-nowrap">${fmtMs(c.elapsed_ms)}</td>
                             <td class="py-1 pr-2">${prefill}</td>
                             <td class="py-1 pr-2">${think}</td>
-                            <td class="py-1">${text}</td>
+                            <td class="${showReasonCol ? 'py-1 pr-2' : 'py-1'}">${text}</td>
+                            ${showReasonCol ? `<td class="py-1">${perCallReason[i] || '\u2014'}</td>` : ''}
                         </tr>`;
                     }).join('')}
                 </tbody>
@@ -178,13 +185,18 @@ function formatMetricsText(metrics) {
     lines.push(parts.join(' · '));
     lines.push('');
 
-    lines.push('call\ttime\tprefill\tthink\ttext');
-    for (const c of calls) {
+    const perCallReason = calls.map(c => reasoningLabel(metrics, c));
+    const distinctReason = [...new Set(perCallReason.filter(Boolean))];
+    const showReasonCol = distinctReason.length > 1
+        || (distinctReason.length === 1 && distinctReason[0] !== reasonLabel);
+
+    lines.push('call\ttime\tprefill\tthink\ttext' + (showReasonCol ? '\treason' : ''));
+    for (const [i, c] of calls.entries()) {
         const label = PURPOSE_LABELS[c.purpose] || c.purpose;
-        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} · ${c.prompt_n} tok${c.cache_n > 0 ? ' · ' + c.cache_n + ' cached' : ''}` : '—';
+        const prefill = c.prompt_ms > 0 ? `${fmtMs(c.prompt_ms)} · ${c.prompt_n} new${c.cache_n > 0 ? ' · ' + c.cache_n + ' cached' : ''}` : '—';
         const think = c.reasoning_ms > 0 ? `${fmtMs(c.reasoning_ms)} · ${c.reasoning_tok} tok` : '—';
         const text = c.content_ms > 0 ? `${fmtMs(c.content_ms)} · ${c.content_tok} tok` : '—';
-        lines.push(`${label}\t${fmtMs(c.elapsed_ms)}\t${prefill}\t${think}\t${text}`);
+        lines.push(`${label}\t${fmtMs(c.elapsed_ms)}\t${prefill}\t${think}\t${text}${showReasonCol ? '\t' + (perCallReason[i] || '—') : ''}`);
         lines.push(`[${label}] prompt_tokens=${c.prompt_tokens} completion_tokens=${c.completion_tokens} pred_n=${c.pred_n} pred_tps=${Math.round(c.pred_tps || 0)} prompt_tps=${Math.round(c.prompt_tps || 0)} cache_n=${c.cache_n}`);
     }
 
@@ -747,6 +759,8 @@ export async function streamResponse(formData, originalMessage) {
     let sourceIds = [];
     let isFirstToken = true;
     let reasoningSeen = false;
+    // A repeated/early `thought_complete` must not re-run the finish handler.
+    let thoughtFinished = false;
     let consolidatingBadge = null;
     let turnHadEdit = false;
     let activeToolContext = null;
@@ -1204,24 +1218,25 @@ export async function streamResponse(formData, originalMessage) {
                         }
 
                         if (event === 'thought_complete') {
-                            const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
-                            const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
-                            if (pulseDot) pulseDot.classList.add('hidden');
-                            if (statusLabel) statusLabel.textContent = 'Complete';
+                            // Status only, and only once. The markdown re-render used to run here
+                            // (inside typewriter.onFinish) and replaced the container that holds the
+                            // live typewriter span — so reasoning arriving after the finish had no
+                            // target and the thought looked frozen until the turn ended. The final
+                            // markdown render happens at end-of-stream instead, where nothing can
+                            // arrive after it.
+                            if (!thoughtFinished) {
+                                thoughtFinished = true;
+                                const pulseDot = thinkingAccordion.querySelector('.thinking-pulse-dot');
+                                const statusLabel = thinkingAccordion.querySelector('.thinking-status-label');
+                                if (pulseDot) pulseDot.classList.add('hidden');
+                                if (statusLabel) statusLabel.textContent = 'Complete';
 
-                            thinkingTypewriter.onFinish = () => {
-                                const displayed = thinkingTypewriter.displayedText;
-                                if (displayed) {
-                                    const html = marked.parse(displayed);
-                                    thinkingContent.innerHTML = html;
-                                    thinkingContent.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-                                }
                                 const summaryLabel = thinkingAccordion.querySelector('.thinking-summary span:first-of-type');
                                 if (summaryLabel) {
                                     summaryLabel.className = 'flex items-center gap-2 text-slate-400';
                                     summaryLabel.innerHTML = '<uk-icon icon="check" class="w-3.5 h-3.5 text-emerald-500"></uk-icon> Thought Process Complete';
                                 }
-                            };
+                            }
                         }
 
                         if (event === 'briefing_cards') {

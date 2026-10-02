@@ -65,11 +65,31 @@ class AISettingsController extends BaseController
     {
         $currentEnv = $this->envEditor->read();
         $newEnv = [];
+        $rejected = [];
 
         foreach (array_keys($currentEnv) as $key) {
-            if (isset($_POST[$key]) && !in_array($key, ['LLM_MODEL_ID', 'LLM_MODEL_NAME', 'LLM_CTX_SIZE'], true)) {
-                $newEnv[$key] = $_POST[$key];
+            if (!isset($_POST[$key]) || in_array($key, ['LLM_MODEL_ID', 'LLM_MODEL_NAME', 'LLM_CTX_SIZE'], true)) {
+                continue;
             }
+            $submitted = (string) $_POST[$key];
+            $current   = (string) $currentEnv[$key];
+
+            // Keys the launcher resolves at boot hold JSON (LLM_SAMPLING, LLM_RUNTIME_POLICY).
+            // A single-line text field cannot round-trip that, and writing a mangled value is
+            // what silently degraded the Reasoning control to Off/On after saving settings:
+            // keep the stored policy and record the rejection instead of clobbering it.
+            if (json_decode($current, true) !== null && json_decode(trim($submitted), true) === null) {
+                $rejected[] = $key;
+                \App\Logger::logEvent(
+                    'settings_save_rejected',
+                    'Settings save kept the stored structured value',
+                    ['key' => $key, 'stored_len' => strlen($current), 'submitted_len' => strlen($submitted)],
+                    'warning',
+                    'AISettingsController::saveSettings'
+                );
+                continue;
+            }
+            $newEnv[$key] = $submitted;
         }
 
         $modelId = trim($_POST['model_id'] ?? '', '\"\' ');
@@ -100,9 +120,15 @@ class AISettingsController extends BaseController
 
         if ($modelChanged || $ctxChanged) {
             $this->respond($sessionId, $activeTab, $this->switchModel());
-        } else {
-            $this->respond($sessionId, $activeTab, ['status' => 'saved']);
+            return;
         }
+
+        $payload = ['status' => 'saved'];
+        if ($rejected !== []) {
+            $payload['kept_structured'] = $rejected;
+            $payload['message'] = 'Saved — left unchanged (resolved by the launcher at boot): ' . implode(', ', $rejected) . '.';
+        }
+        $this->respond($sessionId, $activeTab, $payload);
     }
 
     private function setReasoningEffort(): void
@@ -295,6 +321,33 @@ class AISettingsController extends BaseController
             $envUpdates['LLM_SAMPLING']       = (string)($status['sampling'] ?? '');
             $envUpdates['LLM_RUNTIME_POLICY'] = (string)($status['runtime_policy'] ?? '{}');
             $this->envEditor->write($envUpdates);
+
+            // The launcher resolves the per-model policy at boot and on every switch, but its own
+            // .env is a different file from this app's. Without syncing it here the composer renders
+            // the Reasoning control from a stale, map-less policy and shows the on/off toggle. Runs
+            // whenever the launcher reports values (not only on the "loaded" transition), so a cold
+            // start is covered too.
+            $statusPolicy    = (string)($status['runtime_policy'] ?? '');
+            $statusSampling  = (string)($status['sampling'] ?? '');
+            $currentPolicy   = (string) \App\Config::get('LLM_RUNTIME_POLICY', '');
+            $currentSampling = (string) \App\Config::get('LLM_SAMPLING', '');
+            $policySync      = [];
+            if ($statusPolicy !== '' && $statusPolicy !== $currentPolicy) {
+                $policySync['LLM_RUNTIME_POLICY'] = $statusPolicy;
+            }
+            if ($statusSampling !== '' && $statusSampling !== $currentSampling) {
+                $policySync['LLM_SAMPLING'] = $statusSampling;
+            }
+            if ($policySync !== []) {
+                $this->envEditor->write($policySync);
+                \App\Logger::logEvent(
+                    'runtime_policy_synced',
+                    'Persisted launcher-resolved sampling/policy into the app .env',
+                    ['keys' => array_keys($policySync), 'policy_len' => strlen($statusPolicy)],
+                    'info',
+                    'AISettingsController::handleSwitchStatus'
+                );
+            }
 
             // The health status is cached in Redis for 10s, and during the switch
             // the poll requests above kept caching an "offline" snapshot while
