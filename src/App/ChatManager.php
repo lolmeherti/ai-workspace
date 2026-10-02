@@ -331,9 +331,23 @@ class ChatManager
 
             \App\ProgressWriter::done($sessionId);
 
+            // Repeated-request reminder keeps the user's instruction as the final
+            // semantic instruction before answer generation. It is stored on this
+            // turn's evidence row instead of being appended to this array, so every
+            // later prompt re-emits it in the same position: a reminder that exists
+            // only in this turn's array makes the next prompt diverge exactly here
+            // and costs the engine the whole cached prefix behind it.
+            $reminderText = "RUNTIME REMINDER:\nAnswer the user's original request using the evidence above. If the evidence is not enough to answer fully, say what you found and what additional search would help, then ask the user whether they want you to run it — do not emit another tool call. Request: \"{$query}\"";
+            $reminderRowId = (int) ($freshRowIds[count($freshRowIds) - 1] ?? 0);
+            if ($reminderRowId > 0) {
+                $this->db->update('chat_history', ['turn_reminder' => $reminderText], ['id' => $reminderRowId]);
+            }
+
             $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
             // Immediate answer uses rich evidence for this turn's fresh rows;
             // atoms (durable compact context) replace rich evidence on later turns.
+            // The reminder is emitted by the assembler, right after the row it was
+            // stored on, so it keeps its place in every later prompt too.
             $currentMessages = $this->promptAssemblyService->buildMessagesArray($systemPrompt, $history, $freshRowIds, $currentTime);
 
             // Inject transient session-evidence retrieval for this turn only.
@@ -344,13 +358,15 @@ class ChatManager
                 }
             }
 
-            // Repeated-request reminder keeps the user's instruction as the
-            // final semantic instruction before answer generation, after the
-            // evidence tail.
-            $currentMessages[] = [
-                'role' => 'user',
-                'content' => "RUNTIME REMINDER:\nAnswer the user's original request using the evidence above. If the evidence is not enough to answer fully, say what you found and what additional search would help, then ask the user whether they want you to run it — do not emit another tool call. Request: \"{$query}\"",
-            ];
+            // A turn whose evidence was transient only (search_session_evidence)
+            // has no durable row to store the reminder on, so it stays inline for
+            // this call — the previous behaviour for that edge, nothing worse.
+            if ($reminderRowId === 0) {
+                $currentMessages[] = [
+                    'role' => 'user',
+                    'content' => $reminderText,
+                ];
+            }
         }
 
         if (!empty($sourceMap)) {
@@ -536,14 +552,9 @@ class ChatManager
 
     private function ensureSessionExists(int $sessionId): void
     {
-        $exists = $this->db->query("SELECT id FROM chat_sessions WHERE id = ?", [$sessionId]);
-        if (!$exists) {
-            $this->db->insert('chat_sessions', [
-                'id' => $sessionId,
-                'title' => 'New Conversation',
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-        }
+        // One place owns session creation (App\Repositories\ChatSessionRepository): the briefing
+        // stream writes chat_history by hand and needs the same guarantee.
+        (new \App\Repositories\ChatSessionRepository($this->db))->ensureExists($sessionId);
     }
 
     private function buildToolSchemas(bool $isEditorMode = false): array
@@ -700,6 +711,22 @@ class ChatManager
     }
 
     /**
+     * Emit `thought_complete` at most once per pass. The streaming callbacks reach it from
+     * several branches (native reasoning ending, a close tag, the end of the buffer), and a
+     * second emission re-runs the client's finish handler — which re-renders the container the
+     * typewriter writes into and detaches it, so later reasoning lands nowhere and the thought
+     * only appears when the turn ends.
+     */
+    private function emitThoughtCompleteOnce(callable $emit, bool &$sent): void
+    {
+        if ($sent) {
+            return;
+        }
+        $emit('thought_complete', []);
+        $sent = true;
+    }
+
+    /**
      * Integrated first pass: one tool-capable streaming inference. Streams
      * reasoning live (via the reasoning SSE) so the thought window runs on
      * BOTH normal and tool turns — the tool-planning thought is shown and the
@@ -708,6 +735,7 @@ class ChatManager
      *
      * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
      */
+
     private function firstPass(array $messages, callable $emit, bool $isEditorMode = false, ?string $mode = null, ?string $effort = null): array
     {
         $utf8Buffer = '';
@@ -734,10 +762,7 @@ class ChatManager
                     return;
                 }
 
-                if (!$thoughtCompleteSent) {
-                    $emit('thought_complete', []);
-                    $thoughtCompleteSent = true;
-                }
+                $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
                 $contentEmitted = true;
                 $contentChars += mb_strlen($utf8Buffer);
                 $emit('token', ['chunk' => $utf8Buffer]);
@@ -751,10 +776,7 @@ class ChatManager
         );
 
         if ($utf8Buffer !== '') {
-            if (!$thoughtCompleteSent) {
-                $emit('thought_complete', []);
-                $thoughtCompleteSent = true;
-            }
+            $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
             $contentEmitted = true;
             $emit('token', ['chunk' => mb_convert_encoding($utf8Buffer, 'UTF-8', 'UTF-8')]);
             $utf8Buffer = '';
@@ -788,8 +810,12 @@ class ChatManager
         // thinking trace can't burn the whole completion into empty content.
         // Clamped by actual context headroom (prompt size vs LLM_CTX_SIZE).
         $answerMaxTokens = $this->resolveAnswerMaxTokens($messages);
+        // One `thought_complete` per streamed pass. This method is its own scope, so it needs
+        // its own guard: the first pass has one, and sharing the other's would leave this one
+        // unset (the guard is typed, so that is a hard failure, not a silent skip).
+        $thoughtCompleteSent = false;
 
-        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThought, &$thoughtBuffer, &$preThoughtBuffer, &$isStartOfResponse, &$nativeReasoningSeen, &$firstReasoningTs) {
+        $this->agent->chat($messages, true, function($chunk, $type = 'content') use ($emit, &$aiResponse, &$utf8_buffer, &$inJsonTool, &$jsonBraceDepth, &$inThought, &$thoughtBuffer, &$preThoughtBuffer, &$isStartOfResponse, &$nativeReasoningSeen, &$firstReasoningTs, &$thoughtCompleteSent) {
             if ($type === 'reasoning') {
                 $nativeReasoningSeen = true;
                 if ($firstReasoningTs === null) {
@@ -801,7 +827,7 @@ class ChatManager
 
             if ($nativeReasoningSeen) {
                 $nativeReasoningSeen = false;
-                $emit('thought_complete', []);
+                $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
             }
 
             $aiResponse .= $chunk;
@@ -818,7 +844,7 @@ class ChatManager
                     if (!empty($extracted['thought'])) {
                         $emit('reasoning', ['chunk' => $extracted['thought']]);
                     }
-                    $emit('thought_complete', []);
+                    $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
                     $thoughtBuffer = '';
 
                     if (!empty($extracted['content'])) {
@@ -855,7 +881,7 @@ class ChatManager
                     if (!empty($extracted['thought'])) {
                         $emit('reasoning', ['chunk' => $extracted['thought']]);
                     }
-                    $emit('thought_complete', []);
+                    $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
                     $thoughtBuffer = '';
 
                     if (!empty($extracted['content'])) {
@@ -968,7 +994,7 @@ class ChatManager
             if (!empty($extracted['thought'])) {
                 $emit('reasoning', ['chunk' => $extracted['thought']]);
             }
-            $emit('thought_complete', []);
+            $this->emitThoughtCompleteOnce($emit, $thoughtCompleteSent);
             if (!empty($extracted['content'])) {
                 $emit('token', ['chunk' => $extracted['content']]);
             }

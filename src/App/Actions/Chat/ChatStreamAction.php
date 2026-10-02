@@ -4,6 +4,7 @@ namespace App\Actions\Chat;
 
 use App\Actions\BaseAction;
 use App\ChatManager;
+use App\Services\EndpointException;
 use App\Services\ModelBusyException;
 
 class ChatStreamAction extends BaseAction
@@ -48,6 +49,17 @@ class ChatStreamAction extends BaseAction
                 @ob_flush();
                 @flush();
             });
+        } catch (EndpointException $e) {
+            // The endpoint answered, but not with a completion. Say why instead of
+            // ending the turn with an empty bubble.
+            $payload = json_encode(['event' => 'error', 'data' => [
+                'code' => 'endpoint_error',
+                'status' => $e->status(),
+                'message' => $e->getMessage(),
+            ]]);
+            echo "data: {$payload}\n\n";
+            @ob_flush();
+            @flush();
         } catch (ModelBusyException $e) {
             $payload = json_encode(['event' => 'error', 'data' => ['code' => 'model_busy', 'message' => $e->getMessage()]]);
             echo "data: {$payload}\n\n";

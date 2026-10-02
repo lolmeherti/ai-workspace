@@ -1,0 +1,6 @@
+{
+  "name": "localsy-extraction-compare",
+  "private": true,
+  "description": "Standalone capture server for the extraction comparison. CommonJS on purpose: the repo root package.json declares type=module for the frontend build.",
+  "type": "commonjs"
+}

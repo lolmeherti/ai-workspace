@@ -15,6 +15,10 @@
     --danger: #ff9bac;
     --success: #8be0be;
     --warning: #f0c78b;
+    /* Sidebar selection, so nav rows and session rows can't drift apart. */
+    --selected-bg: #173147;
+    --selected-line: #3b6c81;
+    --selected-text: #e5f9ff;
     --radius: 10px;
     --sidebar-width: 272px;
     --bg-deep: var(--canvas);
@@ -118,7 +122,7 @@ progress { accent-color: var(--accent); }
 @keyframes ui-spin { to { transform: rotate(360deg); } }
 .glass-panel { background: var(--surface); border-color: var(--line-soft); }
 .glass-modal, .uk-modal-dialog { background: var(--surface); border: 1px solid var(--line); backdrop-filter: none; box-shadow: 0 24px 80px #0008; }
-.close-btn-futuristic { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; color: var(--muted); font-size: 1.5rem; }
+.close-btn-futuristic { position: absolute; top: 20px; right: 20px; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; color: var(--muted); font-size: 1.5rem; }
 .status-glow-online, .status-glow-offline { text-shadow: none; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -135,12 +139,39 @@ progress { accent-color: var(--accent); }
 .new-chat-link { margin: 0 14px 12px; }
 .workspace-nav { display: grid; gap: 3px; padding: 0 10px 12px; border-bottom: 1px solid var(--line-soft); }
 .workspace-nav-button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 12px; color: var(--muted); border: 1px solid transparent; background: transparent; text-align: left; min-height: 38px; }
-.workspace-nav-button[aria-current="page"] { background: #173147; color: #b7f2fa; border-color: #3b6c81; }
+.workspace-nav-button[aria-current="page"] { background: var(--selected-bg); color: var(--selected-text); border-color: var(--selected-line); }
 .workspace-nav-button[aria-current="page"]::after { content: ""; margin-left: auto; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .sidebar-content { flex: 1; min-height: 0; overflow: hidden; }
 .sidebar-footer { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--line-soft); display: grid; gap: 8px; max-height: 40dvh; overflow: auto; }
 .sidebar-settings, .system-health summary { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-size: 0.875rem; min-height: 40px; cursor: pointer; }
-.sidebar-settings:hover, .system-health summary:hover { color: var(--text); background: var(--elevated); border-color: var(--line); }
+/* One interaction language for every sidebar row: hover tints the surface and never
+   moves or borders anything, selection uses the accent tokens, focus is an outline.
+   (Session rows used Tailwind slate utilities, so neighbours answered the mouse in two
+   different colour families — nav buttons had no hover at all.) */
+.workspace-nav-button:hover, .chat-session-item:hover,
+.sidebar-settings:hover, .system-health summary:hover { background: var(--elevated); color: var(--text); }
+.workspace-nav-button, .sidebar-settings, .system-health summary, .chat-session-item { transition: background-color .15s ease, color .15s ease; }
+/* Hovering a selected row keeps its selection colour, just lifted: the selection is
+   identity, so the hover tint must not replace it. */
+.workspace-nav-button[aria-current="page"]:hover, .chat-session-item.is-current:hover { background: color-mix(in srgb, var(--selected-bg) 88%, #fff); }
+
+/* Segment control (All / Starred) and the header action (Manage) speak the same
+   language as the rows above. Their old values were Tailwind slate/cyan, and the
+   inactive pill's hover was 20% alpha on this background — invisible. */
+.chat-filter-btn { padding: 6px 12px; border: 1px solid var(--line-soft); border-radius: 8px; background: transparent; color: var(--muted); font-weight: 500; transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+.chat-filter-btn:hover { background: var(--elevated); color: var(--text); }
+.chat-filter-btn.is-active { background: var(--selected-bg); border-color: var(--selected-line); color: var(--selected-text); font-weight: 600; }
+.chat-filter-btn.is-active:hover { background: color-mix(in srgb, var(--selected-bg) 88%, #fff); }
+.chat-filter-star { color: var(--warning); flex: none; }
+.sidebar-inline-action { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.sidebar-inline-action:hover { background: var(--elevated); color: var(--text); }
+/* Its toggled state (Manage -> Cancel) is a colour modifier, not a second style: same box,
+   different intent. */
+.sidebar-inline-action.is-danger { color: var(--danger); }
+.sidebar-inline-action.is-danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 78%, #fff); }
+/* A uk-icon wrapper is 20px by its utility classes while the glyph inside is 16px, so the
+   icon sat in the wrapper's top-left corner — invisible until a hover paints the box. */
+.ui-icon-button uk-icon, .sidebar-toggle uk-icon { display: flex; align-items: center; justify-content: center; }
 .sidebar-settings:focus-visible, .system-health summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .system-health summary::marker { color: var(--accent); }
 .system-health dl { margin: 8px 10px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--field); font-size: 0.875rem; color: var(--text); }
@@ -178,12 +209,29 @@ progress { accent-color: var(--accent); }
 .sidebar-collapsed .sidebar-settings { justify-content: center; }
 
 /* Conversation targets include the row padding. The star owns its own space. */
-.chat-session-item { padding: 0 !important; border-left: 2px solid transparent !important; box-shadow: none !important; min-height: 48px; }
+.chat-session-item { padding: 0 !important; border-left: 2px solid transparent !important; box-shadow: none !important; min-height: 48px; color: var(--muted); }
 .chat-session-item .session-link { align-self: stretch; padding: 12px 10px; min-width: 0; min-height: 46px; border-radius: 8px; }
 .chat-session-item .session-title { font-size: 0.875rem; }
 .chat-session-item .btn-star-session { position: static !important; opacity: 1 !important; width: 36px; height: 36px; margin: 0 5px 0 0; padding: 8px; flex-shrink: 0; }
-.chat-session-item.is-current { border-color: #3b6c81 !important; background: #173147; color: #e5f9ff; }
-.chat-session-item.is-pending { background: #182d41; }
+/* The wrapper is often sized larger than the glyph inside it (utilities give it 20px, the
+   icon renders at 16px), which left every icon sitting in its wrapper's corner — centring
+   the glyph fixes the cogwheel next to a heading just as much as a star in a row. */
+uk-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+
+/* Star toggle: its own chip so it reads as clickable on every row (not only the current
+   one), a centred glyph, and a brighten that keeps the starred/unstarred identity. */
+.chat-session-item .btn-star-session { position: static !important; opacity: 1 !important; width: 36px; height: 36px; margin: 0 5px 0 0; padding: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.chat-session-item .btn-star-session:hover { background: var(--field); }
+.chat-session-item .btn-star-session:hover .star-icon.star-glow-inactive { color: var(--text); }
+.chat-session-item .btn-star-session:hover .star-icon.star-glow-active { color: color-mix(in srgb, var(--warning) 78%, #fff); }
+/* Briefly disabled while the request is in flight — that must not turn into a forbidden
+   cursor over the star. */
+.chat-session-item .btn-star-session:disabled { cursor: pointer; }
+.star-icon { width: 15px; height: 15px; transition: fill .2s ease, color .2s ease; }
+@keyframes star-pop { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 70% { transform: scale(.9); } 100% { transform: scale(1); } }
+.star-pop { animation: star-pop .38s cubic-bezier(.34, 1.56, .64, 1); }
+.chat-session-item.is-current { border-color: var(--selected-line) !important; background: var(--selected-bg); color: var(--selected-text); }
+.chat-session-item.is-pending { background: var(--elevated); }
 .chat-session-item.is-pending .session-link::after { content: "…"; margin-left: auto; color: var(--accent); }
 .chat-session-item.is-working .session-title::before { content: "● "; color: var(--warning); font-size: 0.625rem; }
 .chat-session-item:focus-within { background: var(--elevated); }
@@ -306,7 +354,12 @@ progress { accent-color: var(--accent); }
 .chat-attach-button uk-icon { width: 18px; height: 18px; }
 #q { min-height: 44px; max-height: min(28dvh, 240px); padding: 10px; font-size: 0.9375rem; background: transparent; border: 0; border-radius: 6px; }
 #q:focus-visible { outline: none !important; }
-#send-btn { width: 44px; height: 44px; min-width: 44px; padding: 12px; border: 1px solid var(--accent); border-radius: 11px; background: var(--accent); color: var(--accent-ink); box-shadow: none; transform: none; position: relative; }
+#send-btn { width: 44px; height: 44px; min-width: 44px; padding: 9px; border: 1px solid var(--accent); border-radius: 11px; background: var(--accent); color: var(--accent-ink); box-shadow: none; transform: none; position: relative; }
+/* The glyphs were 18px/14px in a 44px button (41% / 32%) — correct, but timid. The padding
+   sets the content box; the icons fill it now. The stop square is filled, so it stays a
+   little smaller than the stroked send arrow to read as the same weight. */
+#send-btn .send-icon { width: 24px; height: 24px; }
+#send-btn .stop-icon { width: 20px; height: 20px; }
 #send-btn:hover { background: #a5edfa; }
 #send-btn.stop { background: #163a47; color: #b7f2fa; border-color: #6ab6c9; }
 #send-btn[data-ai-blocked="true"] { background: var(--elevated); border-color: var(--line); color: var(--muted); }
@@ -419,6 +472,14 @@ progress { accent-color: var(--accent); }
 .trace-scan-overlay, .trace-pulse-dot .animate-ping, .thinking-pulse-dot .animate-ping { display: none !important; }
 .trace-content, .typewriter-text { font-size: 0.8125rem; }
 .trace-active-task { padding: 10px !important; }
+
+/* The chat's markdown rule sets tables to display:block, which leaves the inner table
+   shrink-to-fit — the metrics table must fill its panel with the columns spread out.
+   utilities.css also draws a border on every cell; here the rows separate themselves. */
+.metrics-table { display: table !important; width: 100%; }
+.metrics-table th, .metrics-table td { border-left: 0 !important; border-right: 0 !important; }
+.metrics-table td { border-bottom: 0 !important; word-break: break-word; }
+.metrics-table th:first-child, .metrics-table td:first-child { white-space: nowrap; }
 .thinking-summary { gap: 12px; }
 .thinking-peek { max-height: 7em; }
 .file-accordion-content.expanded { max-height: min(65dvh, 680px); overflow-y: auto; }
@@ -429,6 +490,9 @@ progress { accent-color: var(--accent); }
 .markdown-content table { display: block; max-width: 100%; overflow-x: auto; font-size: 0.875rem; }
 .markdown-content td, .markdown-content th { min-width: 100px; border-color: var(--line); }
 .code-copy-btn { color: var(--muted); min-height: 32px; min-width: 32px; }
+/* Copy affordances: the pointer cursor is the only feedback — deliberately no hover
+   colour, border or background. Padding exists so the hit area isn't a hairline. */
+.copy-affordance { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 0.75rem; cursor: pointer; }
 
 /* All secondary workspaces use the same reading and form scale. */
 #gallery-workspace, #email-workspace, #job-workspace, #memory-workspace { background: var(--canvas); min-height: 0; }

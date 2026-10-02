@@ -61,7 +61,10 @@ final class WorkspaceStateAction
             return ['status' => 'success', 'state' => 'busy', 'message' => $occupancy['message']];
         }
         return ['status' => 'success', 'state' => $health['online'] ? 'ready' : 'offline',
-            'message' => $health['online'] ? 'AI ready' : 'The AI service is offline. Check the launcher.',
+            'message' => $health['online']
+                ? 'AI ready'
+                : (string) ($health['message'] ?? 'The AI service is offline. Check the launcher.'),
+            'detail' => $health['detail'] ?? null,
             'model' => $health['model'] ?? null];
     }
 

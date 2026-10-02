@@ -170,7 +170,7 @@ Viewer at `/logs` (not linked from UI): event type counts, expandable samples, r
 | MessageAssemblyTest | 50 | buildStateGuard, preprocessHistory, cleanMessagesArray |
 | ThoughtExtractionTest | 58 | strip(), extract(), tag detection methods |
 | MultiQueryTest | 27 | splitQueries edge cases, combineResults with Search/Memory prefixes |
-| SearchPipelineTest | ~52 | Phase A: scrape budget math. Phase B: scraper HTML cleaning + truncation. Phase C: cache evaluator routing (mock, sentinel, emit capture) |
+| SearchPipelineTest | ~52 | Phase A: scrape budget math. Phase B: HTML cleaning + truncation. Phase C: cache evaluator routing (mock, sentinel, emit capture) |
 
 ## Coding conventions
 - PHP uses PSR-4 autoloading (`App\` -> `src/App/`)

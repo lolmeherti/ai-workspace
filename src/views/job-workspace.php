@@ -113,10 +113,10 @@
                                 <div id="cv-file-name"></div>
                                 <div id="cv-file-size"></div>
                             </div>
-                            <button type="button" id="cv-file-remove" class="job-chip-remove" title="Remove file"><uk-icon icon="close"></uk-icon></button>
+                            <button type="button" id="cv-file-remove" class="job-chip-remove" title="Remove file"><uk-icon icon="x"></uk-icon></button>
                         </div>
 
-                        <div id="cv-upload-error" class="job-form-error hidden"><uk-icon icon="warning"></uk-icon><span id="cv-upload-error-text"></span></div>
+                        <div id="cv-upload-error" class="job-form-error hidden"><uk-icon icon="alert-triangle"></uk-icon><span id="cv-upload-error-text"></span></div>
                     </form>
 
                     <div id="cv-list-container" class="job-cards-list"></div>

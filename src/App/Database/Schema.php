@@ -57,7 +57,7 @@ class Schema
                 time_note VARCHAR(16) NULL,
                 turn_reminder TEXT NULL,
                 token_estimate INT DEFAULT 0,
-                search_query VARCHAR(255) NULL,
+                search_query TEXT NULL,
                 cache_used TINYINT(1) DEFAULT 0,
                 scraped_urls TEXT NULL,
                 source_map JSON NULL,
@@ -261,6 +261,18 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'rating'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN rating TINYINT NULL AFTER model");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // `search_query` stores the query a tool call actually ran with — model-generated and
+        // possibly a combined multi-query list. At VARCHAR(255) a long one threw SQLSTATE 22001
+        // on insert, which killed the stream mid-turn ("Connection ended before completion").
+        try {
+            $column = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'search_query'");
+            $type = (string) ($column[0]['Type'] ?? '');
+            if (!empty($column) && stripos($type, 'text') === false) {
+                $this->db->executeStatement("ALTER TABLE chat_history MODIFY COLUMN search_query TEXT NULL");
             }
         } catch (PDOException $e) {
         }

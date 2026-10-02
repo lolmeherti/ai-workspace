@@ -14,14 +14,36 @@ echo [+] Booting up localsy launcher in background...
 start "" "localsy.exe" -debug
 
 echo [+] Waiting for local AI engine to start...
-:wait_port
-netstat -ano | findstr ":1234" | findstr "LISTENING" >nul 2>&1
-if errorlevel 1 (
-    timeout /t 2 /nobreak >nul
-    goto wait_port
-)
+REM The engine port is not fixed: llama.cpp serves 1234, an external engine (Strata)
+REM serves its own port. The launcher publishes the endpoint it started in LLM_API_URL,
+REM so wait on whatever port that names instead of assuming one. Bounded, and loud on
+REM timeout, so a wrong port can never look like "still warming up" forever.
+set /a WAIT_TRIES=0
+:refresh_port
+set AI_PORT=
+for /f "tokens=1,* delims==" %%A in ('findstr /b "LLM_API_URL=" "%LOCALAPPDATA%\localsy\.env" 2^>nul') do for /f "tokens=3 delims=:/" %%P in ("%%B") do set AI_PORT=%%P
+if not "%AI_PORT%"=="" goto check_port
+set /a WAIT_TRIES+=1
+if %WAIT_TRIES% GEQ 30 goto engine_timeout
+timeout /t 2 /nobreak >nul
+goto refresh_port
 
-echo [+] AI engine detected on port 1234. Settling background processes...
+:check_port
+netstat -ano | findstr ":%AI_PORT%" | findstr "LISTENING" >nul 2>&1
+if not errorlevel 1 goto engine_ready
+set /a WAIT_TRIES+=1
+if %WAIT_TRIES% GEQ 60 goto engine_timeout
+timeout /t 2 /nobreak >nul
+goto check_port
+
+:engine_timeout
+echo.
+echo [!] No AI engine listening on port %AI_PORT% after ~2 minutes.
+echo [!] Continuing anyway - the app will report the AI as offline until the engine is up.
+echo.
+
+:engine_ready
+echo [+] AI engine detected on port %AI_PORT%. Settling background processes...
 timeout /t 5 /nobreak >nul
 
 echo [+] Syncing network environment parameters...

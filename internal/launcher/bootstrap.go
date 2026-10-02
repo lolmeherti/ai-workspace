@@ -135,6 +135,12 @@ func Bootstrap() {
 		}
 	}()
 
+	// Publish the boot-resolved sampling + reasoning policy to /api/switch-status. The web
+	// layer reads them to resolve the Reasoning control's graduated levels on a cold start;
+	// a switch publishes its own values and clears these. Set before the server starts.
+	BootSampling = resolved.SamplingJSON()
+	BootRuntimePolicy = resolved.Runtime.RuntimePolicyJSON()
+
 	StartHTTPServer(defs, hw, binDir, modelDir, relay)
 
 	util.LogPrint("[+] Aligning systemic workspace file rights inside WSL...\n")
@@ -154,12 +160,21 @@ func Bootstrap() {
 	if useLocal {
 		if engine != nil {
 			cmd := startStrata(engine, workDir)
-			if cmd == nil {
-				util.LogPrint("[-] %s engine could not be started — the app will report the AI as offline\n", engine.Type)
-			} else {
+			switch {
+			case cmd == nil:
+				reportEngineFailure(recordEngineStartError(
+					fmt.Sprintf("The %s AI engine could not be started.", engine.Type),
+					"the launcher could not spawn the engine process — see the launcher log for the reason",
+				))
+			default:
 				StrataProcess = cmd
 				if !waitStrataReady(engine.Port, uint32(cmd.Process.Pid)) {
-					util.LogPrint("[-] %s engine did not report the model loaded — the app will report the AI as offline\n", engine.Type)
+					reportEngineFailure(recordEngineStartError(
+						fmt.Sprintf("The %s AI engine started but never reported the model loaded.", engine.Type),
+						fmt.Sprintf("no ready answer on port %d within the boot wait — check the engine log", engine.Port),
+					))
+				} else {
+					clearEngineStartError()
 				}
 			}
 		} else {
@@ -175,6 +190,23 @@ func Bootstrap() {
 	if !DebugMode {
 		OpenBrowser("http://localhost:8080")
 	}
+}
+
+// reportEngineFailure makes a boot-time engine failure visible. The log line stays
+// (for the diagnostics bundle), the tray tooltip says what happened, and a message
+// box tells the user once — spawned on its own goroutine so the boot sequence still
+// finishes and the browser still opens. Deliberately NOT systray.Quit(): the UI
+// stays usable (files, jobs, settings) and the user can retry a switch.
+func reportEngineFailure(f *EngineStartError) {
+	if f == nil {
+		return
+	}
+	util.LogPrint("[-] %s %s\n", f.Message, f.Detail)
+	systray.SetTooltip("Localsy: " + f.Message)
+	go ShowErrorMessageBox(
+		"Localsy - AI engine not running",
+		f.Message+"\n\n"+f.Detail+"\n\nThe app is still usable and you can retry from Settings -> AI.",
+	)
 }
 
 // llmAPIURL is the endpoint the web layer must talk to for a given runtime: the

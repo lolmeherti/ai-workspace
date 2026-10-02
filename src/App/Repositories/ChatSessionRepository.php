@@ -27,6 +27,24 @@ class ChatSessionRepository
         return $rows[0] ?? null;
     }
 
+    /**
+     * Make sure a session row exists for this id. Callers that write `chat_history` by hand
+     * (the briefing stream does) cannot assume it: a missing parent turns the insert into a
+     * foreign-key violation (1452 on fk_chat_history_session_id), which kills the stream
+     * mid-turn and leaves the client reporting "connection ended before completion".
+     */
+    public function ensureExists(int $id): void
+    {
+        if ($this->getById($id) !== null) {
+            return;
+        }
+        $this->db->insert('chat_sessions', [
+            'id' => $id,
+            'title' => 'New Conversation',
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
     public function delete(int $id): void
     {
         $this->db->query("DELETE FROM chat_sessions WHERE id = :id", [':id' => $id]);

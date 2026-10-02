@@ -13,29 +13,16 @@ export function setChatFilter(filter) {
     const btnStarred = document.getElementById('btn-filter-starred');
     const items = document.querySelectorAll('.chat-session-item');
 
-    const activeFilterClass = "bg-[#0b1324] border-cyan-500/30 text-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.15)] font-semibold";
-    const inactiveFilterClass = "bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20";
+    // The look of the segment lives in styles.css (.chat-filter-btn / .is-active), so the
+    // active state is one class toggle here — the old version rebuilt a Tailwind class
+    // list in JS, whose inactive hover (slate-800/20) was invisible on this background.
+    if (btnAll) btnAll.classList.toggle('is-active', filter !== 'starred');
+    if (btnStarred) btnStarred.classList.toggle('is-active', filter === 'starred');
 
-    if (filter === 'all') {
-        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center cursor-pointer ${activeFilterClass}`;
-        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${inactiveFilterClass}`;
-
-        items.forEach(item => {
-            item.classList.remove('hidden');
-        });
-    } else if (filter === 'starred') {
-        if (btnAll) btnAll.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center cursor-pointer ${inactiveFilterClass}`;
-        if (btnStarred) btnStarred.className = `flex-1 py-1.5 px-3 rounded-md border text-xs transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer ${activeFilterClass}`;
-
-        items.forEach(item => {
-            const isStarred = item.getAttribute('data-starred') === '1';
-            if (isStarred) {
-                item.classList.remove('hidden');
-            } else {
-                item.classList.add('hidden');
-            }
-        });
-    }
+    items.forEach(item => {
+        const show = filter === 'starred' ? item.getAttribute('data-starred') === '1' : true;
+        item.classList.toggle('hidden', !show);
+    });
 }
 
 export function initChatFilter() {

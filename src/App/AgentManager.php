@@ -184,7 +184,12 @@ class AgentManager
             $contentChars = 0;
             $clientAborted = false;
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, $stream) {
+            // Raw bytes exactly as the endpoint sent them, used only to report an
+            // error body: the assembled chat text lives in $fullResponse.
+            $rawBody = '';
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, $stream) {
+                $rawBody .= $data;
                 // Abort the transfer the instant the client disconnects so the
                 // enclosing finally() releases the inference lock instead of
                 // holding it until the model finishes generating.
@@ -264,6 +269,10 @@ class AgentManager
                 \App\Logger::critical("cURL Error connecting to LLM at {$endpoint}", ['error' => $error]);
                 throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
             }
+
+            // A status or body that is not a completion is a failure, not an empty
+            // answer (see assertEndpointOk).
+            $this->assertEndpointOk($ch, $endpoint, $purpose ?? null, $rawBody);
 
             curl_close($ch);
 
@@ -383,6 +392,51 @@ class AgentManager
     }
 
     /**
+     * A failure must never be expressible as a success value. An endpoint that
+     * answered with an HTTP error, or with a body that is an error payload rather
+     * than a completion, is not an empty answer: it is logged with its status and
+     * a body excerpt, and thrown as EndpointException so the caller can surface the
+     * reason instead of showing a blank bubble. Reads the status while the curl
+     * handle is still open, so call it before curl_close().
+     */
+    private function assertEndpointOk($ch, string $endpoint, ?string $purpose, string $body): void
+    {
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $decoded = json_decode(trim($body), true);
+        $errorPayload = is_array($decoded) && isset($decoded['error']);
+        $okStatus = $status >= 200 && $status < 300;
+
+        if ($okStatus && !$errorPayload) {
+            return;
+        }
+
+        \App\Logger::logEvent(
+            $errorPayload && $okStatus ? 'llm_error_payload' : 'llm_http_error',
+            "LLM endpoint returned HTTP {$status}" . ($errorPayload ? ' with an error body' : ''),
+            [
+                'status' => $status,
+                'endpoint' => $endpoint,
+                'purpose' => $purpose,
+                'error_payload' => $errorPayload,
+                'body_excerpt' => substr(trim($body), 0, 500),
+            ],
+            'error',
+            'AgentManager'
+        );
+
+        // Auxiliary passes (condenser, atomizer, memory, decider, …) already handle
+        // empty output gracefully and must not fail the user's turn because a
+        // side-call was rejected: they get the event above and continue. Only the
+        // user-facing passes fail loudly.
+        $userFacing = $purpose === null || $purpose === '' || in_array($purpose, ['firstpass', 'answer'], true);
+        if (!$userFacing) {
+            return;
+        }
+
+        throw new \App\Services\EndpointException($status, $body, (string) ($purpose ?? ''));
+    }
+
+    /**
      * Generic dotted-path setter: writes $value to $arr at the (possibly
      * nested) $path. "reasoning_effort" sets a top-level key;
      * "chat_template_kwargs.enable_thinking" builds/extends a nested array.
@@ -485,7 +539,12 @@ class AgentManager
 
             $startTime = microtime(true);
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted) {
+            // Raw bytes exactly as the endpoint sent them, used only to report an
+            // error body: the assembled chat text lives in $fullResponse.
+            $rawBody = '';
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted) {
+                $rawBody .= $data;
                 // Abort the transfer the instant the client disconnects so the
                 // enclosing finally() releases the inference lock.
                 if (connection_aborted()) {
@@ -599,6 +658,10 @@ class AgentManager
                 throw new Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
             }
 
+            // A status or body that is not a completion is a failure, not an empty
+            // answer (see assertEndpointOk).
+            $this->assertEndpointOk($ch, $endpoint, $purpose, $rawBody);
+
             curl_close($ch);
         } finally {
             if ($owns) {
@@ -699,6 +762,11 @@ class AgentManager
 
                 throw new \Exception("cURL Error connecting to LLM at {$endpoint}: " . $error);
             }
+
+            // A status or body that is not a completion is a failure, not an empty
+            // answer (see assertEndpointOk). This path is non-streaming, so the body
+            // is the curl result itself.
+            $this->assertEndpointOk($ch, $endpoint, $purpose, (string) $result);
 
             curl_close($ch);
 

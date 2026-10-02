@@ -19,20 +19,16 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
     <!-- Tab Sub-Header -->
     <div class="flex justify-between items-center px-4 py-3 border-b border-slate-800/40 bg-[#0b101f]">
         <span class="text-xs font-bold text-slate-500 normal-case tracking-normal select-none">Conversations</span>
-        <button id="btn-manage-chats" onclick="toggleChatEditMode()" class="text-xs text-slate-400 hover:text-cyan-400 font-medium transition-colors cursor-pointer flex items-center gap-1 min-h-0 px-2 py-1">
+        <button id="btn-manage-chats" onclick="toggleChatEditMode()" class="sidebar-inline-action">
             <uk-icon icon="file-edit" class="w-3.5 h-3.5"></uk-icon> Manage
         </button>
     </div>
 
     <!-- High-Tech Filter Segment Control -->
     <div class="px-4 py-2.5 border-b border-slate-800/40 bg-[#080d1a] flex gap-2">
-        <button onclick="setChatFilter('all')" id="btn-filter-all" 
-                class="flex-1 py-1.5 px-3 rounded-md border text-xs font-medium transition-all duration-200 text-center cursor-pointer">
-            All
-        </button>
-        <button onclick="setChatFilter('starred')" id="btn-filter-starred" 
-                class="flex-1 py-1.5 px-3 rounded-md border text-xs font-medium transition-all duration-200 text-center flex items-center justify-center gap-1.5 cursor-pointer">
-            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="text-amber-400/90 drop-shadow-[0_0_3px_rgba(245,158,11,0.5)]"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <button onclick="setChatFilter('all')" id="btn-filter-all" class="chat-filter-btn flex-1 text-xs text-center cursor-pointer">All</button>
+        <button onclick="setChatFilter('starred')" id="btn-filter-starred" class="chat-filter-btn flex-1 text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" class="chat-filter-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             Starred
         </button>
     </div>
@@ -41,7 +37,7 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
     <div id="chats-list-container" class="flex-1 overflow-y-auto p-2 space-y-1 pb-16">
         <?php if (empty($sessions)): ?>
             <div class="text-center text-slate-500 text-xs py-8">
-                <uk-icon icon="comments" class="w-8 h-8 text-slate-600/50 mb-2"></uk-icon>
+                <uk-icon icon="messages-square" class="w-8 h-8 text-slate-600/50 mb-2"></uk-icon>
                 <p>No conversations yet.</p>
             </div>
         <?php else: ?>
@@ -51,7 +47,7 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
             ?>
                 <div data-session-id="<?php echo $session['id']; ?>" 
                      data-starred="<?php echo $isStarred ? '1' : '0'; ?>"
-                     class="chat-session-item group relative flex items-center justify-between rounded-lg p-2 transition-all duration-200 cursor-pointer border <?php echo $isActive ? 'bg-slate-800/80 text-white border-slate-700/50 shadow-sm' : 'border-transparent text-slate-400 hover:bg-slate-800/30 hover:text-slate-200'; ?>">
+                     class="chat-session-item group relative flex items-center justify-between rounded-lg p-2 cursor-pointer<?php echo $isActive ? ' is-current' : ''; ?>">
                     
                     <a href="index.php?session_id=<?php echo $session['id']; ?>&tab=chats" class="session-link flex-1 flex items-center gap-2 truncate pr-8 select-none">
                         <!-- Custom Selection Indicator (Visible only in Manage Mode) -->
@@ -64,8 +60,7 @@ $chatsActive = ($activeTab ?? 'chats') === 'chats';
                     </a>
 
                     <!-- Star Button Toggle -->
-                    <button type="button" aria-label="Star conversation" aria-pressed="<?php echo $isStarred ? 'true' : 'false'; ?>" onclick="toggleStarSession(event, <?php echo $session['id']; ?>)"
-                            class="btn-star-session absolute right-2 <?php echo $isStarred ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'; ?> transition-all duration-300 py-1 px-1.5 rounded hover:bg-slate-800/40 z-10">
+                    <button type="button" aria-label="Star conversation" aria-pressed="<?php echo $isStarred ? 'true' : 'false'; ?>" onclick="toggleStarSession(event, <?php echo $session['id']; ?>)" class="btn-star-session">
                         <svg xmlns="http://www.w3.org/2000/svg" 
                              width="13" 
                              height="13" 

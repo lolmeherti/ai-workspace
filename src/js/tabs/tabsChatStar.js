@@ -8,6 +8,9 @@ export async function toggleStarSession(event, sessionId) {
         row.dataset.starred = starred ? '1' : '0';
         button.setAttribute('aria-pressed', String(starred)); button.setAttribute('aria-label', starred ? 'Unstar conversation' : 'Star conversation');
         const svg = button.querySelector('.star-icon'); svg?.setAttribute('fill', starred ? 'currentColor' : 'none'); svg?.classList.toggle('star-glow-active', starred); svg?.classList.toggle('star-glow-inactive', !starred);
+        // Pop the star so the click is acknowledged even before the request settles.
+        // (Restart the animation: removing the class alone won't replay a same-name one.)
+        if (svg) { svg.classList.remove('star-pop'); void svg.offsetWidth; svg.classList.add('star-pop'); }
         if (window.currentChatFilter === 'starred') row.classList.toggle('hidden', !starred);
     };
     try { const data = await requestJson(`index.php?toggle_star=${sessionId}&ajax=1`); paint(!!data.is_starred); }

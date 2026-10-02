@@ -30,7 +30,7 @@
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </span>
-                                <button class="text-slate-500 hover:text-cyan-400 p-0.5 rounded transition-colors duration-150 cursor-pointer flex items-center justify-center animate-fade-in"
+                                <button class="copy-affordance animate-fade-in"
                                         onclick="copyToClipboard(this)"
                                         title="Copy message">
                                     <uk-icon icon="copy" class="w-3.5 h-3.5"></uk-icon>
@@ -114,6 +114,20 @@
                                         }
                                     }
                                     if ($pmAc === null) { $pmAc = $pmCalls[count($pmCalls) - 1]; }
+                                    // Reasoning as the backend applied it for a call: mode/effort plus the
+                                    // field/value that went on the wire. Mirrors reasoningLabel() in
+                                    // streamResponse.js so a reloaded turn reads exactly like a live one.
+                                    $pmReasonOf = static function (array $perf, array $call): ?string {
+                                        $r = $perf['reasoning'] ?? null;
+                                        $hasCallInfo = isset($call['reasoning_mode']) || isset($call['reasoning_effort']) || isset($call['reasoning_field']);
+                                        if ($r === null && !$hasCallInfo) { return null; }
+                                        $mode = $call['reasoning_mode'] ?? ($r['mode'] ?? null);
+                                        $effort = $call['reasoning_effort'] ?? ($r['effort'] ?? null);
+                                        $label = $mode === 'instruct' ? 'off' : (($effort !== null && $effort !== '') ? $effort : 'default');
+                                        if (!isset($call['reasoning_field'])) { return $label . ' → template default'; }
+                                        $value = $call['reasoning_value'] ?? null;
+                                        return $label . ' → ' . (($value !== null && $value !== '') ? $value : 'template default');
+                                    };
                                     $pmParts = [count($pmCalls) . ' call' . (count($pmCalls) === 1 ? '' : 's')];
                                     if (isset($perf['total_ms'])) { $pmParts[] = number_format($perf['total_ms'] / 1000, 1) . 's'; }
                                     if (!empty($perf['ttft_ms'])) { $pmParts[] = 'TTFT ' . number_format($perf['ttft_ms'] / 1000, 1) . 's'; }
@@ -125,8 +139,15 @@
                                         if ($pmTps > 0) { $pmParts[] = (int)round($pmTps) . ' tok/s'; }
                                         if (($pmAc['prompt_tokens'] ?? 0) > 0) { $pmParts[] = (int)round(($pmAc['cache_n'] ?? 0) / $pmAc['prompt_tokens'] * 100) . '% cached'; }
                                     }
+                                    $pmReason = $pmAc ? $pmReasonOf($perf, $pmAc) : null;
+                                    if ($pmReason !== null) { $pmParts[] = 'reason ' . $pmReason; }
                                     $pmSummary = implode(' · ', $pmParts);
-                                    $pmChain = implode(' → ', array_map(fn($c) => $pmLabels[$c['purpose'] ?? ''] ?? ($c['purpose'] ?? '?'), $pmCalls));
+                                    $pmCallReasons = array_map(fn($c) => $pmReasonOf($perf, $c), $pmCalls);
+                                    $pmDistinct = array_values(array_unique(array_filter($pmCallReasons, fn($v) => $v !== null)));
+                                    // Only spend a column on reasoning when the calls disagree: the summary
+                                    // already states the turn's setting, so one value would just repeat.
+                                    $pmShowReason = count($pmDistinct) > 1
+                                        || (count($pmDistinct) === 1 && $pmDistinct[0] !== $pmReason);
                                     ?>
                                     <details class="metrics-section w-full mt-3 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-900/40">
                                         <summary class="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer select-none text-slate-300">
@@ -137,25 +158,25 @@
                                             <span class="text-xs font-mono text-slate-400 truncate"><?php echo htmlspecialchars($pmSummary); ?></span>
                                         </summary>
                                         <div class="px-3 pb-3 border-t border-slate-800/60">
-                                            <div class="text-xs text-slate-500 font-mono py-1.5"><?php echo htmlspecialchars($pmChain); ?></div>
-                                            <table class="w-full text-xs font-mono text-slate-400">
+                                            <table class="metrics-table w-full text-xs font-mono text-slate-400">
                                                 <thead><tr class="text-slate-500 text-left">
-                                                    <th class="py-1 pr-2 font-normal">call</th><th class="py-1 pr-2 font-normal">time</th><th class="py-1 pr-2 font-normal">prefill</th><th class="py-1 pr-2 font-normal">think</th><th class="py-1 font-normal">text</th>
+                                                    <th class="py-1 pr-2 font-normal">call</th><th class="py-1 pr-2 font-normal">time</th><th class="py-1 pr-2 font-normal">prefill</th><th class="py-1 pr-2 font-normal">think</th><th class="<?php echo $pmShowReason ? 'py-1 pr-2' : 'py-1'; ?> font-normal">text</th><?php if ($pmShowReason): ?><th class="py-1 font-normal">reason</th><?php endif; ?>
                                                 </tr></thead>
                                                 <tbody>
-                                                <?php foreach ($pmCalls as $pmC): ?>
+                                                <?php foreach ($pmCalls as $pmI => $pmC): ?>
                                                     <?php
                                                     $pmLabel = $pmLabels[$pmC['purpose'] ?? ''] ?? ($pmC['purpose'] ?? '?');
-                                                    $pmPrefill = ($pmC['prompt_ms'] ?? 0) > 0 ? (int)round($pmC['prompt_ms']) . 'ms · ' . ($pmC['prompt_n'] ?? 0) . ' tok' . (($pmC['cache_n'] ?? 0) > 0 ? ' · ' . $pmC['cache_n'] . ' cached' : '') : '—';
+                                                    $pmPrefill = ($pmC['prompt_ms'] ?? 0) > 0 ? (int)round($pmC['prompt_ms']) . 'ms · ' . ($pmC['prompt_n'] ?? 0) . ' new' . (($pmC['cache_n'] ?? 0) > 0 ? ' · ' . $pmC['cache_n'] . ' cached' : '') : '—';
                                                     $pmThink = ($pmC['reasoning_ms'] ?? 0) > 0 ? (int)round($pmC['reasoning_ms']) . 'ms · ' . ($pmC['reasoning_tok'] ?? 0) . ' tok' : '—';
                                                     $pmText = ($pmC['content_ms'] ?? 0) > 0 ? (int)round($pmC['content_ms']) . 'ms · ' . ($pmC['content_tok'] ?? 0) . ' tok' : '—';
                                                     ?>
                                                     <tr class="border-t border-slate-800/40">
-                                                        <td class="py-1 pr-2"><?php echo htmlspecialchars($pmLabel); ?></td>
-                                                        <td class="py-1 pr-2"><?php echo (int)round($pmC['elapsed_ms'] ?? 0); ?>ms</td>
+                                                        <td class="py-1 pr-2 whitespace-nowrap"><?php echo htmlspecialchars($pmLabel); ?></td>
+                                                        <td class="py-1 pr-2 whitespace-nowrap"><?php echo (int)round($pmC['elapsed_ms'] ?? 0); ?>ms</td>
                                                         <td class="py-1 pr-2"><?php echo htmlspecialchars($pmPrefill); ?></td>
                                                         <td class="py-1 pr-2"><?php echo htmlspecialchars($pmThink); ?></td>
-                                                        <td class="py-1"><?php echo htmlspecialchars($pmText); ?></td>
+                                                        <td class="<?php echo $pmShowReason ? 'py-1 pr-2' : 'py-1'; ?>"><?php echo htmlspecialchars($pmText); ?></td>
+                                                        <?php if ($pmShowReason): ?><td class="py-1"><?php echo htmlspecialchars($pmCallReasons[$pmI] ?? '—'); ?></td><?php endif; ?>
                                                     </tr>
                                                 <?php endforeach; ?>
                                                 </tbody>
@@ -169,7 +190,7 @@
 
                                 <?php if (strlen($msg['message']) > 300): ?>
                                     <div class="flex justify-end mt-4 pt-2 border-t border-slate-800/20 bottom-copy-container mt-auto">
-                                        <button type="button" class="text-xs text-slate-500 hover:text-cyan-400 flex items-center gap-1 transition-colors duration-150 cursor-pointer bg-transparent border-none p-0.5 animate-fade-in flex items-center gap-1"
+                                        <button type="button" class="copy-affordance animate-fade-in"
                                                 onclick="copyToClipboard(this)"
                                                 title="Copy message">
                                             <uk-icon icon="copy" class="w-3 h-3"></uk-icon>
