@@ -1,5 +1,7 @@
 package models
 
+import "fmt"
+
 type Artifact struct {
 	File string `json:"file"`
 	URL  string `json:"url"`
@@ -66,8 +68,45 @@ type RuntimeSpec struct {
 	Reasoning         ReasoningPolicy `json:"reasoning"`
 }
 
+// EngineSpec names an external inference engine that serves a model out of
+// process: the launcher starts that engine instead of llama-server and points
+// the web layer at its OpenAI-compatible endpoint. Distinct from ModelDefinition
+// .Runtime, which describes the template/reasoning integration, not the process.
+// Plain paths from the catalog (single-user, sandboxed host).
+type EngineSpec struct {
+	Type   string `json:"type"`   // engine ID, passed to the wrapper as --engine
+	Python string `json:"python"` // interpreter that runs the wrapper
+	Script string `json:"script"` // wrapper entry point (e.g. serve/server.py)
+	Config string `json:"config"` // per-model engine config JSON
+	Port   int    `json:"port"`   // port its OpenAI API listens on
+}
+
+func (e *EngineSpec) Validate() error {
+	switch {
+	case e.Type == "":
+		return fmt.Errorf("engine.type is empty")
+	case e.Python == "":
+		return fmt.Errorf("engine.python is empty")
+	case e.Script == "":
+		return fmt.Errorf("engine.script is empty")
+	case e.Config == "":
+		return fmt.Errorf("engine.config is empty")
+	case e.Port <= 0 || e.Port > 65535:
+		return fmt.Errorf("engine.port %d is not a valid port", e.Port)
+	}
+	return nil
+}
+
+// APIURL is the base URL the PHP layer (inside Docker) must use to reach this
+// engine: the Windows host as the containers see it, plus the engine's port.
+// The llama-server equivalent is always http://<host>:1234/v1.
+func (e *EngineSpec) APIURL(host string) string {
+	return fmt.Sprintf("http://%s:%d/v1", host, e.Port)
+}
+
 type ModelDefinition struct {
 	Name            string                       `json:"name"`
+	Engine          *EngineSpec                  `json:"engine,omitempty"`
 	Model           Artifact                     `json:"model"`
 	MMProj          *Artifact                    `json:"mmproj,omitempty"`
 	Speculative     *SpeculativeConfig           `json:"speculative,omitempty"`

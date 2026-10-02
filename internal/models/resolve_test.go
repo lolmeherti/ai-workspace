@@ -93,6 +93,33 @@ func testDefs(t *testing.T) map[string]ModelDefinition {
       "profiles": {
         "t1": {"ctx_size": 8000, "requirements": {"vram_min": 0}}
       }
+    },
+    "test-model-engine": {
+      "name": "Engine Model",
+      "runtime": "qwen38",
+      "engine": {
+        "type": "strata",
+        "python": "C:/engine/.venv/Scripts/python.exe",
+        "script": "C:/engine/serve/server.py",
+        "config": "C:/engine/engine-model.json",
+        "port": 8081
+      },
+      "sampling": {
+        "thinking": {"temperature": 1.0, "top_k": 20}
+      },
+      "model": {"file": "", "url": ""},
+      "mmproj": {"file": "mmproj.gguf", "url": "https://download.invalid/mmproj.gguf"},
+      "profiles": {
+        "t1": {"ctx_size": 262144, "requirements": {"vram_min": 30}}
+      }
+    },
+    "test-model-engine-broken": {
+      "name": "Engine Model Broken",
+      "engine": {"type": "strata", "port": 8081},
+      "model": {"file": "", "url": ""},
+      "profiles": {
+        "t1": {"ctx_size": 262144, "requirements": {"vram_min": 30}}
+      }
     }
   }
 }`)
@@ -472,5 +499,141 @@ func TestLoadConfigUsesEmbeddedOnly(t *testing.T) {
 	}
 	if _, ok := defs["embedded-only"]; !ok {
 		t.Error("embedded model must be loaded")
+	}
+}
+
+// ── external-engine entries ──
+
+func TestValidateModelEngineEntryNeedsNoArtifact(t *testing.T) {
+	defs := testDefs(t)
+	if err := ValidateModel("test-model-engine", defs, Hardware{VRAMGB: 32}); err != nil {
+		t.Errorf("engine entry with empty model.url must validate, got: %v", err)
+	}
+}
+
+func TestValidateModelEngineIncompleteSpec(t *testing.T) {
+	defs := testDefs(t)
+	err := ValidateModel("test-model-engine-broken", defs, Hardware{VRAMGB: 32})
+	if err == nil {
+		t.Fatal("expected error for an engine spec missing python/script/config")
+	}
+	if !strings.Contains(err.Error(), "engine.") {
+		t.Errorf("expected an engine-spec error, got: %v", err)
+	}
+}
+
+func TestResolveEngineModelUsesProfileContext(t *testing.T) {
+	defs := testDefs(t)
+
+	resolved, err := ResolveEngineModel("test-model-engine", defs, Hardware{VRAMGB: 32})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.CtxSize != 262144 {
+		t.Errorf("expected the profile's baked ctx 262144, got %d", resolved.CtxSize)
+	}
+	if resolved.ModelPath != "" {
+		t.Errorf("engine model must have no model path, got %q", resolved.ModelPath)
+	}
+	if resolved.SamplingJSON() == "" {
+		t.Error("expected sampling to carry through for the .env export")
+	}
+	if !strings.Contains(resolved.Runtime.RuntimePolicyJSON(), "reasoning_effort") {
+		t.Errorf("expected the qwen38 reasoning policy, got %s", resolved.Runtime.RuntimePolicyJSON())
+	}
+}
+
+// An engine entry declares the encoder only so the catalog can advertise the
+// capability (/api/models `vision`); Localsy never downloads or loads it — the
+// engine does. MMProjPath stays empty, which is what keeps the download path and
+// the header warm-up off these entries.
+func TestEngineEntryAdvertisesVisionWithoutOwningTheEncoder(t *testing.T) {
+	defs := testDefs(t)
+
+	if !defs["test-model-engine"].Capabilities.Vision {
+		t.Error("an engine entry declaring an mmproj must advertise vision")
+	}
+	if defs["test-model-engine-broken"].Capabilities.Vision {
+		t.Error("an engine entry without an mmproj must not advertise vision")
+	}
+
+	resolved, err := ResolveEngineModel("test-model-engine", defs, Hardware{VRAMGB: 32})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.MMProjPath != "" {
+		t.Errorf("Localsy must not claim the engine's encoder, got MMProjPath %q", resolved.MMProjPath)
+	}
+}
+
+func TestResolveEngineModelNoProfileMatch(t *testing.T) {
+	defs := testDefs(t)
+	if _, err := ResolveEngineModel("test-model-engine", defs, Hardware{VRAMGB: 8}); err == nil {
+		t.Fatal("expected error when no profile matches the hardware")
+	}
+}
+
+// The llama.cpp path must not silently swallow an engine entry: it has no
+// artifact to download, so ResolveModel has to fail rather than start nothing.
+func TestResolveModelRejectsEngineEntry(t *testing.T) {
+	defs := testDefs(t)
+	if _, err := ResolveModel("test-model-engine", defs, Hardware{VRAMGB: 32}, t.TempDir(), nil); err == nil {
+		t.Fatal("expected ResolveModel to fail for an engine entry")
+	}
+}
+
+func TestAutoSelectSkipsEngineEntry(t *testing.T) {
+	defs := testDefs(t)
+	// test-model-engine advertises the largest ctx (262144); picking it by
+	// default would put every user on the external engine.
+	id := AutoSelectModelID(defs, Hardware{VRAMGB: 32})
+	if id == "test-model-engine" {
+		t.Fatal("auto-selection must never choose an external-engine entry")
+	}
+	if id != "test-model-big" {
+		t.Errorf("expected test-model-big, got %q", id)
+	}
+}
+
+// The shipped catalog is the single source of truth; a typo in an engine spec
+// would otherwise only surface as a failed switch.
+func TestShippedCatalogEngineEntriesAreComplete(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "models.json"))
+	if err != nil {
+		t.Fatalf("cannot read models.json: %v", err)
+	}
+	defs := LoadConfig(data)
+	if len(defs) == 0 {
+		t.Fatal("models.json did not load")
+	}
+
+	found := 0
+	for id, def := range defs {
+		if def.Engine == nil {
+			continue
+		}
+		found++
+		if err := ValidateModel(id, defs, Hardware{VRAMGB: 32}); err != nil {
+			t.Errorf("%s: %v", id, err)
+			continue
+		}
+		// Declaring the encoder is how an engine entry advertises the capability;
+		// ValidateAndDerive must turn that into the /api/models `vision` flag.
+		if def.MMProj != nil && !def.Capabilities.Vision {
+			t.Errorf("%s: declares an mmproj but does not advertise vision", id)
+		}
+		resolved, err := ResolveEngineModel(id, defs, Hardware{VRAMGB: 32})
+		if err != nil {
+			t.Errorf("%s: %v", id, err)
+			continue
+		}
+		if resolved.CtxSize <= 0 {
+			t.Errorf("%s: engine entries must declare the engine's baked ctx_size", id)
+		}
+		t.Logf("%s: engine=%s port=%d ctx=%d vision=%v",
+			id, def.Engine.Type, def.Engine.Port, resolved.CtxSize, def.Capabilities.Vision)
+	}
+	if found == 0 {
+		t.Error("expected at least one external-engine entry in the shipped catalog")
 	}
 }

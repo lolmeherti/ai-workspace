@@ -19,6 +19,7 @@ import { streamUpdateBlockContent, commitBlockEditDirectly, evaluateStreamComple
 import { deleteSelectedBlocks, deleteSingleBlockDirectly } from './chatEditorBlockDelete.js';
 import { triggerUnifiedBriefing } from './chatUnifiedBriefing.js';
 import { initContextDataPanel } from './chatContextData.js';
+import { initChatExport } from './chatExport.js';
 
 window.toggleFileAccordion = toggleFileAccordion;
 window.showFileInExplorer = showFileInExplorer;
@@ -52,3 +53,6 @@ window.triggerUnifiedBriefing = triggerUnifiedBriefing;
 
 // Context Data panel: delegated click handling for Raw/Atomized/Evicted controls.
 initContextDataPanel();
+
+// Export popover: section toggles applied to clipboard copy and both downloads.
+initChatExport();

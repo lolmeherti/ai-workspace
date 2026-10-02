@@ -283,6 +283,12 @@ class AISettingsController extends BaseController
             if (!empty($status['ctx_size'])) {
                 $envUpdates['LLM_CTX_SIZE'] = (string)$status['ctx_size'];
             }
+            // The endpoint follows the runtime: an external-engine model answers on
+            // its own port, llama.cpp on :1234. Both .env copies must move together
+            // or the app would keep talking to the engine that was just stopped.
+            if (!empty($status['api_url'])) {
+                $envUpdates['LLM_API_URL'] = (string)$status['api_url'];
+            }
             // Per-model sampling + reasoning policy are resolved by the launcher;
             // persist them too so PHP applies the right values after a switch.
             // Otherwise the previous model's values are silently carried forward.

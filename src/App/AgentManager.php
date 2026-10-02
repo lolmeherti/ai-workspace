@@ -20,6 +20,15 @@ class AgentManager
     /** Per-call performance log for the current request (purpose + server timings + stream phases). */
     public array $callLog = [];
 
+    /**
+     * What applyReasoning() put on the wire for the most recent request: the
+     * mode/effort the caller resolved, the policy field it wrote, and the value
+     * it wrote (null pair when nothing was written and the template default
+     * applies). Recorded per call so metrics report the backend's actual
+     * reasoning setting, not the one the request body asked for.
+     */
+    public ?array $lastReasoningApplied = null;
+
     /** Reset the per-call performance log (called at the start of each turn). */
     public function resetCallLog(): void
     {
@@ -62,6 +71,13 @@ class AgentManager
             'content_tok' => (int) ceil($contentChars / 4),
             'prompt_tokens' => (int) ($u['prompt_tokens'] ?? 0),
             'completion_tokens' => (int) ($u['completion_tokens'] ?? 0),
+            // Reasoning as this request actually carried it (see applyReasoning):
+            // the mode/effort the backend resolved, and the field/value it wrote.
+            // A null field means nothing was written — the template default ran.
+            'reasoning_mode' => $this->lastReasoningApplied['mode'] ?? null,
+            'reasoning_effort' => $this->lastReasoningApplied['effort'] ?? null,
+            'reasoning_field' => $this->lastReasoningApplied['field'] ?? null,
+            'reasoning_value' => $this->lastReasoningApplied['value'] ?? null,
         ];
         $this->callLog[] = $record;
         return $record;
@@ -203,7 +219,7 @@ class AgentManager
                             }
                         }
 
-                        if (isset($json['choices'][0]['delta']['content'])) {
+                        if (isset($json['choices'][0]['delta']['content']) && $json['choices'][0]['delta']['content'] !== '') {
                             $chunk = $json['choices'][0]['delta']['content'];
                             if ($firstContentTs === null) {
                                 $firstContentTs = microtime(true);
@@ -343,6 +359,9 @@ class AgentManager
     {
         $policy = json_decode((string) Config::get('LLM_RUNTIME_POLICY', '{}'), true) ?: [];
         $rp = $policy['reasoning'] ?? [];
+        // Reset per request: a call that writes nothing must not inherit the
+        // previous call's setting in the metrics.
+        $this->lastReasoningApplied = ['mode' => $mode, 'effort' => $effort, 'field' => null, 'value' => null];
         if (empty($rp['field'])) {
             return;
         }
@@ -358,6 +377,8 @@ class AgentManager
 
         if ($value !== null) {
             self::writePath($payload, $rp['field'], $value);
+            $this->lastReasoningApplied['field'] = (string) $rp['field'];
+            $this->lastReasoningApplied['value'] = $value;
         }
     }
 
@@ -504,7 +525,12 @@ class AgentManager
                         }
                     }
 
-                    if (isset($delta['content'])) {
+                    // An empty delta is not content starting. Strata opens every
+                    // stream with {"role":"assistant","content":""}; treating that
+                    // as the first content token fires thought_complete before any
+                    // reasoning has arrived, and the frontend's typewriter target
+                    // is then replaced by the finished-markdown render.
+                    if (isset($delta['content']) && $delta['content'] !== '') {
                         $chunk = $delta['content'];
                         if ($firstContentTs === null) {
                             $firstContentTs = microtime(true);

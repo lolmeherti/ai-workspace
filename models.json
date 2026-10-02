@@ -244,6 +244,30 @@
       }
     },
 
+    "qwen3-8-flash-next-iq3s": {
+      "name": "Qwen3.8 Flash-Next IQ3_S (Strata)",
+      "runtime": "qwen38",
+      "engine": {
+        "type": "strata",
+        "python": "C:\\Strata\\.venv\\Scripts\\python.exe",
+        "script": "C:\\Strata\\serve\\server.py",
+        "config": "C:\\Strata\\strata-iq3_s.json",
+        "port": 8081
+      },
+      "sampling": {
+        "thinking": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0, "presence_penalty": 0.0 },
+        "instruct": { "temperature": 0.7, "top_p": 0.8,  "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
+      },
+      "model": { "file": "", "url": "" },
+      "mmproj": {
+        "file": "mmproj-Qwen3.8-Flash-Next-BF16.gguf",
+        "url": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF/resolve/main/mmproj-Qwen3.8-Flash-Next-BF16.gguf"
+      },
+      "profiles": {
+        "t1": { "ctx_size": 262144, "requirements": { "vram_min": 30 } }
+      }
+    },
+
     "bonsai-27b-q1": {
       "name": "Bonsai 27B Q1_0",
       "runtime": "bonsai",

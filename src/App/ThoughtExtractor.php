@@ -11,8 +11,7 @@ class ThoughtExtractor
     private const THINK_TAG_CLOSE  = '/<\/think>/';
     private const THINK_TAG_PATTERN = '/<think>.*?<\/think>/s';
 
-    private const CHANNEL_EXTRACT_PATTERN = '/<\|[^|]*\|?>thought(.*?)(?:<channel\|?>|$)/s';
-    private const THINK_EXTRACT_PATTERN = '/<think>(.*?)(?:<\/think>|$)/s';
+    private const ANY_THOUGHT_EXTRACT_PATTERN = '/<\|[^|]*\|?>thought(.*?)(?:<channel\|?>|$)|<think>(.*?)(?:<\/think>|$)/s';
 
     /**
      * True if this chunk contains the opening of a thought block.
@@ -96,17 +95,17 @@ class ThoughtExtractor
      */
     public static function extract(string $text): array
     {
-        $thought = '';
-        $content = $text;
+        $thoughts = [];
 
-        if (preg_match(self::CHANNEL_EXTRACT_PATTERN, $text, $matches)) {
-            $thought = trim($matches[1]);
-            $content = trim(preg_replace(self::CHANNEL_THOUGHT_PATTERN, '', $text));
-        } elseif (preg_match(self::THINK_EXTRACT_PATTERN, $text, $matches)) {
-            $thought = trim($matches[1]);
-            $content = trim(preg_replace(self::THINK_TAG_PATTERN, '', $text));
+        if (preg_match_all(self::ANY_THOUGHT_EXTRACT_PATTERN, $text, $matches, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL)) {
+            foreach ($matches as $match) {
+                $block = trim((string)($match[1] ?? $match[2] ?? ''));
+                if ($block !== '') {
+                    $thoughts[] = $block;
+                }
+            }
         }
 
-        return ['thought' => $thought, 'content' => $content];
+        return ['thought' => implode("\n\n", $thoughts), 'content' => self::strip($text)];
     }
 }

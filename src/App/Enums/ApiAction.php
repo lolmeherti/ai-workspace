@@ -57,4 +57,5 @@ enum ApiAction: string
     case LOG_FRONTEND_EVENT = 'log_frontend_event';
     case RATE_REPLY = 'rate_reply';
     case GET_REASONING_EFFORT = 'get_reasoning_effort';
+    case EXPORT_CONVERSATION = 'export_conversation';
 }
