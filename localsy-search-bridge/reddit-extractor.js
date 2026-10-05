@@ -32,25 +32,25 @@
   const debug = [];  // diagnostic log — sent back with result
 
   // Try Reddit JSON API first — works in background tabs, bypasses challenges.
-  let jsonEntities = null;
+  let jsonResult = null;
   if (isPost) {
     try {
-      jsonEntities = await extractFromRedditJSON(pageUrl);
+      jsonResult = await extractFromRedditJSON(pageUrl);
     } catch (e) {
       debug.push({ step: "json_api_error", message: e.message });
     }
   }
 
-  if (jsonEntities) {
+  if (jsonResult) {
     // JSON API succeeded — skip DOM extraction entirely.
     await chrome.runtime.sendMessage({
       type: "localsy_fetch_result",
       status: "success",
       content: {
-        url: pageUrl,
-        title: document.title,
+        url: jsonResult.url || pageUrl,
+        title: jsonResult.title || document.title,
         fetched_at: fetchedAt,
-        entities: jsonEntities,
+        entities: jsonResult.entities,
         _debug: debug
       }
     }).catch(() => null);
@@ -146,6 +146,23 @@
   // Reddit JSON API extraction (works in background tabs, no DOM needed)
   // ════════════════════════════════════════════════════════════════
 
+  // The pipeline normalises thread URLs to the canonical .json endpoint, so the
+  // tab may already be sitting on the JSON document itself. Read it directly
+  // instead of asking Reddit for the same bytes a second time.
+  function readJsonFromDocument() {
+    const pre = document.querySelector("pre");
+    const text = (pre ? pre.textContent : document.body && document.body.innerText) || "";
+    const trimmed = text.trim();
+    if (!trimmed.startsWith("[")) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) && parsed.length >= 2 ? parsed : null;
+    } catch (e) {
+      debug.push({ step: "json_api_document_parse_error", message: e.message });
+      return null;
+    }
+  }
+
   async function extractFromRedditJSON(url) {
     // Build canonical .json URL from post ID (ignore title slug which may be
     // truncated by Reddit redirects).
@@ -155,16 +172,24 @@
       debug.push({ step: "json_api_bad_url", path: new URL(url).pathname });
       return null;
     }
-    const jsonUrl = `https://www.reddit.com/r/${pathParts[1]}/comments/${pathParts[3]}/.json`;
-    debug.push({ step: "json_api_fetch", json_url: jsonUrl });
+    let data = readJsonFromDocument();
+    if (data) {
+      debug.push({ step: "json_api_from_document" });
+    } else {
+      // Same-origin by construction: build the endpoint on the host the tab is
+      // actually on. Hardcoding www.reddit.com made this cross-origin (and
+      // therefore a silent CORS failure) on any other reddit host.
+      const jsonUrl = `${location.origin}/r/${pathParts[1]}/comments/${pathParts[3]}/.json`;
+      debug.push({ step: "json_api_fetch", json_url: jsonUrl });
 
-    const resp = await fetch(jsonUrl, { credentials: "same-origin" });
-    if (!resp.ok) {
-      debug.push({ step: "json_api_fetch_failed", status: resp.status });
-      return null;
+      const resp = await fetch(jsonUrl, { credentials: "same-origin" });
+      if (!resp.ok) {
+        debug.push({ step: "json_api_fetch_failed", status: resp.status });
+        return null;
+      }
+
+      data = await resp.json();
     }
-
-    const data = await resp.json();
     if (!Array.isArray(data) || data.length < 2) {
       debug.push({ step: "json_api_bad_shape", is_array: Array.isArray(data), len: data?.length });
       return null;
@@ -259,7 +284,11 @@
       comment_count: entities.length - 1,
     });
 
-    return entities.length > 0 ? entities : null;
+    // The .json document has no <title>; the post's own title and permalink are
+    // the human-facing source identity, so citations never point at a .json URL.
+    return entities.length > 0
+      ? { entities, url: absoluteRedditUrl(postPermalink), title: postData.title || "" }
+      : null;
   }
 
   // ════════════════════════════════════════════════════════════════

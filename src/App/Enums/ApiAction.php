@@ -58,4 +58,5 @@ enum ApiAction: string
     case RATE_REPLY = 'rate_reply';
     case GET_REASONING_EFFORT = 'get_reasoning_effort';
     case EXPORT_CONVERSATION = 'export_conversation';
+    case INDEX_URLS = 'index_urls';
 }

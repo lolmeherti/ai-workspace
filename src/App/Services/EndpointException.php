@@ -9,7 +9,7 @@ namespace App\Services;
  * Exists so that a failure can never be expressed as a success value: before
  * this, a 400 whose body carried a reason was parsed as a completion with no
  * choices, which surfaced to the user as an empty answer with no explanation
- * (see .hermes/plans/2026-10-02_080055-silent-failure-handling.md, task 1).
+ * (see .hermes/plans/observability/2026-10-02_silent-failure-handling.md, task 1).
  *
  * The status and a trimmed body excerpt are carried so the failure is
  * attributable — logged as an event and surfaced through the existing error

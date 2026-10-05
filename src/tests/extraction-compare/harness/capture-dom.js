@@ -140,21 +140,53 @@
     try { return new URL(href, location.href).toString(); } catch (e) { return String(href || ""); }
   }
 
-  function tableInfo(el) {
-    const rows = el.querySelectorAll("tr").length;
-    let cols = 0;
-    for (const tr of el.querySelectorAll("tr")) {
-      cols = Math.max(cols, tr.children.length);
+  // Tables are increasingly built from divs carrying ARIA roles instead of <table>
+  // (GitBook, Notion-likes, docs themes). Neither route could see them: the map
+  // looked for the TABLE tag only, so the grid arrived as loose cell text and the
+  // model had no table to pick. Recognise the ARIA shape too.
+  const ARIA_TABLE_SELECTOR = 'table,[role="table"],[role="grid"]';
+
+  function isAriaTable(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    const r = (el.getAttribute("role") || "").toLowerCase();
+    return r === "table" || r === "grid";
+  }
+
+  function isTableEl(el) {
+    return el.nodeType === Node.ELEMENT_NODE && (el.tagName === "TABLE" || isAriaTable(el));
+  }
+
+  // Outermost rows only: a rowgroup may nest rows.
+  function rowEls(el) {
+    if (el.tagName === "TABLE") return [...el.querySelectorAll("tr")];
+    const all = [...el.querySelectorAll('[role="row"]')];
+    return all.filter((r) => !all.some((o) => o !== r && o.contains(r)));
+  }
+
+  function cellEls(row) {
+    if (row.tagName === "TR") {
+      return [...row.children].filter((c) => c.tagName === "TH" || c.tagName === "TD");
     }
+    return [...row.children].filter((c) => {
+      const r = (c.getAttribute("role") || "").toLowerCase();
+      return r === "cell" || r === "gridcell" || r === "columnheader" || r === "rowheader";
+    });
+  }
+
+  function tableInfo(el) {
+    const rows = rowEls(el);
+    let cols = 0;
+    for (const r of rows) cols = Math.max(cols, cellEls(r).length);
     const headers = [];
-    const headRow = el.querySelector("tr");
+    const headRow = rows[0];
     if (headRow) {
-      for (const cell of headRow.children) {
-        headers.push(norm(cell.textContent).slice(0, 80));
+      for (const cell of cellEls(headRow)) {
+        const text = norm(cell.textContent).slice(0, 80);
+        if (text) headers.push(text);
         if (headers.length >= OPTIONS.tableHeaderMax) break;
       }
     }
-    return { rows, cols, headers };
+    return { rows: rows.length, cols, headers };
   }
 
   function linkCues(el, limit) {
@@ -173,11 +205,19 @@
   function mdOf(node, depth) {
     let out = "";
     depth = depth || 0;
+    // A block whose own element IS the table never reaches the TABLE case below
+    // (that case handles a table found among children), so its cells were being
+    // concatenated into one run-on string. Render it as a pipe table instead —
+    // the same shape the production extractor's renderTable() produces.
+    if (isTableEl(node)) {
+      return tableMd(node);
+    }
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) { out += child.textContent.replace(/\s+/g, " "); continue; }
       if (child.nodeType !== Node.ELEMENT_NODE) continue;
       const tag = child.tagName;
       if (NOISE_TAGS.has(tag)) continue;
+      if (isTableEl(child)) { out += "\n\n" + tableMd(child) + "\n\n"; continue; }
       switch (tag) {
         case "BR": out += "\n"; break;
         case "HR": out += "\n\n---\n\n"; break;
@@ -232,12 +272,11 @@
 
   function tableMd(tableEl) {
     const rows = [];
-    for (const tr of tableEl.querySelectorAll("tr")) {
+    for (const tr of rowEls(tableEl)) {
       const cells = [];
-      for (const cell of tr.children) {
-        if (cell.tagName === "TH" || cell.tagName === "TD") {
-          cells.push(norm(cell.textContent).replace(/\|/g, "\\|"));
-        }
+      for (const cell of cellEls(tr)) {
+        const text = norm(cell.textContent).replace(/\|/g, "\\|");
+        if (text) cells.push(text);
       }
       if (cells.length) rows.push(cells);
     }
@@ -273,14 +312,14 @@
     for (const el of document.body.querySelectorAll("*")) {
       const tag = el.tagName;
       if (NOISE_TAGS.has(tag) || tag === "TD" || tag === "TH" || tag === "CAPTION") { skipped.noise++; continue; }
-      if (el.closest("table") && tag !== "TABLE") { continue; }  // cells live inside the table block
-      if (!TEXT_TAGS.has(tag)) continue;
+      if (el.closest(ARIA_TABLE_SELECTOR) && !isTableEl(el)) { continue; }  // cells live inside the table block
+      if (!TEXT_TAGS.has(tag) && !isTableEl(el)) continue;
       if (!OPTIONS.keepChrome && (el.closest("nav") || el.closest("header") || el.closest("footer") || el.closest("aside"))) { skipped.chrome++; continue; }
       const text = totalText(el);
       const isHeading = tag.length === 2 && tag[0] === "H";
       if (!text.length) { skipped.small_text_blocks++; continue; }
       const isValue = /(\d|[€$%])/.test(text);
-      const tooSmall = text.length < OPTIONS.minBlockChars && !isHeading && tag !== "TABLE";
+      const tooSmall = text.length < OPTIONS.minBlockChars && !isHeading && !isTableEl(el);
       if (tooSmall && !(OPTIONS.keepValueShaped && isValue)) {
         skipped.small_text_blocks++;
         droppedChars += text.length;
@@ -297,13 +336,13 @@
       const tag = el.tagName;
       if (!REGION_TAGS.has(tag)) continue;
       if (!OPTIONS.keepChrome && CHROME_TAGS.has(tag)) { skipped.chrome++; continue; }
-      if (el.closest("table")) continue;
+      if (el.closest(ARIA_TABLE_SELECTOR)) continue;
       const total = totalText(el);
       if (!total.length) { skipped.small_regions++; continue; }
       if (total.length < OPTIONS.minRegionChars) { skipped.small_regions++; continue; }
       if (ownText(el).length < OPTIONS.regionOwnTextChars) {
         const childBlocks = el.querySelectorAll(
-          "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,dd,dt,figcaption,summary,table"
+          'p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,dd,dt,figcaption,summary,table,[role="table"],[role="grid"]'
         ).length;
         if (childBlocks < OPTIONS.regionChildBlocks) { skipped.small_regions++; continue; }
       }
@@ -374,15 +413,15 @@
 
       const own = ownText(el);
       const total = totalText(el);
-      const info = tag === "TABLE" ? tableInfo(el) : null;
+      const info = isTableEl(el) ? tableInfo(el) : null;
 
       let preview;
-      if (tag === "TABLE") {
+      if (info) {
         preview = "table: " + info.rows + " rows × " + info.cols + " cols; header row: "
           + (info.headers.length ? info.headers.join(" | ") : "(none)");
       } else if (isRegion && own.length < 10) {
         const childBlocks = el.querySelectorAll(
-          "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,dd,dt,figcaption,summary,table"
+          'p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,dd,dt,figcaption,summary,table,[role="table"],[role="grid"]'
         ).length;
         preview = "(container — no own text; " + childBlocks + " descendant blocks)";
       } else {
@@ -395,7 +434,7 @@
       blocks.push({
         id, parent_id: parentId, depth, tag, role: roleOf(el),
         own_len: own.length, total_len: total.length,
-        preview, table: info, links,
+        preview, table: info, table_aria: isAriaTable(el) || undefined, links,
         hidden: isHidden(el) || undefined,
         value_shape: valueShaped.has(el) || undefined
       });

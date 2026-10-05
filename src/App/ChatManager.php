@@ -63,7 +63,185 @@ class ChatManager
         return [];
     }
 
-    public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?string $effort = null, ?callable $streamCallback = null): array
+    /**
+     * Which URLs from this message should be opened, and is this a "here is a page" message?
+     *
+     * Two sources of truth, in priority order:
+     *   • an explicit list (the older per-URL toggles) — respected exactly, even when empty, because
+     *     "I turned them all off" is a decision, not a missing value;
+     *   • otherwise the fallback: fetch only when the message is essentially just a link (<= 2 URLs and almost
+     *     no prose). A pasted page therefore opens nothing on its own.
+     *
+     * The Parse links control rides in as that empty list when it is off, and the prompt is then not scanned
+     * at all — the URL work happens here, on submit, never in the browser.
+     *
+     * @return array{urls:string[],question:string,summarize:bool,source:string,index:array}
+     */
+    private function resolveDirectSources(string $query, ?array $submitted): array
+    {
+        if ($submitted === []) {
+            return [
+                'urls'      => [],
+                'question'  => trim($query),
+                'summarize' => false,
+                'source'    => 'none',
+                'index'     => ['entries' => [], 'counts' => []],
+            ];
+        }
+
+        $index = \App\Search\UrlIndex::index($query);
+        $fetchable = array_values(array_filter($index['entries'], static fn(array $e): bool => $e['fetchable']));
+        // the app's own link rule, evaluated here on submit: one implementation, one place
+        $defaults = \App\Search\UrlIndex::defaultSelection($index, $query);
+
+        $urls = [];
+        $source = 'none';
+        if ($submitted !== null) {
+            $approvedKeys = [];
+            foreach ($submitted as $u) {
+                $key = \App\Search\UrlIndex::key((string) $u);
+                if ($key !== '') $approvedKeys[$key] = true;
+            }
+            foreach ($fetchable as $e) {
+                if (isset($approvedKeys[$e['key']])) $urls[] = $e['url'];
+            }
+            $source = 'strip';
+        } elseif ($defaults['basically_a_link']) {
+            $urls = array_column($fetchable, 'url');
+            $source = 'fallback';
+        }
+
+        return [
+            'urls'      => array_values(array_unique($urls)),
+            'question'  => $defaults['prose'],
+            'summarize' => $defaults['summarize'],
+            'source'    => $source,
+            'index'     => $index,
+        ];
+    }
+
+    /** URLs already fetched earlier in this session, read back from persisted evidence rows. */
+    private function alreadyParsedUrls(int $sessionId): array
+    {
+        $urls = [];
+        $rows = $this->db->query(
+            "SELECT source_map FROM chat_history WHERE session_id = ? AND message_type = 'data_fetching'",
+            [$sessionId]
+        );
+        foreach ($rows as $row) {
+            $map = json_decode((string) ($row['source_map'] ?? ''), true);
+            if (!is_array($map)) continue;
+            foreach ($map as $entry) {
+                if (!empty($entry['url'])) $urls[] = (string) $entry['url'];
+            }
+        }
+        return $urls;
+    }
+
+    /**
+     * Fetch the approved URLs through the browser bridge and store them as one evidence row.
+     *
+     * Stored exactly like a tool result (tool_name='fetch_source'), so citations, Context Data, deferred
+     * atomization and later `search_session_evidence` reads all work without new plumbing. The turn framing is
+     * written to the row's `turn_reminder` rather than appended to this turn's message array — the same reason
+     * the tool path does it: a reminder that exists only in this turn's array makes the next prompt diverge at
+     * that exact position and costs the engine the cached prefix behind it.
+     *
+     * @return array{ingested:bool,fit:string,condenserCalls:int,failed:array}
+     */
+    private function ingestDirectSources(int $sessionId, string $query, array $direct, callable $emit): array
+    {
+        $result = ['ingested' => false, 'fit' => 'none', 'condenserCalls' => 0, 'failed' => []];
+
+        $pipeline = new \App\Search\SearchPipeline($this->agent);
+        $pipeline->setSessionId($sessionId);
+        $pipeline->setSourceStartSeq(\App\Search\SourceSequence::nextSourceSeq($this->db, $sessionId));
+
+        $emit('status', ['text' => count($direct['urls']) === 1
+            ? 'Opening the link...'
+            : 'Opening ' . count($direct['urls']) . ' links...']);
+
+        $fetched = $pipeline->fetchDirect(
+            $direct['urls'],
+            $direct['question'],
+            [['role' => 'user', 'content' => $query]],
+            $emit,
+            $this->alreadyParsedUrls($sessionId)
+        );
+
+        $result['fit'] = $fetched['fitLevel'];
+        $result['condenserCalls'] = (int) $fetched['condenserCalls'];
+        $result['failed'] = $fetched['failed'];
+        $result['evidence'] = (string) ($fetched['evidence'] ?? '');
+
+        $evidence = (string) ($fetched['evidence'] ?? '');
+        if ($evidence === '' || empty($fetched['sourceMap'])) {
+            \App\Logger::logEvent('direct_fetch_no_evidence', 'Direct source produced no usable evidence', [
+                'urls' => $direct['urls'],
+                'failed' => $fetched['failed'],
+                'reason' => $direct['source'],
+            ], 'warn', 'ChatManager::ingestDirectSources');
+            return $result;
+        }
+
+        $label = implode(', ', array_map(
+            static fn(string $sid): string => $sid . ' ' . ($fetched['sourceMap'][$sid]['domain'] ?? ''),
+            array_keys($fetched['sourceMap'])
+        ));
+
+        $directFailures = \App\Search\SourceFailures::finalize(
+            $fetched['failed'] ?? [],
+            $fetched['sourceMap'] ?? [],
+            $evidence
+        );
+
+        $this->db->insert('chat_history', [
+            'session_id'      => $sessionId,
+            'role'            => 'system',
+            'message'         => $evidence,
+            'message_type'    => 'data_fetching',
+            'tool_name'       => 'fetch_source',
+            'search_query'    => mb_substr($label, 0, 250),
+            'source_map'      => json_encode($fetched['sourceMap']),
+            'backing_chunks'  => !empty($fetched['backingChunks']) ? json_encode($fetched['backingChunks'], JSON_UNESCAPED_UNICODE) : null,
+            'selected_chunks' => !empty($fetched['selectedChunks']) ? json_encode($fetched['selectedChunks'], JSON_UNESCAPED_UNICODE) : null,
+            'failed_sources'  => $directFailures ? json_encode($directFailures, JSON_UNESCAPED_UNICODE) : null,
+            'atomic_context'  => null,
+            'token_estimate'  => ($this->countTokens)($evidence),
+        ]);
+
+        $historyId = (int) $this->db->getConnection()->lastInsertId();
+
+        $reminder = $direct['summarize']
+            ? "SOURCE HANDED OVER BY THE USER:\nThe user sent this source without a question. Summarise what it contains in a few short sections, state its publication or update date if the source has one, and offer to dig into any part of it."
+            : "RUNTIME REMINDER:\nAnswer the user's original request using the evidence above. Request: \"{$direct['question']}\"";
+        $this->db->update('chat_history', ['turn_reminder' => $reminder], ['id' => $historyId]);
+
+        $emit('context_data_added', [
+            'id'             => $historyId,
+            'label'          => $label,
+            'tool_name'      => 'fetch_source',
+            'query'          => $label,
+            'source_count'   => count($fetched['sourceMap']),
+            'token_estimate' => ($this->countTokens)($evidence),
+            'active'         => true,
+        ]);
+
+        \App\Logger::logEvent('direct_fetch_ingested', 'Direct source stored as evidence', [
+            'row_id' => $historyId,
+            'sources' => array_keys($fetched['sourceMap']),
+            'evidence_chars' => strlen($evidence),
+            'fit_level' => $fetched['fitLevel'],
+            'condenser_model_calls' => $fetched['condenserCalls'],
+            'summarize' => $direct['summarize'],
+            'how' => $direct['source'],
+        ], 'info', 'ChatManager::ingestDirectSources');
+
+        $result['ingested'] = true;
+        return $result;
+    }
+
+    public function process(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile = null, ?string $effort = null, ?callable $streamCallback = null, ?array $fetchUrls = null): array
     {
         $emit = function(string $event, array $data = []) use ($streamCallback) {
             if ($streamCallback !== null) {
@@ -89,13 +267,13 @@ class ChatManager
 
         $lockToken = ModelLock::acquireOrBusy(ModelLock::PROCESS_TTL_MS);
         try {
-            return $this->processLocked($sessionId, $query, $imageFile, $activeEditFile, $effort, $emit);
+            return $this->processLocked($sessionId, $query, $imageFile, $activeEditFile, $effort, $emit, $fetchUrls);
         } finally {
             ModelLock::release($lockToken);
         }
     }
 
-    private function processLocked(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile, ?string $effort, callable $emit): array
+    private function processLocked(int $sessionId, string $query, ?array $imageFile, ?string $activeEditFile, ?string $effort, callable $emit, ?array $fetchUrls = null): array
     {
         $this->ensureSessionExists($sessionId);
 
@@ -163,6 +341,20 @@ class ChatManager
         if ($imagePath !== null) {
             $fileRefs[] = basename($imagePath);
         }
+
+        // ── Direct sources: URLs the user pasted ─────────────────────────────
+        // A pasted link is an explicit request for that page, so it is fetched here — before the prompt is
+        // assembled — and stored as evidence exactly like a tool result. Nothing is fetched unless the user
+        // approved it (the composer strip sends the ON list) or the message is essentially just a link.
+        $failedSources = [];
+        $turnEvidence = '';
+        $direct = $this->resolveDirectSources($query, $fetchUrls);
+        if (!empty($direct['urls'])) {
+            $directResult = $this->ingestDirectSources($sessionId, $query, $direct, $emit);
+            $failedSources = array_merge($failedSources, $directResult['failed'] ?? []);
+            $turnEvidence .= (string) ($directResult['evidence'] ?? '');
+        }
+
         foreach (array_unique($fileRefs) as $physicalName) {
             $file = $this->fileContext->lookupContent($physicalName);
             if ($file === null) {
@@ -190,10 +382,10 @@ class ChatManager
         }
 
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
-        $updatedTitle = null;
-        if (count($history) === 1) {
-            $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
-        }
+        // Named on the first user turn. Evidence rows for that same turn (a pasted link, an attached
+        // file) are already in $history, so the row count is not the first-turn signal — the
+        // user-row count is. The guard lives in autoGenerateTitle.
+        $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
 
         $isEditorMode = !empty($activeEditFile);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($isEditorMode);
@@ -243,6 +435,10 @@ class ChatManager
                 $toolName = $fn['name'] ?? '';
                 $argsJson = $fn['arguments'] ?? '{}';
                 $args = json_decode($argsJson, true) ?: [];
+                // A model that emits `queries` as a string used to reach implode() below and throw a
+                // TypeError, which killed the stream before its terminal event. Normalise at the boundary
+                // so the guard holds for every caller further down (ToolExecutionService, the tools).
+                $args = \App\Services\ToolExecutionService::normalizeToolArguments($args, (string) ($fn['name'] ?? ''));
                 $queries = $args['queries'] ?? [];
 
                 if (empty($toolName)) {
@@ -285,7 +481,13 @@ class ChatManager
                 $lastSourceMap = $this->toolExecutionService->getLastSourceMap();
                 $lastBackingChunks = $this->toolExecutionService->getLastBackingChunks();
                 $lastSelectedChunks = $this->toolExecutionService->getLastSelectedChunks();
+                $lastFailures = $this->toolExecutionService->getLastFailures();
                 $sourceMap = array_merge($sourceMap, $lastSourceMap);
+                $failedSources = array_merge($failedSources, $lastFailures);
+                // The panel's successes and failures are both derived from the evidence this turn produced: a
+                // source in the map with no block in here is one the answer never saw. Passing anything else
+                // (the answer text, an empty string) reports every fetched page as unreadable.
+                $turnEvidence .= $result;
 
                 $emit('tool_done', ['tool' => $toolName, 'label' => "{$toolName} completed."]);
 
@@ -293,6 +495,8 @@ class ChatManager
                 // the exact selected chunks persisted so a later deferred
                 // atomization pass can condense this row on its own. The next
                 // turn injects raw until that happens.
+                $rowFailures = \App\Search\SourceFailures::finalize($lastFailures, $lastSourceMap, $result);
+
                 $this->db->insert('chat_history', [
                     'session_id' => $sessionId,
                     'role' => 'system',
@@ -303,6 +507,7 @@ class ChatManager
                     'source_map' => !empty($lastSourceMap) ? json_encode($lastSourceMap) : null,
                     'backing_chunks' => !empty($lastBackingChunks) ? json_encode($lastBackingChunks, JSON_UNESCAPED_UNICODE) : null,
                     'selected_chunks' => ($toolName === 'search_web' && !empty($lastSelectedChunks)) ? json_encode($lastSelectedChunks, JSON_UNESCAPED_UNICODE) : null,
+                    'failed_sources' => $rowFailures ? json_encode($rowFailures, JSON_UNESCAPED_UNICODE) : null,
                     'atomic_context' => null,
                     'token_estimate' => ($this->countTokens)($result),
                 ]);
@@ -327,6 +532,7 @@ class ChatManager
                     'count' => count($createdTasks),
                     'tasks' => $createdTasks,
                 ]);
+                $turnEvidence .= $result;
             }
 
             \App\ProgressWriter::done($sessionId);
@@ -369,8 +575,17 @@ class ChatManager
             }
         }
 
-        if (!empty($sourceMap)) {
-            $emit('sources', ['sources' => $sourceMap]);
+        // The panel's two groups are computed once and reused for the live event and the stored row, so a reload
+        // cannot disagree with what the turn displayed. Successes exclude anything listed as failed: the map
+        // holds everything that was fetched, including pages that were read and contributed nothing.
+        $panelFailures = \App\Search\SourceFailures::finalize($failedSources, $sourceMap, $turnEvidence);
+        if (!empty($sourceMap) || !empty($panelFailures)) {
+            // Successes and failures travel together so the panel can show both groups from one event, and
+            // the sources the user never saw are named rather than silently absent (P4-S2).
+            $emit('sources', [
+                'sources' => \App\Search\SourceFailures::used($sourceMap, $panelFailures),
+                'failed'  => $panelFailures,
+            ]);
         }
 
         $emit('generating', []);
@@ -430,6 +645,9 @@ class ChatManager
             'token_estimate' => $assistantTokens,
             'search_query' => null,
             'source_map' => empty($sourceMap) ? null : json_encode($sourceMap),
+            // Stored so a reload renders the same two groups without re-deriving them from evidence it no
+            // longer has (the assistant row holds the answer, never the evidence blocks).
+            'failed_sources' => empty($panelFailures) ? null : json_encode($panelFailures, JSON_UNESCAPED_UNICODE),
             'model' => $this->agent->getModelName(),
             'had_tool_calls' => !empty($first['tool_calls']) ? 1 : 0,
         ]);
@@ -684,13 +902,40 @@ class ChatManager
         ];
     }
 
+    /**
+     * Whether this history is the session's first user turn — the moment a conversation earns its
+     * name. Evidence rows (a pasted link, an attached file) are written into the same turn, so the
+     * row count is not the first-turn signal; exactly one user row is.
+     */
+    public static function isFirstUserTurn(array $history): bool
+    {
+        $userRows = 0;
+        foreach ($history as $row) {
+            if (($row['role'] ?? '') === 'user') {
+                $userRows++;
+            }
+        }
+        return $userRows === 1;
+    }
+
+    /**
+     * A conversation is named after the user's own words. A pasted URL is not a title, so bare links
+     * are dropped and the rest of the message names the chat; a message that was nothing but a link
+     * falls back to the link itself.
+     */
+    public static function titleFromQuery(string $query): string
+    {
+        $stripped = trim((string) preg_replace('~\s+~u', ' ', (string) preg_replace('~https?://\S+~iu', ' ', $query)));
+        $source = $stripped !== '' ? $stripped : trim($query);
+
+        return mb_strlen($source) > 60 ? mb_substr($source, 0, 57) . '...' : $source;
+    }
+
     private function autoGenerateTitle(int $sessionId, string $query, array $history, callable $emit): ?string
     {
-        if (count($history) !== 1) return null;
+        if (!self::isFirstUserTurn($history)) return null;
 
-        $title = mb_strlen($query) > 60
-            ? mb_substr($query, 0, 57) . '...'
-            : $query;
+        $title = self::titleFromQuery($query);
 
         $this->db->update('chat_sessions', ['title' => $title], ['id' => $sessionId]);
         $emit('title_updated', ['title' => $title]);
@@ -782,7 +1027,9 @@ class ChatManager
             $utf8Buffer = '';
         }
 
-        if ($contentEmitted && !empty($result['tool_calls'])) {
+        // $contentEmitted alone is true even for an empty delta, which logged faults for turns that emitted
+        // nothing at all (rows #2418/#2455, chars=0). Require actual content.
+        if ($contentChars > 0 && $contentEmitted && !empty($result['tool_calls'])) {
             \App\Logger::logEvent('content_before_tool', 'Content emitted before tool_calls in the integrated first pass', [
                 'content_before_tool_chars' => $contentChars,
                 'tool' => $result['tool_calls'][0]['function']['name'] ?? null,

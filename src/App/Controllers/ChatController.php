@@ -174,7 +174,19 @@ class ChatController extends BaseController
             return;
         }
 
+        // The composer's Parse links control: '0' is the user deciding this message's links stay closed, which is
+        // a decision — not the same as a client that sent no choice at all. Absent keeps the app's own link rule
+        // (a message that is essentially just a link is read). The backend does the URL work either way: nothing
+        // is enumerated in the browser. An explicit per-URL list is still honoured if some caller sends one.
+        $fetchUrls = null;
+        if (isset($_POST['fetch_urls'])) {
+            $decoded = json_decode((string) $_POST['fetch_urls'], true);
+            $fetchUrls = is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+        } elseif ((string) ($_POST['parse_links'] ?? '1') === '0') {
+            $fetchUrls = [];
+        }
+
         (new ChatStreamAction($this->db, $this->agentManager))
-            ->execute($sessionId, $query, $imageFile, null, null, $activeEditFile, $effort);
+            ->execute($sessionId, $query, $imageFile, null, null, $activeEditFile, $effort, $fetchUrls);
     }
 }

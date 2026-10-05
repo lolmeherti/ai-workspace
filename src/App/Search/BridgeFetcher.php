@@ -91,6 +91,12 @@ final class BridgeFetcher
 
     public function fetch(string $url, ?string $requestId = null): BridgeFetchResult
     {
+        // Reddit: read the thread's own JSON instead of the rendered page — one
+        // request, no page render, entities that carry author/score/dates. The
+        // rewrite happens before validation so validation applies to what we
+        // actually request. Non-thread URLs are returned untouched.
+        $url = RedditUrl::toJson($url) ?? $url;
+
         $validationError = self::validateFetchUrl($url);
         if ($validationError !== null) {
             return new BridgeFetchResult('rejected', null, $validationError);

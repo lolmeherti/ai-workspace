@@ -314,11 +314,15 @@ class AgentManager
                 'budget_exhausted' => $budgetExhausted,
             ], $level, 'AgentManager::chat');
 
+            // Informational, not a fault: this is a length heuristic and a legitimate short answer ("ok",
+            // 2 chars) trips it, as did an endpoint-error probe's control call. It is deliberately NOT in
+            // ModelPerformanceReport::MODEL_FAULT_EVENTS — a truncated generation is already visible as
+            // finish_reason=length / the llm_empty_answer_* events.
             if ($responseLen < 20 && $responseLen > 0) {
                 \App\Logger::logEvent('llm_partial_response', "LLM returned unusually short response ({$responseLen} chars)", [
                     'response_preview' => mb_substr($fullResponse, 0, 500),
                     'elapsed_ms' => $elapsed,
-                ], 'warn', 'AgentManager::chat');
+                ], 'info', 'AgentManager::chat');
             }
 
             $this->lastReasoningChars = $reasoningChars;

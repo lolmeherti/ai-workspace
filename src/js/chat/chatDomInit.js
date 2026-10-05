@@ -9,7 +9,7 @@ import { hydrateBriefingCards } from './chatBriefingCards.js';
 import { openEditorDrawer, closeEditorDrawer, saveEditorDraft } from './chatEditorOpenClose.js';
 import { deleteSelectedBlocks } from './chatEditorBlockDelete.js';
 import { enableFusedRangeEdit } from './chatEditorBlockEdit.js';
-import { extractThinking, createThinkingAccordion, addCodeCopyButtons } from '../markdown.js';
+import { extractThinking, createThinkingAccordion, addCodeCopyButtons, refMapFromDocument, substituteRefBadges } from '../markdown.js';
 
 // Lazy file-choice restoration: a historical message that triggered a file
 // search re-fetches its results only when scrolled into view, so page load no
@@ -53,7 +53,9 @@ export function initChatDom() {
                 }
 
                 if (typeof marked !== 'undefined') {
-                    el.innerHTML = parseInlineFiles(marked.parse(displayText));
+                    // Same citation badges as the live stream and the other reload renderer: #REFID_n becomes
+                    // the source chip, and any older citation shape is dropped.
+                    el.innerHTML = parseInlineFiles(marked.parse(substituteRefBadges(displayText, refMapFromDocument())));
                 }
 
                 if (typeof hljs !== 'undefined') {

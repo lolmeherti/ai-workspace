@@ -44,6 +44,11 @@ require_once __DIR__ . '/ModelPerformanceReportTest.php';
 require_once __DIR__ . '/RateReplyActionTest.php';
 require_once __DIR__ . '/ReasoningEffortTest.php';
 require_once __DIR__ . '/ExportRenderTest.php';
+require_once __DIR__ . '/RedditUrlTest.php';
+require_once __DIR__ . '/UrlIndexTest.php';
+require_once __DIR__ . '/ToolArgumentTest.php';
+require_once __DIR__ . '/SourceFailuresTest.php';
+require_once __DIR__ . '/SessionTitleTest.php';
 
 use App\Config;
 use App\Database;
@@ -83,8 +88,17 @@ use App\Tests\ModelPerformanceReportTest;
 use App\Tests\RateReplyActionTest;
 use App\Tests\ReasoningEffortTest;
 use App\Tests\ExportRenderTest;
+use App\Tests\RedditUrlTest;
+use App\Tests\UrlIndexTest;
+use App\Tests\ToolArgumentTest;
+use App\Tests\SourceFailuresTest;
+use App\Tests\SessionTitleTest;
 
 Config::load(__DIR__ . '/..');
+
+// Event attribution: $modelName is process-global, so a suite constructing an AgentManager would tag every
+// later warn/error row with a real model and distort the /models.php per-model fault counts.
+\App\Logger::clearModelName();
 
 $db = null;
 try {
@@ -204,6 +218,21 @@ $allOk = (new ReasoningEffortTest())->run() && $allOk;
 
 echo "\n=== Phase 35: Conversation Export Tests ===\n";
 $allOk = (new ExportRenderTest())->run() && $allOk;
+
+echo "\n=== Phase 36: Reddit URL Policy Tests ===\n";
+$allOk = (new RedditUrlTest())->run() && $allOk;
+
+echo "\n=== Phase 37: URL Index Tests (pasted text) ===\n";
+$allOk = (new UrlIndexTest())->run() && $allOk;
+
+echo "\n=== Phase 38: Tool Argument Normalisation ===\n";
+$allOk = (new ToolArgumentTest($db))->run() && $allOk;
+
+echo "\n=== Phase 39: Source Outcomes ===\n";
+$allOk = (new SourceFailuresTest())->run() && $allOk;
+
+echo "\n=== Phase 40: Session Title Tests ===\n";
+$allOk = (new SessionTitleTest($db))->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

@@ -15,7 +15,7 @@ class ChatStreamAction extends BaseAction
     ) {
     }
 
-    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile = null, ?string $effort = null): void
+    public function execute(int $sessionId, string $query, $imageFile, $cacheAction, $cacheKey, $activeEditFile = null, ?string $effort = null, ?array $fetchUrls = null): void
     {
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
@@ -48,7 +48,7 @@ class ChatStreamAction extends BaseAction
                 echo "data: {$payload}\n\n";
                 @ob_flush();
                 @flush();
-            });
+            }, $fetchUrls);
         } catch (EndpointException $e) {
             // The endpoint answered, but not with a completion. Say why instead of
             // ending the turn with an empty bubble.
@@ -62,6 +62,26 @@ class ChatStreamAction extends BaseAction
             @flush();
         } catch (ModelBusyException $e) {
             $payload = json_encode(['event' => 'error', 'data' => ['code' => 'model_busy', 'message' => $e->getMessage()]]);
+            echo "data: {$payload}\n\n";
+            @ob_flush();
+            @flush();
+        } catch (\Throwable $e) {
+            // Anything else — a TypeError, a fatal in a tool, a bad DB write — used to end the request
+            // before the terminal event, so the browser could only say "Connection ended before
+            // completion" with no cause. Log it as a turn failure (visible at /logs, level critical) and
+            // hand the browser a terminated stream plus the reason, so the bubble says what broke.
+            \App\Logger::logEvent('chat_turn_failed', 'Chat turn died before completion: ' . $e->getMessage(), [
+                'exception'  => get_class($e),
+                'message'    => $e->getMessage(),
+                'at'         => $e->getFile() . ':' . $e->getLine(),
+                'session_id' => $sessionId,
+                'where'      => __CLASS__,
+            ], 'critical', 'ChatStreamAction');
+
+            $payload = json_encode(['event' => 'error', 'data' => [
+                'code'    => 'internal_error',
+                'message' => 'The turn failed: ' . get_class($e) . ' at ' . basename($e->getFile()) . ':' . $e->getLine() . '. Details in /logs.',
+            ]]);
             echo "data: {$payload}\n\n";
             @ob_flush();
             @flush();

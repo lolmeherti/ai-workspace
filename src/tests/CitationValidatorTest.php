@@ -104,6 +104,56 @@ class CitationValidatorTest
         $out3 = $this->validator->sanitizeCitations('Paris [S1] is capital.', []);
         $this->test('empty valid set strips citation', !str_contains($out3, '[S1]'));
         $this->test('empty valid set preserves text', str_contains($out3, 'Paris'));
+
+        // ── cited in prose instead of in brackets ────────────────────────────
+        // Measured: "**Caveat on those prices:** S2/S3 are eBay US listings." reached the user with the
+        // internal ids intact — brackets were the only shape the sanitizer knew.
+        $prose = $this->validator->sanitizeCitations(
+            'Caveat on those prices: S2/S3 are eBay US listings.',
+            ['S1', 'S2', 'S3']
+        );
+        $this->test('a slash-joined run of ids is stripped', !preg_match('/\bS\d+\b/', $prose));
+        $this->test('and the sentence around it survives', str_contains($prose, 'are eBay US listings'));
+
+        $spoken = $this->validator->sanitizeCitations('See S1, S2 and S3 for the numbers.', ['S1', 'S2', 'S3']);
+        $this->test('a spelled-out run is stripped too', !preg_match('/\bS\d+\b/', $spoken));
+
+        $inParens = $this->validator->sanitizeCitations('Prices (S2, S3) are US listings.', ['S1', 'S2', 'S3']);
+        $this->test('a parenthesised run leaves no empty parens and no id',
+            !preg_match('/\bS\d+\b/', $inParens) && !str_contains($inParens, '('));
+
+        // A lone id is left alone on purpose: these ids are a letter and a digit and collide with real names
+        // in this domain. One stray id is a smaller failure than mangling "AWS S3".
+        $aws = $this->validator->sanitizeCitations('Upload it to AWS S3 and check.', ['S1', 'S2', 'S3']);
+        $this->test('a lone id that is a real name survives', str_contains($aws, 'AWS S3'));
+        $cs = $this->validator->sanitizeCitations('CS2 runs faster than CS:GO.', ['S1', 'S2']);
+        $this->test('an id inside a longer token is not touched', str_contains($cs, 'CS2'));
+
+        $chunk = $this->validator->sanitizeCitations('The claim S2-C1 is wrong.', ['S1', 'S2']);
+        $this->test('a bare chunk reference is stripped', !str_contains($chunk, 'S2-C1'));
+
+        // ── the token the UI badges is kept ──────────────────────────────────
+        // #REFID_n is the model-facing citation (see PromptAssemblyService::toRefIds). It survives into the
+        // stored answer so the rendered badge can replace it; only a token with nothing behind it goes.
+        $kept = $this->validator->sanitizeCitations('Tea helps. #REFID_2', ['S1', 'S2']);
+        $this->test('a token for a source this turn showed is kept', str_contains($kept, '#REFID_2'));
+        $this->test('and the sentence around it is untouched', str_contains($kept, 'Tea helps.'));
+
+        $dead = $this->validator->sanitizeCitations('Tea helps. #REFID_9', ['S1', 'S2']);
+        $this->test('a token with no source behind it is dropped', !str_contains($dead, '#REFID_'));
+
+        $padded = $this->validator->sanitizeCitations('Tea. #REFID_02', ['S1', 'S2']);
+        $this->testEq('the number is normalised for the lookup', 'Tea. #REFID_2', $padded);
+
+        $this->testEq('a chunk-suffixed source token is normalised without a dangling chunk',
+            'Tea. #REFID_2.', $this->validator->sanitizeCitations('Tea. #REFID_02-C12.', ['S2']));
+        $this->testEq('an unknown chunk-suffixed token is removed in full',
+            'Tea. .', $this->validator->sanitizeCitations('Tea. #REFID_9-C1.', ['S2']));
+        $this->testEq('ordinary text with a chunk-like suffix is preserved',
+            'Device AB-C1.', $this->validator->sanitizeCitations('Device AB-C1.', ['S2']));
+
+        $asToken = $this->validator->sanitizeCitations('Tea. #REFID_2', ['#REFID_1', '#REFID_2']);
+        $this->test('an already-tokenised valid list works too', str_contains($asToken, '#REFID_2'));
     }
 
     // ===================================================================

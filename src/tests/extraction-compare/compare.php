@@ -354,6 +354,7 @@ writeJson($qDir . '/model-input-meta.json', [
     'omitted_chars_of_page_text' => $omittedChars,
     'budget_chars' => $budgetChars,
     'preview_cap_chars' => $map['options']['previewChars'] ?? null,
+    'blocks_with_date_hint' => 0,
     'map_build_ms' => $captureTimes['map_build_ms'] ?? null,
     'notes' => $omittedBlocks
         ? 'Input budget truncated the map; the OMISSIONS section was shown to the model.'
@@ -629,6 +630,7 @@ $stats = [
     ],
     'map' => [
         'preview_cap_chars' => $map['options']['previewChars'] ?? null,
+    'blocks_with_date_hint' => 0,
         'budget_chars' => $budgetChars,
         'map_json_chars' => strlen((string) json_encode($map)),
         'store_json_chars' => strlen((string) json_encode($store)),

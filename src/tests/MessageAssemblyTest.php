@@ -23,6 +23,7 @@ class MessageAssemblyTest
     {
         $this->runPreprocessHistory();
         $this->runBuildMessagesArray();
+        $this->runRefIds();
         $this->runStableSystemPrompt();
 
         echo "\n" . str_repeat('=', 55) . "\n";
@@ -246,6 +247,36 @@ class MessageAssemblyTest
     }
 
     // ===================================================================
+    // model-facing citation tokens (#REFID_n)
+    // ===================================================================
+    private function runRefIds(): void
+    {
+        echo "\n=== citation tokens handed to the model ===\n";
+
+        // The model copies the id it reads out of the evidence, so that is the one place the token has to be
+        // rewritten — and only there: a page's own text can legitimately contain "AWS S3" or "an S1 helmet".
+        $evidence = '<source id="S7">'
+            . '<title>AWS S3 pricing and an S1 helmet</title>'
+            . '<chunk id="S7-C1"><claim refs="S7-C1,S8">x</claim></chunk>'
+            . '</source>';
+        $out = PromptAssemblyService::toRefIds($evidence);
+        $this->test('the source id becomes the token the model cites', str_contains($out, '<source id="#REFID_7">'));
+        $this->test('chunk ids follow', str_contains($out, '<chunk id="#REFID_7-C1">'));
+        $this->test('ref lists follow', str_contains($out, 'refs="#REFID_7-C1,#REFID_8"'));
+        $this->test('page text is never rewritten', str_contains($out, 'AWS S3 pricing and an S1 helmet'));
+
+        $block = $this->prompt->buildEvidenceBlock('<source id="S1">a</source>', ['S1', 'S2']);
+        $this->test('the model only ever sees the ref token',
+            str_contains($block['content'], 'valid_sources="#REFID_1,#REFID_2"')
+            && !str_contains($block['content'], 'id="S1"'));
+
+        $this->testEq('atoms carry the same token', '#REFID_3 the claim',
+            PromptAssemblyService::renderAtomLines([['source_id' => 'S3', 'claim' => 'the claim']]));
+        $this->testEq('an already-tokenised id is left alone', '#REFID_3', PromptAssemblyService::refToken('#REFID_3'));
+        $this->testEq('a non-id is passed through', 'file', PromptAssemblyService::refToken('file'));
+    }
+
+    // ===================================================================
     // stable system prompt + runtime timestamp (cheap-fix regression)
     // ===================================================================
     private function runStableSystemPrompt(): void
@@ -300,7 +331,8 @@ class MessageAssemblyTest
         $this->test('current_time appended as the trailing message',
             is_array($last) && ($last['role'] ?? null) === 'user' && ($last['content'] ?? '') === $t);
 
-        // Evidence wrapped with valid_sources + fetched_at when present.
+        // Evidence wrapped with valid_sources + fetched_at when present. The list carries the token the model
+        // is told to cite (#REFID_1), not the stored S1: the model never sees the internal id any more.
         $ev = [
             ['role' => 'system', 'message' => '<source id="S1">x</source>', 'message_type' => 'data_fetching', 'created_at' => '2026-09-22 19:00:00'],
             ['role' => 'user', 'message' => 'hi', 'message_type' => 'text'],
@@ -308,7 +340,7 @@ class MessageAssemblyTest
         $m4 = $this->prompt->buildMessagesArray($sys, $ev);
         $evidenceBlock = null;
         foreach ($m4 as $msg) {
-            if (is_string($msg['content']) && str_contains($msg['content'], 'valid_sources="S1"')) {
+            if (is_string($msg['content']) && str_contains($msg['content'], 'valid_sources="#REFID_1"')) {
                 $evidenceBlock = $msg['content'];
             }
         }

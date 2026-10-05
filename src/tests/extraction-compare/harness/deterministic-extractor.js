@@ -66,6 +66,7 @@
     title: document.title,
     fetched_at: new Date().toISOString(),
     date_posted: extractJsonLdDatePosted(),
+    dates: resolveSourceDates(),
     links: finalCandidate.links,
     entities: [{
       entity_type: "article",
@@ -182,12 +183,19 @@
     return location.hostname === "consent.google.com";
   }
 
-  function detectHardChallenge() {
+  // A captcha widget only means "blocked" when the page has nothing to read.
+  // Sites embed invisible captchas (reCAPTCHA Enterprise / hCaptcha) for their
+  // own forms while serving normal content, so treating the mere presence of the
+  // iframe as a wall discards a readable page. Content is the discriminator.
+  // With no extraction available (early check) the iframe rule cannot judge and
+  // stays silent; the settling loop re-checks it against a real candidate.
+  function detectHardChallenge(extraction = null) {
     const title = document.title || "";
     if (/prove you('re| are) (a )?(human|not a robot)|verify you are human|i'?m not a robot|attention required|enable javascript/i.test(title)) {
       return "title: " + title.slice(0, 80);
     }
-    if (document.querySelector("iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[src*='captcha']")) {
+    const captchaFrame = document.querySelector("iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[src*='captcha']");
+    if (captchaFrame && extraction && !isGenuineContent(extraction)) {
       return "captcha iframe";
     }
     if (location.pathname.startsWith("/sorry/")) return "google /sorry/ block";
@@ -255,11 +263,12 @@
 
     while (Date.now() - t0 < DEADLINE_MS) {
       if (detectConsent()) return { candidate, stable: false, terminal: "consent_required", reason: null, debug: { elapsed_ms: Date.now() - t0 } };
-      const hard = detectHardChallenge();
-      if (hard) return { candidate, stable: false, terminal: "challenge_required", reason: hard, debug: { elapsed_ms: Date.now() - t0 } };
 
       const curr = extract();
       candidate = curr;
+
+      const hard = detectHardChallenge(curr);
+      if (hard) return { candidate, stable: false, terminal: "challenge_required", reason: hard, debug: { elapsed_ms: Date.now() - t0 } };
 
       // Still on a challenge screen? Wait for it to resolve/redirect (a redirect
       // re-injects this script on the real page).
@@ -325,25 +334,37 @@
       currentHeading = "";
     }
 
+    // A text repeated verbatim is either boilerplate or the same block rendered a
+    // second time (responsive layout, list + detail split view) — deduping that is
+    // the point. But a SHORT repeated string is per-item data: every job card says
+    // "Vollzeit", every card states its own date and salary. Deduping those across
+    // the whole page stripped each item of its own attributes and left the single
+    // surviving copy under the wrong item (measured: a card lost "vor 4 Tagen
+    // veröffentlicht", "Wien", "Vollzeit" and its salary because an earlier card
+    // carried the identical strings). Dedupe long text only; short strings stay
+    // with the item that carries them.
+    const DEDUPE_MIN_CHARS = 60;
     function appendText(raw) {
       const text = cleanText(raw);
-      if (!text || seenText.has(text)) return;
-      seenText.add(text);
+      if (!text) return;
+      if (text.length >= DEDUPE_MIN_CHARS) {
+        if (seenText.has(text)) return;
+        seenText.add(text);
+      }
       if (buffer && !buffer.endsWith("\n")) buffer += " ";
       buffer += text;
     }
 
-    // Render a <table> as a GFM pipe table so it survives into the app's
-    // markdown renderer. Cell text is cleaned and pipe characters escaped so a
-    // stray "|" inside a cell can't break the table grid.
+    // Render a table as a GFM pipe table so it survives into the app's markdown
+    // renderer. Cell text is cleaned and pipe characters escaped so a stray "|"
+    // inside a cell can't break the table grid.
     function renderTable(tableEl) {
       const rows = [];
-      for (const tr of tableEl.querySelectorAll("tr")) {
+      for (const tr of tableRows(tableEl)) {
         const cells = [];
-        for (const cell of tr.children) {
-          if (cell.tagName === "TH" || cell.tagName === "TD") {
-            cells.push(cleanText(cell.textContent).replace(/\|/g, "\\|"));
-          }
+        for (const cell of tableCells(tr)) {
+          const text = cleanText(cell.textContent).replace(/\|/g, "\\|");
+          if (text) cells.push(text);
         }
         if (cells.length) rows.push(cells);
       }
@@ -373,7 +394,7 @@
         currentLevel = parseInt(tag.charAt(1), 10);
         return; // heading text captured as the heading; don't re-walk it
       }
-      if (tag === "TABLE") {
+      if (isTableEl(node)) {
         flushSection();
         const md = renderTable(node);
         if (md) sections.push({ heading: currentHeading, heading_level: currentHeading ? currentLevel : 0, body: md });
@@ -438,6 +459,175 @@
     }
     return "gen_" + Math.abs(hash).toString(36);
   }
+
+  // ── Tables ──────────────────────────────────────────────────────────────────
+  // Tables are increasingly built from divs carrying ARIA roles instead of
+  // <table> (GitBook, Notion-likes, docs themes). Without this they never became
+  // tables: their cells arrived as a run of loose values with the header row and
+  // row boundaries gone.
+  function isAriaTable(el) {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+    const r = (el.getAttribute("role") || "").toLowerCase();
+    return r === "table" || r === "grid";
+  }
+
+  function isTableEl(el) {
+    return !!el && el.nodeType === Node.ELEMENT_NODE && (el.tagName === "TABLE" || isAriaTable(el));
+  }
+
+  function tableRows(el) {
+    if (el.tagName === "TABLE") return [...el.querySelectorAll("tr")];
+    const all = [...el.querySelectorAll('[role="row"]')];
+    return all.filter(r => !all.some(o => o !== r && o.contains(r)));   // outermost rows
+  }
+
+  function tableCells(row) {
+    if (row.tagName === "TR") {
+      return [...row.children].filter(c => c.tagName === "TH" || c.tagName === "TD");
+    }
+    return [...row.children].filter(c => {
+      const r = (c.getAttribute("role") || "").toLowerCase();
+      return r === "cell" || r === "gridcell" || r === "columnheader" || r === "rowheader";
+    });
+  }
+
+  // ── Source dates ────────────────────────────────────────────────────────────
+  // Publication and update information usually sits in the material the article
+  // extractor discards: a dateline above the body, a byline, or a footer line
+  // ("This page was last edited on ..."). This pass reads the whole document for
+  // it, keeps the sentence it came from so the KIND can be told apart, and
+  // reports nothing rather than guessing. Explicit markup is preferred; plain
+  // page text is the fallback, so a page that only writes the date in prose still
+  // resolves. Deterministic: no model call.
+  function resolveSourceDates() {
+    const DATE_SHAPE = '(?:\\d{4}-\\d{2}-\\d{2}(?:[T ]\\d{2}:\\d{2}(?::\\d{2})?(?:Z|[+-]\\d{2}:?\\d{2})?)?'
+    + '|\\d{1,2}\\.\\d{1,2}\\.\\d{4}'
+    + '|\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}'
+    + '|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{1,2},\\s+\\d{4}'
+    + '|\\d+\\s+(?:minute|hour|day|week|month|year)s?\\s+ago'
+    + '|vor\\s+\\d+\\s+(?:Minuten?|Stunden?|Tagen?|Wochen?|Monaten?|Jahren?)'
+    + '|\\d{1,2}:\\d{2}\\s*(?:AM|PM)?\\s*(?:GMT|UTC|CET|CEST|[+-]\\d{1,2})?)';
+    const LABEL_PUB = /(published|posted|published on|edited by|ver(?:ö|o)ffentlicht|erschienen|stand)/i;
+    const LABEL_UPD = /(last edited|last modified|last updated|updated|aktualisiert|zuletzt (?:ge(?:ä|a)ndert|bearbeitet))/i;
+
+  // Text of an element with a separator between adjacent nodes: raw textContent
+  // fuses inline elements ("September 30, 20269:01 PM").
+  function spacedText(el) {
+    if (!el) return '';
+    if (el.nodeType === Node.TEXT_NODE) return el.textContent || '';
+    let out = '';
+    for (const child of el.childNodes) {
+      if (child.nodeType === Node.ELEMENT_NODE) out += spacedText(child) + ' ';
+      else out += (child.nodeValue || '') + ' ';
+    }
+    return out.replace(/\s+/g, ' ');
+  }
+
+
+
+    const out = { published: null, updated: null, published_evidence: null, updated_evidence: null,
+                  published_signal: null, updated_signal: null, candidates: 0 };
+    try {
+      const meta = { publication: [], update: [] };
+      // explicit metadata first
+      for (const node of document.querySelectorAll('meta[property],meta[name],meta[itemprop]')) {
+        const key = (node.getAttribute('property') || node.getAttribute('name') || node.getAttribute('itemprop') || '').toLowerCase();
+        const val = (node.getAttribute('content') || '').trim();
+        if (!val) continue;
+        if (/^(article:published_time|og:published_time|datepublished|pubdate|dc\.date|date)$/.test(key)) meta.publication.push({ key, val });
+        else if (/^(article:modified_time|og:updated_time|datemodified|last-modified)$/.test(key)) meta.update.push({ key, val });
+      }
+      for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
+        let data; try { data = JSON.parse(node.textContent || ''); } catch (e) { continue; }
+        const walkJson = (o) => {
+          if (o == null) return;
+          if (Array.isArray(o)) { o.forEach(walkJson); return; }
+          if (typeof o !== 'object') return;
+          for (const [k, v] of Object.entries(o)) {
+            const key = k.toLowerCase();
+            if (typeof v === 'string' && v.trim()) {
+              if (key === 'datepublished') meta.publication.push({ key: 'json-ld datePublished', val: v.trim() });
+              if (key === 'dateposted') meta.publication.push({ key: 'json-ld datePosted', val: v.trim() });
+              if (key === 'datemodified') meta.update.push({ key: 'json-ld dateModified', val: v.trim() });
+            } else walkJson(v);
+          }
+        };
+        walkJson(data);
+      }
+      // visible marked-up dates: <time datetime>
+      const timeEls = [...document.querySelectorAll('time[datetime]')];
+      // plain text in the regions the article extractor throws away
+      const candidates = [];
+      const push = (region, text) => {
+        let text2 = String(text || '');
+        if (!text2.trim()) return;
+        // every date in the fragment, not only the first
+        const re = new RegExp('([^.!?|]{0,110}?(' + DATE_SHAPE + ')[^.!?|]{0,50})', 'gi');
+        let m; let guard = 0;
+        while ((m = re.exec(text2)) !== null && guard++ < 40) {
+          const sentence = m[1].replace(/\s+/g, ' ').trim();
+          const kind = LABEL_UPD.test(sentence) ? 'update' : (LABEL_PUB.test(sentence) ? 'publication' : 'unknown');
+          candidates.push({ region, sentence, date: m[2].trim(), kind });
+        }
+      };
+      for (const tag of ['header', 'footer', 'aside', 'nav']) {
+        for (const el of document.querySelectorAll(tag)) push(tag, spacedText(el));
+      }
+      const h1 = document.querySelector('h1');
+      if (h1 && h1.parentElement) {
+        const before = [], after = [];
+        let seen = false;
+        for (const child of h1.parentElement.childNodes) {
+          if (child === h1) { seen = true; continue; }
+          if (child.nodeType === Node.ELEMENT_NODE) (seen ? after : before).push(spacedText(child));
+          else (seen ? after : before).push(child.nodeValue || '');
+        }
+        if (before.length) push('byline-before-headline', before.join(' ').slice(-1200));
+        if (after.length) push('byline-after-headline', after.join(' ').slice(0, 700));
+      }
+      out.candidates = candidates.length;
+
+      const pick = (kind) => {
+        if (kind === 'publication' && meta.publication.length) {
+          return { date: meta.publication[0].val, evidence: meta.publication[0].key + ' = ' + meta.publication[0].val, signal: 'metadata' };
+        }
+        if (kind === 'update' && meta.update.length) {
+          return { date: meta.update[0].val, evidence: meta.update[0].key + ' = ' + meta.update[0].val, signal: 'metadata' };
+        }
+        if (kind === 'publication') {
+          // a date standing before an explicit "Updated" in the same fragment is the
+          // publication date (the usual dateline shape)
+          for (const c of candidates) {
+            if (LABEL_UPD.test(c.sentence)) {
+              const m = c.sentence.match(new RegExp('(' + DATE_SHAPE + ')[^.!?]{0,60}?(?:updated|last modified|last updated|aktualisiert)', 'i'));
+              if (m) return { date: m[1].trim(), evidence: c.sentence, signal: 'dateline-pattern' };
+            }
+          }
+        }
+        const wantTime = kind === 'publication' ? /published/i : /modifi|updated/i;
+        if (timeEls.length) {
+          for (const el of timeEls) {
+            if (kind === 'update' && !wantTime.test(el.outerHTML || '')) continue;
+            return { date: (el.getAttribute('datetime') || '').trim(), evidence: spacedText(el).trim() || '<time datetime>', signal: 'time-element' };
+          }
+        }
+        for (const c of candidates) {
+          if (c.kind === kind) return { date: c.date, evidence: c.sentence, signal: 'labelled-text' };
+        }
+        return null;
+      };
+      const pub = pick('publication');
+      const upd = pick('update');
+      if (pub) { out.published = pub.date; out.published_evidence = pub.evidence; out.published_signal = pub.signal; }
+      if (upd) { out.updated = upd.date; out.updated_evidence = upd.evidence; out.updated_signal = upd.signal; }
+    } catch (e) {
+      // Never fail silently: an error here used to ship an empty dates object that
+      // looked exactly like "the page states no date".
+      out.error = String((e && e.message) || e);
+    }
+    return out;
+  }
+
 
   // Generic schema.org JSON-LD scrape: return the first datePosted string found
   // (JobPosting is the common case), regardless of host. No site-specific logic.

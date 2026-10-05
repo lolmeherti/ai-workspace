@@ -3,6 +3,7 @@ import { requestJson, notify, confirmAction, withPending } from '../workspace/fe
 import { ensureAIAvailable, reportBusy, paintAvailability } from '../workspace/availability.js';
 import { updateConversation } from './chatNavigation.js';
 import { state } from '../state.js';
+import { groupBySite, endpointOf } from './sourceGroups.js';
 
 let epoch = 0;
 let dirty = false;
@@ -206,7 +207,8 @@ function sourceFeed(d) {
     if (d.parsed?.length) {
         return d.parsed.map(s => {
             const meta = map[s.id] || {};
-            const text = (s.chunks || []).join('\n').trim();
+            // Condenser sources carry claims and no chunks; both are content the model read.
+            const text = [...(s.chunks || []), ...(s.claims || [])].join('\n').trim();
             return { id: s.id, title: s.title || meta.title || s.id, domain: s.domain || meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
         });
     }
@@ -308,7 +310,7 @@ function renderActions(d) {
     return wrap;
 }
 
-function renderSourceCard(src) {
+function renderSourceCard(src, { endpoint = null } = {}) {
     const card = el('div', 'context-source-card bg-[#0e1a2b] border border-[#172c46] rounded-lg overflow-hidden');
     const head = el('button', 'w-full flex items-start justify-between gap-1.5 p-2.5 text-left hover:bg-[#12213a] transition-colors');
     head.type = 'button';
@@ -320,7 +322,15 @@ function renderSourceCard(src) {
     titleRow.append(el('h4', 'text-xs font-semibold text-slate-100 truncate', src.title || src.id));
     titleRow.append(el('span', 'text-[10px] font-mono text-cyan-300 bg-[#102035] px-1 rounded flex-shrink-0', `~${src.tokens} tok`));
     info.append(titleRow);
-    if (src.domain) info.append(el('span', 'text-[10px] text-slate-400 font-mono block truncate', src.domain));
+    // Inside a site group the endpoint tells the pages apart — the site is already the heading, so a grouped
+    // page with no path (the site root) shows no second line rather than repeating its own site.
+    const grouped = endpoint !== null;
+    const second = grouped ? endpoint : src.domain;
+    if (second) {
+        info.append(el('span', grouped
+            ? 'source-endpoint text-[10px] block truncate'
+            : 'text-[10px] text-slate-400 font-mono block truncate', second));
+    }
     meta.append(info);
     const chevron = el('span', 'context-source-chevron text-slate-500 transition-transform flex-shrink-0 mt-0.5');
     chevron.innerHTML = ICON('<path d="M6 9l6 6 6-6"/>').replace('<svg ', '<svg class="w-3.5 h-3.5" ');
@@ -360,7 +370,26 @@ function renderSources(d) {
     if (!special) left.append(el('span', 'px-1.5 py-0.2 rounded-full bg-[#10233b] text-cyan-300 text-[10px] font-mono border border-cyan-500/20', String(feed.length)));
     head.append(left, el('span', 'text-[10px] text-slate-400', special ? `~${Number(d.token_estimate) || 0} raw tok` : `${feed.length} source${feed.length === 1 ? '' : 's'} · ~${Number(d.token_estimate) || 0} raw tok`));
     wrap.append(head);
-    for (const src of feed) wrap.append(renderSourceCard(src));
+
+    // Every site heads its block, even when it answered once — a header on some groups and not others made the
+    // list read as two different things stacked together. A source with no site (a memory, an attached file)
+    // has nothing to head with and stays the bare card it always was.
+    for (const group of groupBySite(feed)) {
+        if (group.site === '') {
+            for (const src of group.pages) wrap.append(renderSourceCard(src, { endpoint: null }));
+            continue;
+        }
+
+        const siteHead = el('div', 'source-site-head');
+        siteHead.append(el('span', '', group.site));
+        if (group.pages.length > 1) siteHead.append(el('span', 'source-site-count', String(group.pages.length)));
+        wrap.append(siteHead);
+
+        const holder = el('div', 'source-site-pages');
+        for (const src of group.pages) holder.append(renderSourceCard(src, { endpoint: endpointOf(src.url) }));
+        wrap.append(holder);
+    }
+
     return wrap;
 }
 

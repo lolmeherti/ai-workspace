@@ -169,7 +169,9 @@ class ChatExportAction extends BaseAction
                 }
             } elseif ($kind === 'assistant' || $kind === 'summary') {
                 $extracted = ThoughtExtractor::extract((string) $row['message']);
-                $record['text'] = $extracted['content'];
+                // An export is read outside the app, where no badge can be rendered, so a citation token
+                // becomes a plain link to the source it names.
+                $record['text'] = $this->withSourceLinks($extracted['content'], $row['source_map'] ?? null);
                 if ($options['thoughts'] && $extracted['thought'] !== '') {
                     $record['reasoning'] = $extracted['thought'];
                 }
@@ -360,6 +362,53 @@ class ChatExportAction extends BaseAction
             }
         }
         return $out;
+    }
+
+    /**
+     * Replace #REFID_n citation tokens with markdown links to the sources they name.
+     *
+     * Exports leave the app, where no badge exists, so a token would otherwise travel as a dead "#REFID_7".
+     * A token with no source behind it is dropped.
+     */
+    private function withSourceLinks(string $text, mixed $rawMap): string
+    {
+        if (str_contains($text, '#REFID_')) {
+            $byId = [];
+            foreach ($this->decodeSources($rawMap) as $source) {
+                $byId[(string) $source['id']] = $source;
+            }
+
+            $text = preg_replace_callback('/#REFID_(\d+)(?:-C\d+)?/', static function (array $m) use ($byId): string {
+                $source = $byId['S' . (int) $m[1]] ?? null;
+                $url = (string) ($source['url'] ?? '');
+                if ($url === '') {
+                    return '';
+                }
+                $label = (string) ($source['title'] ?? '');
+                if ($label === '') {
+                    $label = (string) (parse_url($url, PHP_URL_HOST) ?: $url);
+                }
+                return '[' . $label . '](' . $url . ')';
+            }, $text) ?? $text;
+        }
+
+        // An export is read where nothing can render a chip or resolve an id, so the older citation shapes are
+        // removed here exactly as the clipboard removes them — the two "text that leaves the app" surfaces must
+        // not disagree. Mirror of stripLegacyCitations() in markdown.js; keep the patterns and their order in sync.
+        return $this->stripLegacyCitations($text);
+    }
+
+    /**
+     * Drop the pre-#REFID citation shapes: bracketed ids, parenthesised runs, bare runs of two or more, and
+     * chunk ids. A lone bare id is left alone — "AWS S3" and "an S1 helmet" are real words, not citations.
+     */
+    private function stripLegacyCitations(string $text): string
+    {
+        $text = preg_replace('/\[S\d+(?:-C\d+)?(?:\s*,\s*S\d+(?:-C\d+)?)*\]/', '', $text) ?? $text;
+        $text = preg_replace('/\(\s*S\d+\s*(?:[\/,&+]|and|or|to)\s*S\d+\s*\)/', '', $text) ?? $text;
+        $text = preg_replace('/\bS\d+\b(?:\s*(?:\/|,|&|\+|and|or|to)\s*\bS\d+\b)+/', '', $text) ?? $text;
+
+        return preg_replace('/\bS\d+-C\d+\b/', '', $text) ?? $text;
     }
 
     /**

@@ -61,6 +61,7 @@ class Schema
                 cache_used TINYINT(1) DEFAULT 0,
                 scraped_urls TEXT NULL,
                 source_map JSON NULL,
+                failed_sources JSON NULL,
                 active_context TINYINT(1) DEFAULT 1,
                 raw_evicted TINYINT(1) DEFAULT 0,
                 backing_chunks JSON NULL,
@@ -197,6 +198,16 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'source_map'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN source_map JSON NULL AFTER search_query");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // Sources the turn could not read (or read and got nothing usable from), so the panel can show
+        // them on reload instead of only during the live turn.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'failed_sources'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN failed_sources JSON NULL AFTER source_map");
             }
         } catch (PDOException $e) {
         }

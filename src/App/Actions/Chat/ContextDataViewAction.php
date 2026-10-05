@@ -66,7 +66,11 @@ class ContextDataViewAction extends BaseAction
      * Parse the persisted evidence block (EvidenceBuilder <source>/<chunk> XML)
      * into structured source entries for readable rendering.
      *
-     * @return array<int, array{id: string, title: string, domain: string, chunks: string[]}>
+     * Condenser-format sources (level 3 fitting) carry <claim> blocks and no <chunk>, so both are collected:
+     * counting only chunks made five real sources report "~0 tok" in the Context Data view while the model
+     * had actually read ~1.5k tokens of their claims (measured on session 1000984, 2026-10-03).
+     *
+     * @return array<int, array{id: string, title: string, domain: string, chunks: string[], claims: string[]}>
      */
     public static function parseSources(string $message): array
     {
@@ -94,8 +98,15 @@ class ContextDataViewAction extends BaseAction
                 }
             }
 
-            if ($title !== '' || $domain !== '' || $chunks !== []) {
-                $sources[] = ['id' => $s[1], 'title' => $title, 'domain' => $domain, 'chunks' => $chunks];
+            $claims = [];
+            if (preg_match_all('/<claim\b[^>]*>(.*?)<\/claim>/s', $inner, $cl, PREG_SET_ORDER)) {
+                foreach ($cl as $claim) {
+                    $claims[] = self::unescape($claim[1]);
+                }
+            }
+
+            if ($title !== '' || $domain !== '' || $chunks !== [] || $claims !== []) {
+                $sources[] = ['id' => $s[1], 'title' => $title, 'domain' => $domain, 'chunks' => $chunks, 'claims' => $claims];
             }
         }
         return $sources;

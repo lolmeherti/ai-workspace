@@ -130,7 +130,7 @@ class EvidenceConsolidationTest
 
             $nextTurn = $this->injectedContent($svc, $row, []);
             $this->test('next turn injects atoms not raw message',
-                str_contains($nextTurn, '[S1] Knicks won 4-1') && !str_contains($nextTurn, 'full raw evidence text'));
+                str_contains($nextTurn, '#REFID_1 Knicks won 4-1') && !str_contains($nextTurn, 'full raw evidence text'));
             $this->test('immediate answer (rich row) still uses raw message',
                 $this->injectedContent($svc, $row, [$rowId]) === 'full raw evidence text');
         } finally {
@@ -348,14 +348,14 @@ class EvidenceConsolidationTest
 
             $c1 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'RAW_TEXT', 0, $atoms)), []);
             $this->test('raw live + atoms -> raw AND atoms injected',
-                str_contains($c1, 'RAW_TEXT') && str_contains($c1, '[S1] atom fact'));
+                str_contains($c1, 'RAW_TEXT') && str_contains($c1, '#REFID_1 atom fact'));
 
             $c2 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'RAW_ONLY', 0, null)), []);
             $this->test('raw live, no atoms -> raw only', $c2 === 'RAW_ONLY');
 
             $c3 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'EVICTED_RAW', 1, $atoms)), []);
             $this->test('raw evicted + atoms -> atoms only',
-                !str_contains($c3, 'EVICTED_RAW') && str_contains($c3, '[S1] atom fact'));
+                !str_contains($c3, 'EVICTED_RAW') && str_contains($c3, '#REFID_1 atom fact'));
 
             $c4 = $this->injectedContent($svc, $this->fetchRow($this->seedRowWithState($sessionId, 'OFF_RAW', 1, null)), []);
             $this->test('raw evicted, no atoms -> empty (off)', $c4 === '');

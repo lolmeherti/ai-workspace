@@ -1,4 +1,5 @@
 import { renderSourcesList } from '../chat/sourceCards.js';
+import { substituteRefBadges, refMapFromSources } from '../markdown.js';
 import { flushDraftChanges } from '../chat/draftSync.js';
 import { updateConversation } from '../chat/chatNavigation.js';
 import { paintAvailability, refreshAvailability, reportBusy } from '../workspace/availability.js';
@@ -17,21 +18,9 @@ import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
 import { renderBriefingActions } from '../chat/chatBriefingCards.js';
 import { renderReplyRating } from '../chat/replyRating.js';
 
-function escapeRegex(s) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function stripCitations(text, sourceIds) {
-    let out = text;
-    if (sourceIds.length) {
-        const sorted = [...sourceIds].sort((a, b) => b.length - a.length);
-        const alt = sorted.map(escapeRegex).join('|');
-        const re = new RegExp(`\\[(?:${alt})(?:-C\\d+)?(?:\\s*,\\s*(?:${alt})(?:-C\\d+)?)*\\]`, 'g');
-        out = out.replace(re, '');
-    }
-    // Fallback: strip any residual citation-shaped token (hallucinated or stale IDs).
-    return out.replace(/\[S\d+(?:-C\d+)?(?:\s*,\s*S\d+(?:-C\d+)?)*\]/g, '');
-}
+// Citation tokens are turned into source badges (see markdown.js: substituteRefBadges). The older strip
+// helpers that used to live here are gone: one implementation, or the streamed answer and the restored one
+// drift apart.
 
 const PURPOSE_LABELS = {
     firstpass: 'first pass',
@@ -756,7 +745,8 @@ export async function streamResponse(formData, originalMessage) {
     window.briefingEmailCards = null;
     window.briefingActionCards = [];
     let currentSources = [];
-    let sourceIds = [];
+    let currentRefs = {};        // source number -> {url, title, domain}, for the citation badges
+    let currentFailures = [];
     let isFirstToken = true;
     let reasoningSeen = false;
     // A repeated/early `thought_complete` must not re-run the finish handler.
@@ -1126,8 +1116,13 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'sources') {
                             const sources = data.sources || {};
+                            const failed = Array.isArray(data.failed) ? data.failed : [];
                             currentSources = Object.entries(sources).map(([id, s]) => ({ id, ...s }));
-                            sourceIds = currentSources.map(s => s.id);
+                            currentFailures = failed;
+                            currentRefs = refMapFromSources(currentSources);
+                            // The bubble carries its own numbering so copying a freshly streamed answer can
+                            // turn its tokens into links without waiting for a page reload.
+                            aiBubble.dataset.refs = JSON.stringify(currentRefs);
                         }
 
                         if (event === 'generating') {
@@ -1330,7 +1325,9 @@ export async function streamResponse(formData, originalMessage) {
                                     }
                                 }
 
-                                parseBuffer = stripCitations(parseBuffer, sourceIds);
+                                // Citation tokens become source badges here, in the streamed text itself, so a
+                                // half-arrived token is held back rather than flashing as raw text.
+                                parseBuffer = substituteRefBadges(parseBuffer, currentRefs, { holdPartial: true });
                                 scheduleRender(parseBuffer);
                             }
  
@@ -1404,8 +1401,8 @@ export async function streamResponse(formData, originalMessage) {
                             if (data.message) {
                                 aiBubble.setAttribute('data-raw', data.message);
                             }
-                            if (currentSources.length) {
-                                renderSourcesList(aiBubble, currentSources);
+                            if (currentSources.length || currentFailures.length) {
+                                renderSourcesList(aiBubble, currentSources, currentFailures);
                             }
                             if (window.briefingActionCards && window.briefingActionCards.length) {
                                 renderBriefingActions(aiBubble, window.briefingActionCards);

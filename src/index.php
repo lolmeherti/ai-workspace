@@ -116,7 +116,7 @@ try {
 
     // First-run onboarding preview. Force with ?onboarding=1 to review the flow
     // on an already-configured machine; the real trigger is Go's
-    // /api/onboarding needs_onboarding (see .hermes/plans/onboarding.md).
+    // /api/onboarding needs_onboarding (see .hermes/plans/models/onboarding.md).
     if (($_GET['onboarding'] ?? '') === '1') {
         include __DIR__ . '/views/onboarding.php';
         exit;

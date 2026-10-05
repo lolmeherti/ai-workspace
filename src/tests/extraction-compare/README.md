@@ -133,3 +133,51 @@ as many questions as needed; only the model pass re-runs.
 * A failed model call is reported as a failure. There is no silent fallback to
   Pipeline A.
 * No winner is computed. `report.md` ends with an empty human-review checklist.
+
+## Status: the model route is parked (2026-10-03)
+
+The model-guided selection route stays in this directory and stays UNWIRED: nothing in `src/App/` or
+`localsy-search-bridge/` calls it, and only the dev page `src/inspect.php` shells out to these scripts.
+Production keeps the deterministic route, improved by three fixes this experiment produced (ARIA-role tables,
+the source-date sweep, dedup scoped to long text). Measured cost of the model route: one serial model call per
+page, 5.4-16.7 s and 7.7k-22.6k prompt tokens, with a selection that moves with the question's wording (24
+blocks on one phrasing, 4 on another for the same page). Full decision, evidence and resume conditions:
+`.hermes/plans/web-search/2026-10-03_extraction-comparison-report.md` section 9.
+
+## The extractor copy must stay byte-identical
+
+`harness/deterministic-extractor.js` is the production `localsy-search-bridge/generic-extractor.js` copied
+verbatim; `server.js` hashes both and reports `identical_to_production`. After editing the production extractor,
+copy it over the harness copy in the same change, or the rig's Pipeline A silently stops being production's code.
+Do not "improve" the copy on its own — that turns the A-vs-B comparison into a rig artifact.
+
+## Inspect page — compare the two routes by hand (src/inspect.php)
+
+`http://localhost:8080/inspect.php` — a dev-only page, not linked from the UI (like `/logs`).
+
+Paste a link + a question, press **Capture page**, then compare:
+
+- **Localsy pipeline** — production route on the capture: extractor → dedup → BM25 → budget fit
+  (`baseline.php`), spending 0 model calls. Shown verbatim: it is the evidence block the model receives.
+- **Model selection** — the experimental route: DOM map → model picks block ids → content extracted
+  deterministically (`compare.php`), spending 1 model call.
+- **run both** — side by side on one capture, with a stats bar (chunks/BM25/fit level/dropped chars vs
+  map blocks shown/picked/tokens/latency).
+
+Left pane is the captured DOM rendered in a sandboxed iframe (scripts blocked, so it is static); `raw HTML`
+toggles the source, `open live` opens the real URL in a tab. `stats` dumps the raw stats JSON.
+
+The question is **required**: it is the retrieval query both routes work from (BM25 and the budget fit on
+the production route, block selection on the model route). The checkbox *let the model format the query*
+spends one extra call to turn the question into a search query first — the query actually used is shown.
+
+Requirements, same as the rest of the harness:
+
+    node src/tests/extraction-compare/server.js          # on the host
+    harness/ loaded in the browser you already use       # edge://extensions → Load unpacked
+
+Endpoints (all JSON, driven by the page): `act=snapshots`, `act=queue` (POST url) → `act=status&snapshot=`,
+`act=page&snapshot=`, `act=extract` (POST snapshot, question, route=localsy|model, format_query=1),
+`act=extract_both` (POST snapshot, question). Each run writes its artifacts where the CLI scripts always
+write them (`runs/<snapshot>/prod/…` for the production route, `runs/<snapshot>/qNN/…` for the model route)
+so anything observed here can be re-read and quoted from disk.

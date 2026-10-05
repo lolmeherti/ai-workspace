@@ -10,3 +10,5 @@ env
 json_parser_errors.log
 src/logs/app.log
 .hermes/plans/
+docs/
+AGENTS.md

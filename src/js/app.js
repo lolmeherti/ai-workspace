@@ -13,6 +13,7 @@ import { parseMarkdownElements, copyToClipboard } from './markdown.js';
 import { handleChatSubmit, toggleChatEditMode, handleChatSelection, submitMultiDelete } from './chatManager.js';
 import { initReplyRating } from './chat/replyRating.js';
 import { initReasoningEffort } from './chat/reasoningEffort.js';
+import { initUrlPicker } from './chat/chatUrlPicker.js';
 import { enableMemoryEdit, disableMemoryEdit, updateTokenCounter, bypassCondensation, confirmCondensation, applyCondensation, triggerManualCondensation, lockChatContext } from './ui.js';
 import './gallery/galleryBootstrap.js';
 import './tabs/tabsBootstrap.js';
@@ -55,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     parseMarkdownElements();
     initReplyRating();
     initReasoningEffort();
+    initUrlPicker();
     
     switchSidebarTab(state.activeTab);
 

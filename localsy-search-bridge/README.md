@@ -158,7 +158,7 @@ Architecture is locked. The browser is the primary crawler and the only SERP sou
 
 ### Files to know
 
-- Full plan: `C:\Users\Admin-PC\Desktop\ai-workspace\.hermes\plans\localsy-search-bridge.md`
+- Full plan: `C:\Users\Admin-PC\Desktop\ai-workspace\.hermes/plans/web-search/localsy-search-bridge.md`
 - Architecture doc: `C:\Users\Admin-PC\Desktop\ai-workspace\localsy-search-bridge.md`
 - Extension source: `C:\Users\Admin-PC\Desktop\ai-workspace\localsy-search-bridge\`
 - PHP adapter: `C:\Users\Admin-PC\Desktop\ai-workspace\src\App\Adapters\Reddit.php` (to port to extension)
@@ -176,7 +176,7 @@ Architecture is locked. The browser is the primary crawler and the only SERP sou
 
 ```
 Continue the Localsy Search Bridge implementation. The full plan is at
-.hermes/plans/localsy-search-bridge.md. The architecture is locked —
+.hermes/plans/web-search/localsy-search-bridge.md. The architecture is locked —
 browser as primary crawler, Go relay on :8765/:9876, entity-based citations,
 single blocking CAPTCHA handling, no HTTP fallback.
 

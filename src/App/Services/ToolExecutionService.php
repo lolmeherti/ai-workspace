@@ -50,8 +50,86 @@ class ToolExecutionService
         $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
     }
 
+    /**
+     * Coerce decoded tool-call arguments into the shape the tool schemas declare.
+     *
+     * Models occasionally emit a scalar where the schema says list — `queries` as a JSON string, or as a
+     * bare string. `implode()` on that throws a TypeError, and a TypeError inside the turn kills the SSE
+     * stream before its terminal event, so the browser can only report "Connection ended before
+     * completion." with no cause. Normalising once, where arguments enter the tool layer, keeps every
+     * downstream consumer safe (this class at :56/:137, and the tools whose execute() is typed `array`),
+     * and turns a schema violation into a logged event instead of a dead turn.
+     *
+     * Never branches on model identity: any model that emits a scalar gets the same treatment.
+     */
+    public static function normalizeToolArguments(array $args, string $toolName): array
+    {
+        if (!array_key_exists('queries', $args)) {
+            return $args;                                    // nothing to normalise
+        }
+
+        $raw = $args['queries'];
+
+        // Already a list: still make sure it holds usable query strings. A list with an empty string or an
+        // integer in it is a schema violation too, and the tools' execute() methods are typed `array` of
+        // string. Unchanged lists cost nothing and are not logged.
+        if (is_array($raw)) {
+            $clean = self::cleanQueryList($raw);
+            if ($clean === $raw) {
+                return $args;
+            }
+            $args['queries'] = $clean;
+            self::logNormalization($toolName, $raw, 'list_sanitized', count($clean));
+            return $args;
+        }
+
+        $list = [];
+        $how  = 'empty_or_unusable';
+
+        if (is_string($raw) && trim($raw) !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $list = $decoded;      $how = 'json_array_decoded';    // "[\"a\",\"b\"]"
+            } elseif (is_scalar($decoded) && trim((string) $decoded) !== '') {
+                $list = [$decoded];    $how = 'json_scalar_decoded';   // "\"one query\""
+            } else {
+                $list = [$raw];        $how = 'bare_string_wrapped';   // plain text, not JSON
+            }
+        } elseif (is_scalar($raw) && trim((string) $raw) !== '') {
+            $list = [$raw];            $how = 'bare_scalar_wrapped';
+        }
+
+        $args['queries'] = self::cleanQueryList($list);
+        self::logNormalization($toolName, $raw, $how, count($args['queries']));
+
+        return $args;
+    }
+
+    /** Query strings only: scalars cast to string, empty and non-scalar entries dropped. */
+    private static function cleanQueryList(array $list): array
+    {
+        return array_values(array_filter(
+            array_map(static fn($q): string => is_scalar($q) ? (string) $q : '', $list),
+            static fn(string $q): bool => trim($q) !== ''
+        ));
+    }
+
+    /** A schema violation is observable in the event log (level warn → visible at /logs), never silent. */
+    private static function logNormalization(string $toolName, mixed $raw, string $how, int $resultCount): void
+    {
+        \App\Logger::logEvent('tool_args_normalized', 'Tool arguments did not match the declared schema', [
+            'tool_name'     => $toolName,
+            'argument'      => 'queries',
+            'received_type' => get_debug_type($raw),
+            'received_len'  => is_string($raw) ? mb_strlen($raw) : null,
+            'coerced_to'    => $how,
+            'result_count'  => $resultCount,
+        ], 'warn', 'ToolExecutionService::normalizeToolArguments');
+    }
+
     public function executeToolByName(string $toolName, array $args, int $sessionId, callable $emit): string
     {
+        $args = self::normalizeToolArguments($args, $toolName);   // idempotent: a list passes straight through
         $toolData = array_merge(['tool' => $toolName], $args);
         if (isset($toolData['queries']) && !isset($toolData['query'])) {
             $toolData['query'] = implode(', ', $toolData['queries']);
@@ -70,6 +148,11 @@ class ToolExecutionService
     public function getLastSourceMap(): array
     {
         return $this->searchWebTool->getLastSourceMap();
+    }
+
+    public function getLastFailures(): array
+    {
+        return $this->searchWebTool->getLastFailures();
     }
 
     public function getLastBackingChunks(): array

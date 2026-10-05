@@ -42,6 +42,43 @@ final class SearchPipeline
         $this->sourceStartSeq = $startSeq;
     }
 
+    /** Normalized URL => source id, for the pages already read earlier in this turn. */
+    private array $alreadyRead = [];
+
+    /**
+     * Pages already fetched and numbered earlier in this turn, keyed by normalized URL.
+     *
+     * One tool call is one turn's evidence: when a second sub-query surfaces a page the first one already read,
+     * that page keeps its id and is not fetched again. Without this each sub-query started a fresh pipeline with
+     * an empty deduplicator, so the same URL was re-scraped and minted a new S# (measured: one 3-query turn read
+     * huggingface.co three times and benchlm.ai twice, giving 7 registrations for 4 pages).
+     *
+     * @param array<string, string> $byUrl normalized url => source id
+     */
+    public function setAlreadyRead(array $byUrl): void
+    {
+        $this->alreadyRead = $byUrl;
+    }
+
+    /**
+     * The id a page already carries in this turn, or null when it is new to the turn. Identity is the repo's URL
+     * key (same page as the direct path's "fetched once"), plus www-equivalence: the SERP and the page's own
+     * links spell the same host both ways, and one page must resolve to one id however it is written.
+     */
+    public static function turnUrlKey(string $url): string
+    {
+        return preg_replace('#^https?://www\.#', 'https://', UrlIndex::key($url)) ?? $url;
+    }
+
+    public static function alreadyReadId(string $url, array $byUrl): ?string
+    {
+        $key = self::turnUrlKey($url);
+        if ($key === '' || !isset($byUrl[$key])) {
+            return null;
+        }
+        return (string) $byUrl[$key];
+    }
+
     /**
      * Run the full search pipeline. Single implementation: browser bridge.
      * Bridge failure is surfaced explicitly rather than degrading to snippets.
@@ -61,6 +98,191 @@ final class SearchPipeline
         }
 
         return $this->runBridgeMode($query, $messages, $emit, $bridge);
+    }
+
+    // ── Direct sources (URLs the user pasted, no SERP) ──────────────────
+
+    /**
+     * Fetch the URLs the user supplied directly — no search engine, no candidate ranking.
+     *
+     * Same per-source machinery as the search path (chunk building, duplicate-source check, BM25 when a
+     * question is present, three-level budget fitting), so a pasted link produces exactly the evidence shape a
+     * search produces and rides the same persistence, citations and Context Data.
+     *
+     * Never mass-fetches on its own: the caller passes the URLs the user approved. Indexing, normalisation and
+     * deduplication happen here (UrlIndex) so one URL is fetched once even if it appears ten times, and a page
+     * already parsed earlier in the session is skipped in favour of the chunks that already exist.
+     *
+     * @param string[] $urls      approved URLs (raw text is fine; they are re-indexed here)
+     * @param string   $query     the user's question, '' when they sent only a link
+     * @param string[] $alreadyParsed URLs already fetched in this session (reuse, do not re-fetch)
+     * @return array{evidence:string,sourceIds:string[],sourceMap:array,backingChunks:WebChunk[],selectedChunks:WebChunk[],failed:array,fitLevel:string,condenserCalls:int,counts:array}
+     */
+    public function fetchDirect(array $urls, string $query, array $messages, callable $emit, array $alreadyParsed = []): array
+    {
+        $index = UrlIndex::index(implode("\n", $urls));
+        $candidates = array_values(array_filter($index['entries'], static fn(array $e): bool => $e['fetchable']));
+        $skipped = array_values(array_filter($index['entries'], static fn(array $e): bool => !$e['fetchable']));
+
+        $split = UrlIndex::excluding($candidates, $alreadyParsed);
+        $targets = $split['fresh'];
+        $max = (int) Config::get('MAX_DIRECT_SOURCES', 0);   // 0 = no ceiling; a valve, never surfaced
+        if ($max > 0 && count($targets) > $max) {
+            $targets = array_slice($targets, 0, $max);
+        }
+
+        \App\Logger::logEvent('direct_fetch_requested', 'Direct source fetch requested', [
+            'requested'   => count($index['entries']),
+            'unique'      => $index['counts']['unique'],
+            'duplicates'  => $index['counts']['duplicates'],
+            'fetchable'   => $index['counts']['fetchable'],
+            'not_fetchable' => array_map(static fn(array $e): string => $e['url'] . ' (' . $e['reason'] . ')', $skipped),
+            'already_parsed' => array_map(static fn(array $e): string => $e['url'], $split['already']),
+            'to_fetch'    => count($targets),
+            'question'    => $query !== '',
+        ], 'info', 'SearchPipeline::fetchDirect');
+
+        if (empty($targets)) {
+            return [
+                'evidence' => '', 'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [],
+                'selectedChunks' => [], 'failed' => [], 'fitLevel' => 'none', 'condenserCalls' => 0,
+                'counts' => $index['counts'] + ['already_parsed' => count($split['already'])],
+            ];
+        }
+
+        $bridge = new BridgeFetcher();
+        if (!$bridge->isConnected()) {
+            $this->emitProgress('search_unavailable', 'Browser bridge not connected', $emit);
+            \App\Logger::logEvent('direct_fetch_failed', 'Browser bridge disconnected', [
+                'urls' => array_column($targets, 'url'),
+            ], 'error', 'SearchPipeline::fetchDirect');
+            return [
+                'evidence' => 'The browser bridge is not connected, so the link could not be opened.',
+                'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [], 'selectedChunks' => [],
+                'failed' => [['url' => '', 'status' => 'disconnected']], 'fitLevel' => 'none',
+                'condenserCalls' => 0, 'counts' => $index['counts'],
+            ];
+        }
+
+        $sourceId = $this->sourceStartSeq - 1;
+        $allChunks = [];
+        $sourceMap = [];
+        $failed = [];
+        $lastHost = null;
+
+        foreach ($targets as $entry) {
+            $url = $entry['url'];
+            // Pace repeat hits on one domain: the bridge navigates sequentially anyway, but firing 20
+            // navigations at one host back to back is how a site starts refusing us.
+            if ($lastHost !== null && $lastHost === $entry['domain']) {
+                usleep(1_200_000);
+            }
+            $lastHost = $entry['domain'];
+
+            $sourceId++;
+            $sid = "S{$sourceId}";
+            $host = $entry['domain'];
+            $this->emitProgress('scraping_start', "Opening {$host}", $emit, $url);
+
+            $t0 = microtime(true);
+            $result = $bridge->fetch($url);
+            $ms = (int) round((microtime(true) - $t0) * 1000);
+
+            \App\Logger::logEvent('direct_fetch_result', 'Direct source fetch finished', [
+                'url' => $url,
+                'status' => $result->status,
+                'ms' => $ms,
+                'bytes' => is_array($result->content) ? strlen((string) json_encode($result->content)) : 0,
+            ], $result->isSuccess() ? 'info' : 'warn', 'SearchPipeline::fetchDirect');
+
+            if (!$result->isSuccess() || !$result->content) {
+                $failed[] = ['url' => $url, 'status' => $result->status, 'error' => $result->error];
+                \App\Logger::logEvent('direct_fetch_failed', 'Direct source could not be read', [
+                    'url' => $url, 'status' => $result->status, 'error' => $result->error,
+                ], 'warn', 'SearchPipeline::fetchDirect');
+                $this->emitProgress('scraping_done', "{$host}: {$result->status}", $emit, $url);
+                continue;
+            }
+
+            $chunks = $this->chunksFromBridgeContent($result->content, $sid, $url);
+            if (empty($chunks)) {
+                $failed[] = ['url' => $url, 'status' => 'no_content', 'error' => null];
+                $this->emitProgress('scraping_done', "{$host}: no readable content", $emit, $url);
+                continue;
+            }
+
+            $sourceBody = '';
+            foreach ($chunks as $chunk) $sourceBody .= $chunk->text . "\n";
+            $decision = $this->contentDeduplicator->evaluate($sourceBody);
+            \App\Logger::logEvent('direct_fetch_source', 'Direct source chunked', [
+                'source_id' => $sid,
+                'url' => $url,
+                'chunks' => count($chunks),
+                'chars' => strlen($sourceBody),
+                'duplicate' => (bool) $decision['duplicate'],
+                'max_similarity' => round((float) $decision['max_similarity'], 4),
+            ], 'info', 'SearchPipeline::fetchDirect');
+
+            if ($decision['duplicate']) {
+                $this->emitProgress('scraping_done', "{$host}: duplicate of an earlier source", $emit, $url);
+                continue;
+            }
+            $this->contentDeduplicator->keep($sourceBody, "{$sid} {$url}");
+
+            $allChunks = array_merge($allChunks, $chunks);
+            $first = $chunks[0];
+            $sourceMap[$sid] = [
+                'url'    => $first->finalUrl ?: $url,
+                'title'  => $first->title,
+                'domain' => $first->domain,
+            ];
+            $this->emitProgress('scraping_done', "Opened {$host}", $emit, $url);
+        }
+
+        if (empty($allChunks)) {
+            \App\Logger::logEvent('direct_fetch_fit', 'No usable content from the direct sources', [
+                'failed' => $failed,
+            ], 'warn', 'SearchPipeline::fetchDirect');
+            return [
+                'evidence' => '', 'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [],
+                'selectedChunks' => [], 'failed' => $failed, 'fitLevel' => 'none', 'condenserCalls' => 0,
+                'counts' => $index['counts'],
+            ];
+        }
+
+        // A pasted link is a document the user handed over, not a search result: everything that was read goes
+        // in, in document order, and the budget fit below decides how much of it survives. Ranking it against
+        // the question first was silently dropping most of the page — measured: an 11-chunk thread reached the
+        // model as 1 chunk (322 chars) because the question happened to match one word in one comment, and a
+        // question sharing no words with the page dropped it entirely.
+        $selected = $allChunks;
+
+        $callsBefore = count($this->agent->callLog);
+        $fit = $this->threeLevelFit($selected, $query !== '' ? $query : ($sourceMap ? reset($sourceMap)['title'] : ''), $messages);
+        $condenserCalls = count($this->agent->callLog) - $callsBefore;
+
+        $evidence = (string) ($fit['evidence'] ?? '');
+        \App\Logger::logEvent('direct_fetch_fit', 'Direct source evidence fitted', [
+            'sources' => count($sourceMap),
+            'chunks' => count($allChunks),
+            'selected_chunks' => count($selected),
+            'fit_level' => $fit['level'] ?? 'unknown',
+            'condenser_model_calls' => $condenserCalls,
+            'evidence_chars' => strlen($evidence),
+            'failed' => $failed,
+        ], 'info', 'SearchPipeline::fetchDirect');
+
+        return [
+            'evidence'       => $evidence,
+            'sourceIds'      => array_keys($sourceMap),
+            'sourceMap'      => $sourceMap,
+            'backingChunks'  => $allChunks,
+            'selectedChunks' => $selected instanceof \ArrayObject ? iterator_to_array($selected) : $selected,
+            'failed'         => $failed,
+            'fitLevel'       => (string) ($fit['level'] ?? 'unknown'),
+            'condenserCalls' => $condenserCalls,
+            'counts'         => $index['counts'] + ['already_parsed' => count($split['already'])],
+        ];
     }
 
     // ── Bridge mode (browser SERP + full extraction) ────────────────────
@@ -97,11 +319,28 @@ final class SearchPipeline
         $sourceId = $this->sourceStartSeq - 1;
         $allChunks = [];
         $fetchedUrls = [];
+        /** @var array<string, string> id => url, pages this query surfaced that were read earlier in the turn */
+        $reused = [];
         // Transport/disconnect failures only — the browser never navigated, so a
         // retry carries no shadow-ban risk. Never retry challenge/consent/timeout.
         $retryableStatuses = ['disconnected', 'ws_error', 'error'];
+        $failed = [];
 
         foreach ($candidates as $candidate) {
+            $knownId = self::alreadyReadId((string) $candidate->url, $this->alreadyRead);
+            if ($knownId !== null) {
+                // Read earlier in this turn under this id: fetching it again would pay for the same page twice
+                // and mint a second id for one URL. The model already has the page above; the note below tells
+                // it so, tying this query's result to the id it already carries.
+                $reused[$knownId] = (string) $candidate->url;
+                \App\Logger::logEvent('search_source_reused', 'Page already read in this turn — not fetched again', [
+                    'query' => $query,
+                    'url' => $candidate->url,
+                    'source_id' => $knownId,
+                ], 'info', 'SearchPipeline::runBridgeMode');
+                continue;
+            }
+
             $sourceId++;
             $sid = "S{$sourceId}";
 
@@ -129,6 +368,9 @@ final class SearchPipeline
             BridgeFetchLogger::record($candidate->url, $result->status, $totalBodyLen, $entityCount, $result->error, $result->content);
 
             if (!$result->isSuccess()) {
+                // Kept, not just logged: the chat panel tells the user which sources could not be read and
+                // why (P4-S2). A failure that only reaches the log is a silent gap for the user.
+                $failed[] = ['url' => $candidate->url, 'status' => (string) $result->status, 'reason' => $result->error];
                 $this->emitProgress('scraping_done', "Scraped {$shortUrl} ({$result->status})", $emit, $candidate->url);
                 continue;
             }
@@ -203,6 +445,22 @@ final class SearchPipeline
         }
 
         if (empty($allChunks)) {
+            if ($reused !== []) {
+                // Every result this query returned was already read above. That is a successful outcome, not a
+                // fetch failure — say which pages answered it instead of reporting that nothing could be read.
+                \App\Logger::logEvent('search_source_reused', 'All of this query\'s results were already in context', [
+                    'query' => $query,
+                    'source_ids' => array_keys($reused),
+                ], 'info', 'SearchPipeline::runBridgeMode');
+                return [
+                    'evidence' => self::reuseNote($reused),
+                    'sourceIds' => [],
+                    'sourceMap' => [],
+                    'backingChunks' => [],
+                    'selectedChunks' => [],
+                    'failed' => $failed,
+                ];
+            }
             $this->emitProgress('search_no_results', 'No usable page content was extracted', $emit);
             \App\Logger::logEvent('search_no_results', 'All bridge fetches failed or yielded no content', [
                 'query' => $query,
@@ -261,18 +519,27 @@ final class SearchPipeline
             'source_count' => count($sourceIds),
             'used_source_ids' => $usedSourceIds,
             'unused_source_ids' => array_values(array_diff($sourceIds, $usedSourceIds)),
+            'reused_source_ids' => array_keys($reused),
         ], 'info', 'SearchPipeline::runBridgeMode');
 
         // Atomic extraction has MOVED OUT of SearchPipeline: it now runs as a
         // deferred consolidation in ChatManager (start of a later turn, gated by
         // backlog/headroom policy) over the selected chunks returned here. This
         // keeps a web turn at 2 blocking inferences to the visible answer.
+        $evidence = $fit['evidence'];
+        if ($reused !== []) {
+            // Say it once, at the top of this query's evidence, so the answer can cite the page that already
+            // holds this query's result instead of wondering why the search returned less than it did.
+            $evidence = self::reuseNote($reused) . "\n" . $evidence;
+        }
+
         return [
-            'evidence'  => $fit['evidence'],
+            'evidence'  => $evidence,
             'sourceIds' => $sourceIds,
             'sourceMap' => $sourceMap,
             'backingChunks' => $allChunks,
             'selectedChunks' => $selected,
+            'failed'    => $failed,
         ];
     }
 
@@ -297,6 +564,11 @@ final class SearchPipeline
         $fetchedAt = date('c');
         $title = $content['title'] ?? '';
         $finalUrl = $content['url'] ?? $sourceUrl;
+        // Source dates resolved by the extension's own sweep (it reads the whole
+        // document, including the header/footer the article extractor discards).
+        // An entity-level date (a post or comment timestamp) still wins: it is
+        // more specific than the page's own date.
+        $dates = is_array($content['dates'] ?? null) ? $content['dates'] : [];
 
         foreach ($entities as $entity) {
             $body = $entity['body'] ?? '';
@@ -308,7 +580,8 @@ final class SearchPipeline
             $entityType = $entity['entity_type'] ?? null;
             $author     = $entity['author'] ?? null;
             $score      = isset($entity['score']) ? (int) $entity['score'] : null;
-            $published  = $entity['published'] ?? null;
+            $published  = $entity['published'] ?? $dates['published'] ?? $content['date_posted'] ?? null;
+            $updated    = $dates['updated'] ?? null;
 
             $chunkNum++;
 
@@ -320,7 +593,7 @@ final class SearchPipeline
                 title:       $title,
                 domain:      $domain,
                 publishedAt: $published,
-                updatedAt:   null,
+                updatedAt:   $updated,
                 fetchedAt:   $fetchedAt,
                 headingPath: [],
                 sectionType: $entityType ?? 'entity',
@@ -334,6 +607,17 @@ final class SearchPipeline
         }
 
         return $chunks;
+    }
+
+    /** One line naming the pages this query found that the turn had already read, and the ids they carry. */
+    private static function reuseNote(array $byId): string
+    {
+        $parts = [];
+        foreach ($byId as $id => $url) {
+            $host = (string) (parse_url((string) $url, PHP_URL_HOST) ?: $url);
+            $parts[] = $id . ' (' . preg_replace('/^www\./', '', strtolower($host)) . ')';
+        }
+        return '(already read earlier in this turn: ' . implode(', ', $parts) . ')';
     }
 
     private static function emptyResult(string $message): array

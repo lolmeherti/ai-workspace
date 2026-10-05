@@ -15,9 +15,13 @@ class ModelPerformanceReport
      * errors, tool execution failures, bridge/search/job noise) is system/infra.
      */
     public const MODEL_FAULT_EVENTS = [
-        'llm_tool_parse_error',
+        // Removed 2026-10-03, both were reporting non-faults:
+        //   llm_tool_parse_error — zero rows ever; its only emitter is the unused chatWithTools(), the live
+        //     path (chatToolCapable) stitches native tool_calls and never JSON-parses a whole body. The PHP
+        //     tool-line parser it belonged to is gone.
+        //   llm_partial_response — a plain length heuristic (0 < len < 20) that fires on legitimately short
+        //     answers and on error bodies. Logged at info now.
         'llm_tool_no_match',
-        'llm_partial_response',
         'llm_empty_answer_firstpass',
         'llm_empty_answer_thinking_exhausted',
         'content_before_tool',

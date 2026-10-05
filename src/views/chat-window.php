@@ -168,6 +168,13 @@ $effBtn = 'effort-btn px-2.5 py-1 text-xs rounded-md text-slate-400 hover:text-c
 $effActive = static fn(string $v): string => $eff === $v ? ' effort-active' : '';
 ?>
                     <div id="effort-control" class="flex items-center justify-end gap-2 mb-2">
+                        <div id="parse-links-control" class="flex items-center gap-2">
+                            <span class="text-xs normal-case tracking-normal text-slate-500 font-semibold">Parse links</span>
+                            <div id="parse-links-toggle" class="flex items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
+                                <button type="button" data-parse-links="off" class="<?php echo $effBtn; ?>" aria-pressed="false">Off</button>
+                                <button type="button" data-parse-links="on" class="<?php echo $effBtn; ?>" aria-pressed="false">On</button>
+                            </div>
+                        </div>
                         <span class="text-xs normal-case tracking-normal text-slate-500 font-semibold">Reasoning</span>
                         <div id="effort-graduated" style="<?php echo $grad ? 'display:flex' : 'display:none'; ?>" class="items-center gap-0.5 bg-[#0f172a] border border-slate-700 rounded-lg p-0.5">
                             <button type="button" data-effort="low" class="<?php echo $effBtn . $effActive('low'); ?>" aria-pressed="<?php echo $eff === 'low' ? 'true' : 'false'; ?>">Low</button>

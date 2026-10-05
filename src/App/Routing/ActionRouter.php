@@ -48,6 +48,11 @@ class ActionRouter
         $apiActionVal = $_GET['api_action'] ?? '';
         $apiAction = ApiAction::tryFrom($apiActionVal);
 
+        if ($apiAction === ApiAction::INDEX_URLS) {
+            (new \App\Actions\IndexUrlsAction())->execute();
+            return;
+        }
+
         if ($apiAction === ApiAction::LOG_FRONTEND_EVENT) {
             (new LogFrontendEventAction())->execute();
             return;

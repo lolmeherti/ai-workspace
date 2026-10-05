@@ -6,6 +6,7 @@ import { showChatSkeleton } from './workspace/chatSkeleton.js';
 import { state } from './state.js';
 import { streamResponse } from './streamer/streamResponse.js';
 import { removeFile } from './fileHandler.js';
+import { getParseLinks } from './chat/chatUrlPicker.js';
 
 export async function handleChatSubmit(e) {
     e.preventDefault();
@@ -86,6 +87,10 @@ export async function handleChatSubmit(e) {
         });
     }
     formData.set("q", finalQueryText);
+
+    // The Parse links setting travels as one flag: '1' lets the backend apply its own link rule to the prompt,
+    // '0' means this message's URLs stay closed. No URL work happens here.
+    formData.set("parse_links", getParseLinks());
 
     inputField.value = "";
     inputField.style.height = "";

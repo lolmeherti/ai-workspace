@@ -30,6 +30,12 @@ class EvidenceBuilder
             if ($first->publishedAt) {
                 $lines[] = '<published>' . htmlspecialchars($first->publishedAt, ENT_XML1) . '</published>';
             }
+            // Publication and update stay separate lines: the model must be able to
+            // say which is which (a 2022 source that was updated in 2026 is not a
+            // 2026 source).
+            if ($first->updatedAt && $first->updatedAt !== $first->publishedAt) {
+                $lines[] = '<updated>' . htmlspecialchars($first->updatedAt, ENT_XML1) . '</updated>';
+            }
             $lines[] = '<fetched>' . htmlspecialchars($first->fetchedAt, ENT_XML1) . '</fetched>';
 
             self::appendEntityMeta($first, $lines);
@@ -79,6 +85,9 @@ class EvidenceBuilder
 
             if ($first->publishedAt) {
                 $lines[] = '<published>' . htmlspecialchars($first->publishedAt, ENT_XML1) . '</published>';
+            }
+            if ($first->updatedAt && $first->updatedAt !== $first->publishedAt) {
+                $lines[] = '<updated>' . htmlspecialchars($first->updatedAt, ENT_XML1) . '</updated>';
             }
             $lines[] = '<fetched>' . htmlspecialchars($first->fetchedAt, ENT_XML1) . '</fetched>';
 

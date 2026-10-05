@@ -10,6 +10,134 @@ const THINKING_FORMATS = [
     { open: '<think>', openLen: 7, close: '</think>', closeLen: 8 }
 ];
 
+const REF_BADGE_ICON = '<svg class="ref-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+const REF_LABEL_MAX = 24;
+
+function escapeHtml(text) {
+    return String(text).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+}
+
+function escapeAttr(text) {
+    return String(text).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+}
+
+/**
+ * The source map the reloaded page was rendered with: {7: {url, title, domain}, ...}
+ * Emitted by the chat history view so a reloaded answer can badge its citations exactly as the live one did.
+ */
+export function refMapFromDocument() {
+    const host = document.getElementById('ref-map');
+    if (!host) return {};
+    try {
+        const map = JSON.parse(host.textContent || '{}');
+        return map && typeof map === 'object' ? map : {};
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * The same map built from the live stream's source payload (the `sources` SSE event): [{id: 'S7', url, ...}]
+ * becomes {7: {url, title, domain}}.
+ */
+export function refMapFromSources(sources) {
+    const map = {};
+    for (const source of Array.isArray(sources) ? sources : []) {
+        const number = Number(String(source && source.id || '').replace(/^S/, ''));
+        if (!number) continue;
+        map[number] = {
+            url: String(source.url || ''),
+            title: String(source.title || ''),
+            domain: String(source.domain || '')
+        };
+    }
+    return map;
+}
+
+/**
+ * The refs the live stream stored on the bubble it was writing into: a just-streamed answer is not in the
+ * page-load map, so binding the clipboard needs the turn's own source numbering.
+ */
+export function refsOnBubble(bubble) {
+    if (!bubble || !bubble.dataset) return {};
+    try {
+        const map = JSON.parse(bubble.dataset.refs || '{}');
+        return map && typeof map === 'object' ? map : {};
+    } catch {
+        return {};
+    }
+}
+
+/** The domain as it should read: no "www.", which is noise in a chip or a link. */
+function hostLabel(ref) {
+    return String(ref.domain || '').replace(/^www\./, '');
+}
+
+/** The page's identity as a reader sees it: its title, else the bare host, else the address. */
+function refLabel(ref) {
+    return String(ref.title || '') || hostLabel(ref) || String(ref.url || '');
+}
+
+function refBadge(ref) {
+    const url = String(ref.url || '');
+    const title = String(ref.title || '');
+    let label = refLabel(ref);
+    if (label.length > REF_LABEL_MAX) label = label.slice(0, REF_LABEL_MAX - 1).trimEnd() + '…';
+    const tip = (title ? title + ' — ' : '') + (url || hostLabel(ref));
+    return `<a class="ref-badge" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(tip)}">`
+        + REF_BADGE_ICON + `<span>${escapeHtml(label)}</span></a>`;
+}
+
+/** Older citation shapes have no badge and no link: they are removed wherever the answer is rendered or copied. */
+function stripLegacyCitations(out) {
+    out = out.replace(/\[S\d+(?:-C\d+)?(?:\s*,\s*S\d+(?:-C\d+)?)*\]/g, '');
+    out = out.replace(/\(\s*S\d+\s*(?:[\/,&+]|and|or|to)\s*S\d+\s*\)/g, '');
+    out = out.replace(/\bS\d+\b(?:\s*(?:\/|,|&|\+|and|or|to)\s*\bS\d+\b)+/g, '');
+    return out.replace(/\bS\d+-C\d+\b/g, '');
+}
+
+/**
+ * Turn the model's citation tokens into source badges.
+ *
+ * `refs` maps the token's number to {url, title, domain} — the number is the source's own sequence number, so
+ * "#REFID_7" always means source 7 however many turns ago it was read. A token with no source behind it is
+ * dropped rather than rendered as a dead chip, and the older citation shapes ([S1], "S2/S3", "(S2)") are
+ * removed because nothing can render them. With `holdPartial`, a token still arriving is withheld instead of
+ * flashing as text while the stream is mid-word.
+ */
+export function substituteRefBadges(text, refs = {}, { holdPartial = false } = {}) {
+    let out = String(text);
+
+    // A source number or chunk suffix may still be arriving. Hold the whole trailing
+    // token until a delimiter or final render, before replacing any part with a badge.
+    if (holdPartial) out = out.replace(/#(?:R(?:E(?:F(?:I(?:D(?:_\d*(?:-C?\d*)?)?)?)?)?)?)?$/, '');
+
+    out = out.replace(/#REFID_(\d+)(?:-C\d+)?/g, (match, digits) => {
+        const ref = refs[Number(digits)];
+        return ref ? refBadge(ref) : '';
+    });
+
+    out = stripLegacyCitations(out);
+
+    return out;
+}
+
+/**
+ * The same tokens as markdown links, for text that leaves the app — the clipboard, an export. References a
+ * reader can follow, instead of a token nothing outside the chat window can resolve.
+ */
+export function refsToLinks(text, refs = {}) {
+    const out = String(text).replace(/#REFID_(\d+)(?:-C\d+)?/g, (match, digits) => {
+        const ref = refs[Number(digits)];
+        if (!ref || !ref.url) return '';
+        // Same label as the chip, without the truncation: a link someone pastes elsewhere can carry the
+        // page's full title.
+        return `[${refLabel(ref).replace(/[[\]]/g, '')}](${ref.url})`;
+    });
+
+    return stripLegacyCitations(out);
+}
+
 export function extractThinking(text) {
     for (const fmt of THINKING_FORMATS) {
         const start = text.indexOf(fmt.open);
@@ -65,6 +193,8 @@ export function createThinkingAccordion(thinkingText) {
 }
 
 export function parseMarkdownElements() {
+    // Read once per pass: every restored answer badges its citations from the same session source map.
+    const refs = refMapFromDocument();
     document.querySelectorAll('.markdown-rendered:not(.parsed)').forEach(function(el) {
         const rawMarkdown = el.getAttribute('data-markdown') || '';
         const { thinking, response } = extractThinking(rawMarkdown);
@@ -72,7 +202,7 @@ export function parseMarkdownElements() {
         const displayText = thinking ? response : rawMarkdown;
 
         if (typeof marked !== 'undefined') {
-            el.innerHTML = marked.parse(displayText);
+            el.innerHTML = marked.parse(substituteRefBadges(displayText, refs));
         }
 
         if (typeof window.parseInlineFiles === 'function') {
@@ -132,7 +262,10 @@ export function copyToClipboard(button) {
     const bubble = container.querySelector('[data-raw]');
     if (!bubble) return;
 
-    const textToCopy = bubble.getAttribute('data-raw');
+    // The stored answer keeps its #REFID_n tokens so the badges can be rebuilt; what lands on the clipboard
+    // is the same answer with each token as a markdown link, which is what survives being pasted elsewhere.
+    const refs = { ...refMapFromDocument(), ...refsOnBubble(bubble) };
+    const textToCopy = refsToLinks(bubble.getAttribute('data-raw'), refs);
 
     navigator.clipboard.writeText(textToCopy).then(() => {
         const icon = button.querySelector('uk-icon');

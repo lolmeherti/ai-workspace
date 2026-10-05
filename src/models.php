@@ -40,9 +40,10 @@ if ($db) {
 }
 
 $FAULT_LABELS = [
-    'llm_tool_parse_error' => 'Tool call parse error',
+    // 'llm_tool_parse_error' and 'llm_partial_response' removed 2026-10-03 — see
+    // ModelPerformanceReport::MODEL_FAULT_EVENTS for why (dead category / a heuristic that flags real
+    // short answers).
     'llm_tool_no_match' => 'Tool call no match',
-    'llm_partial_response' => 'Partial response',
     'llm_empty_answer_firstpass' => 'Empty answer (first pass)',
     'llm_empty_answer_thinking_exhausted' => 'Empty answer (thinking exhausted)',
     'content_before_tool' => 'Content before tool',
