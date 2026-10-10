@@ -298,6 +298,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// Probe support: a fetch made with the extension's own privileges
+// ════════════════════════════════════════════════════════════════
+// A media URL resolved for a page is cross-origin to that page, so a page-context fetch of it answers to
+// the media host's CORS headers. The worker is not subject to them (host_permissions: <all_urls>), and it
+// is the half that decides whether the browser can pull a track the page resolved. Reads one chunk and
+// cancels, so a probe never pulls a whole file.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== "localsy_sw_fetch") return;
+
+  (async () => {
+    try {
+      const init = { credentials: "include" };
+      if (message.range) init.headers = { Range: message.range };
+      const r = await fetch(message.url, init);
+      const info = {
+        status: r.status,
+        ct: r.headers.get("content-type"),
+        content_length: r.headers.get("content-length"),
+        content_range: r.headers.get("content-range")
+      };
+      try {
+        const reader = r.body.getReader();
+        const first = await reader.read();
+        info.first_chunk_bytes = (first && first.value) ? first.value.byteLength : 0;
+        info.head = (first && first.value) ? [...first.value.slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join(" ") : "";
+        reader.cancel().catch(() => {});
+      } catch (e) {
+        info.read_error = String((e && e.message) || e);
+      }
+      sendResponse(info);
+    } catch (e) {
+      sendResponse({ error: String((e && e.message) || e) });
+    }
+  })();
+
+  return true;
+});
+
+// ════════════════════════════════════════════════════════════════
 // Cloudflare-native challenge detection
 // ════════════════════════════════════════════════════════════════
 

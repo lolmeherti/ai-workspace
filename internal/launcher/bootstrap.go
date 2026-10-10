@@ -9,13 +9,14 @@ import (
 
 	"github.com/getlantern/systray"
 
-	"localsy/internal/docker"
 	"localsy/internal/bridge"
+	"localsy/internal/docker"
 	"localsy/internal/env"
 	"localsy/internal/gpu"
 	"localsy/internal/llama"
 	"localsy/internal/models"
 	"localsy/internal/util"
+	"localsy/internal/video"
 )
 
 func Bootstrap() {
@@ -45,6 +46,8 @@ func Bootstrap() {
 
 	InitLogging(workDir)
 	util.LogPrint("[+] %s: Initializing Localsy Environment...\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	video.SweepOrphaned(workDir)
 
 	vendor, vram := gpu.Detect()
 	util.LogPrint("[+] Detected GPU: %s with %.2f GB VRAM\n", vendor, vram)

@@ -21,15 +21,28 @@ import (
 	"localsy/internal/memcalc"
 	"localsy/internal/models"
 	"localsy/internal/util"
+	"localsy/internal/video"
 )
 
 func StartHTTPServer(defs map[string]models.ModelDefinition, hw models.Hardware, binDir, modelDir string, relay *bridge.Relay) {
+	// One watch at a time is all this machine can usefully do: the transcriber has the CPU while it runs.
+	// The manager is built here so the endpoint and the boot-time sweep agree on the same data directory.
+	workDir := filepath.Dir(modelDir)
+	videos := video.NewManager(workDir, &video.WatchWorker{
+		Tools:           video.Toolchain{},
+		Models:          video.DefaultASRModels(workDir),
+		MaxDuration:     video.MaxDurationSeconds(workDir),
+		BinDir:          binDir,
+		BrowserCaptions: browserCaptions(relay),
+	})
+
 	handler := &modelsHandler{
 		defs:     defs,
 		hw:       hw,
 		binDir:   binDir,
 		modelDir: modelDir,
 		relay:    relay,
+		videos:   videos,
 	}
 
 	// Precompute every model's max-ctx ceiling in the background so the settings
@@ -49,6 +62,9 @@ type modelsHandler struct {
 	binDir   string
 	modelDir string
 	relay    *bridge.Relay
+
+	// videos owns the running watch jobs; nil when the launcher was built without the video pipeline.
+	videos *video.Manager
 
 	switchMu sync.Mutex
 	sw       switchStatus
@@ -87,9 +103,9 @@ type switchStatus struct {
 	// Resolved per-model config the web layer persists alongside the model
 	// identity (AISettingsController::handleSwitchStatus). Populated once the
 	// switch reaches "starting".
-	Sampling        string `json:"sampling"`
-	RuntimePolicy   string `json:"runtime_policy"`
-	APIURL          string `json:"api_url,omitempty"`
+	Sampling      string `json:"sampling"`
+	RuntimePolicy string `json:"runtime_policy"`
+	APIURL        string `json:"api_url,omitempty"`
 
 	// Boot-time engine failure, published only when no switch is in flight, so the
 	// web layer can explain why the AI is offline (see engineerror.go).
@@ -117,7 +133,15 @@ func (h *modelsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleBridgeFetch(w, r)
 	case "/bridge/search":
 		h.handleBridgeSearch(w, r)
+	case "/video/capability":
+		h.handleVideoCapability(w, r)
+	case "/video/watch":
+		h.handleVideoWatch(w, r)
 	default:
+		if rest, ok := strings.CutPrefix(path, "/video/watch/"); ok {
+			h.handleVideoJob(w, r, rest)
+			return
+		}
 		http.NotFound(w, r)
 	}
 }

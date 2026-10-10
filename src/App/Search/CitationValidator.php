@@ -27,9 +27,10 @@ final class CitationValidator
         }
 
         // Source badges: the marker stays, but only for ids this turn actually showed. "007" is normalised so
-        // the UI has one shape to look up.
+        // the UI has one shape to look up, and the shapes the model actually writes are folded into it — it
+        // writes "[REFID_1-C2]" as readily as "#REFID_1", and anything this misses shows up as literal text.
         $answer = preg_replace_callback(
-            '/#REFID_(\d+)(?:-C\d+)?/',
+            '/[\[(]?#?REFID_(\d+)(?:-C\d+)?[)\]]?/',
             static fn(array $m): string => isset($validNumbers[(int) $m[1]]) ? '#REFID_' . (int) $m[1] : '',
             $answer
         ) ?? $answer;

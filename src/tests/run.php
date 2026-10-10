@@ -49,6 +49,11 @@ require_once __DIR__ . '/UrlIndexTest.php';
 require_once __DIR__ . '/ToolArgumentTest.php';
 require_once __DIR__ . '/SourceFailuresTest.php';
 require_once __DIR__ . '/SessionTitleTest.php';
+require_once __DIR__ . '/TranscriptFusionTest.php';
+require_once __DIR__ . '/VideoWatchRunnerTest.php';
+require_once __DIR__ . '/VideoSourcesTest.php';
+require_once __DIR__ . '/VideoWatchIngestTest.php';
+require_once __DIR__ . '/ContextSourceTextTest.php';
 
 use App\Config;
 use App\Database;
@@ -93,6 +98,11 @@ use App\Tests\UrlIndexTest;
 use App\Tests\ToolArgumentTest;
 use App\Tests\SourceFailuresTest;
 use App\Tests\SessionTitleTest;
+use App\Tests\TranscriptFusionTest;
+use App\Tests\VideoWatchRunnerTest;
+use App\Tests\VideoSourcesTest;
+use App\Tests\VideoWatchIngestTest;
+use App\Tests\ContextSourceTextTest;
 
 Config::load(__DIR__ . '/..');
 
@@ -233,6 +243,20 @@ $allOk = (new SourceFailuresTest())->run() && $allOk;
 
 echo "\n=== Phase 40: Session Title Tests ===\n";
 $allOk = (new SessionTitleTest($db))->run() && $allOk;
+
+echo "\n=== Phase 41: Transcript Fusion (video watcher) ===\n";
+$allOk = (new TranscriptFusionTest())->run() && $allOk;
+
+echo "\n=== Phase 42: Video Watch Stop Path ===\n";
+$allOk = (new VideoWatchRunnerTest())->run() && $allOk;
+
+echo "\n=== Phase 43: Video Source Map ===\n";
+$allOk = (new VideoSourcesTest())->run() && $allOk;
+echo "\n=== Phase 44: Video Turn ===\n";
+$allOk = (new VideoWatchIngestTest())->run() && $allOk;
+
+echo "\n=== Phase 45: Context Data source text ===\n";
+$allOk = (new ContextSourceTextTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

@@ -21,6 +21,12 @@ class ChatManager
 {
     private const OUTPUT_RESERVE_TOKENS = 4096;
     private const SAFETY_MARGIN_TOKENS = 256;
+    /**
+     * The whole answer when a watch produced nothing to read. The backend says it, in its own voice, with no
+     * model call: a model asked to answer anyway reaches for the title, the uploader and the view count
+     * instead of admitting it could not watch the video (measured 2026-10-09, session 1002382).
+     */
+    private const WATCH_REFUSAL = 'Sorry, I could not watch this video for you.';
 
     private Database $db;
     private AgentManager $agent;
@@ -90,7 +96,9 @@ class ChatManager
         }
 
         $index = \App\Search\UrlIndex::index($query);
-        $fetchable = array_values(array_filter($index['entries'], static fn(array $e): bool => $e['fetchable']));
+        // Pages and videos are both claimed by this turn; a video is simply routed to the watch path below.
+        $fetchable = array_values(array_filter($index['entries'], static fn(array $e): bool =>
+            $e['fetchable'] || ($e['reason'] ?? '') === 'video'));
         // the app's own link rule, evaluated here on submit: one implementation, one place
         $defaults = \App\Search\UrlIndex::defaultSelection($index, $query);
 
@@ -117,6 +125,115 @@ class ChatManager
             'summarize' => $defaults['summarize'],
             'source'    => $source,
             'index'     => $index,
+        ];
+    }
+
+    /**
+     * The links in this message split into videos and pages. A video is not a page, so the two never take
+     * each other's route; a video already watched in this session is left alone, because its transcript is
+     * already evidence and `search_session_evidence` reads it back when it matters.
+     *
+     * @return array{0:string[],1:string[]}
+     */
+    private static function splitVideoUrls(array $urls, array $alreadyParsed): array
+    {
+        $seen = [];
+        foreach ($alreadyParsed as $parsed) {
+            $key = \App\Search\UrlIndex::key((string) $parsed);
+            if ($key !== '') {
+                $seen[$key] = true;
+            }
+        }
+
+        $videos = [];
+        $pages = [];
+        foreach ($urls as $url) {
+            $url = (string) $url;
+            if (!\App\Search\VideoSources::isVideo($url)) {
+                $pages[] = $url;
+                continue;
+            }
+            $key = \App\Search\UrlIndex::key($url);
+            if ($key !== '' && isset($seen[$key])) {
+                continue;
+            }
+            $videos[] = $url;
+        }
+
+        return [$videos, $pages];
+    }
+
+    /**
+     * Watch the video links and hand their transcripts over as evidence, in the same shape a fetched page
+     * produces — same row, same source ids, same citations, same Context Data. The stop button reaches the
+     * job through the connection check: the browser going away is a cancellation, not a hang-up.
+     */
+    private function watchVideos(
+        \App\Search\SearchPipeline $pipeline,
+        int $sessionId,
+        array $urls,
+        string $query,
+        array $direct,
+        callable $emit
+    ): array {
+        $watch = (new \App\Services\VideoWatchIngest($this->agent))->ingest(
+            $urls,
+            $query,
+            $emit,
+            static fn(): bool => !connection_aborted()
+        );
+
+        \App\Logger::logEvent('video_watch_turn', 'Video links handled for this turn', [
+            'session_id' => $sessionId,
+            'urls'       => $urls,
+            'watched'    => $watch['watched'],
+            'failed'     => $watch['failed'],
+        ], $watch['watched'] > 0 ? 'info' : 'warn', 'ChatManager::watchVideos');
+
+        if ($watch['docs'] === []) {
+            // The watch's own failures come first so they survive the union: nothingFetched() carries a 'failed'
+            // key too, and in a union the left side wins — dropping them left the failed video out of the source
+            // panel and out of the reason the turn could tell the user.
+            return ['failed' => $watch['failed']] + self::nothingFetched();
+        }
+
+        $ingested = $pipeline->ingestDocument(
+            $watch['docs'],
+            $direct['question'],
+            [['role' => 'user', 'content' => $query]]
+        );
+        $ingested['failed'] = array_merge((array) ($ingested['failed'] ?? []), $watch['failed']);
+
+        return $ingested;
+    }
+
+    /** Two groups of evidence into one turn's worth: the transcripts and the pages share the row. */
+    private static function mergeFetched(array $a, array $b): array
+    {
+        $rank = ['exact' => 4, 'extractive' => 3, 'condensed' => 2, 'none' => 1];
+
+        return [
+            'evidence'       => trim((string) ($a['evidence'] ?? '') . "\n\n" . (string) ($b['evidence'] ?? '')),
+            'sourceIds'      => array_merge((array) ($a['sourceIds'] ?? []), (array) ($b['sourceIds'] ?? [])),
+            'sourceMap'      => ((array) ($a['sourceMap'] ?? [])) + ((array) ($b['sourceMap'] ?? [])),
+            'backingChunks'  => array_merge((array) ($a['backingChunks'] ?? []), (array) ($b['backingChunks'] ?? [])),
+            'selectedChunks' => array_merge((array) ($a['selectedChunks'] ?? []), (array) ($b['selectedChunks'] ?? [])),
+            'failed'         => array_merge((array) ($a['failed'] ?? []), (array) ($b['failed'] ?? [])),
+            'fitLevel'       => ($rank[(string) ($b['fitLevel'] ?? '')] ?? 0) > ($rank[(string) ($a['fitLevel'] ?? '')] ?? 0)
+                ? (string) $b['fitLevel']
+                : (string) ($a['fitLevel'] ?? 'none'),
+            'condenserCalls' => (int) ($a['condenserCalls'] ?? 0) + (int) ($b['condenserCalls'] ?? 0),
+            'counts'         => (array) ($a['counts'] ?? []) + (array) ($b['counts'] ?? []),
+        ];
+    }
+
+    /** The shape the direct path returns when there is nothing to hand over. */
+    private static function nothingFetched(): array
+    {
+        return [
+            'evidence' => '', 'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [],
+            'selectedChunks' => [], 'failed' => [], 'fitLevel' => 'none', 'condenserCalls' => 0,
+            'counts' => [],
         ];
     }
 
@@ -157,17 +274,32 @@ class ChatManager
         $pipeline->setSessionId($sessionId);
         $pipeline->setSourceStartSeq(\App\Search\SourceSequence::nextSourceSeq($this->db, $sessionId));
 
-        $emit('status', ['text' => count($direct['urls']) === 1
-            ? 'Opening the link...'
-            : 'Opening ' . count($direct['urls']) . ' links...']);
+        $alreadyParsed = $this->alreadyParsedUrls($sessionId);
+        [$videoUrls, $pageUrls] = self::splitVideoUrls($direct['urls'], $alreadyParsed);
 
-        $fetched = $pipeline->fetchDirect(
-            $direct['urls'],
-            $direct['question'],
-            [['role' => 'user', 'content' => $query]],
-            $emit,
-            $this->alreadyParsedUrls($sessionId)
-        );
+        $fetched = null;
+        if ($videoUrls !== []) {
+            $fetched = $this->watchVideos($pipeline, $sessionId, $videoUrls, $query, $direct, $emit);
+            $result['failed'] = $fetched['failed'];
+        }
+
+        if ($pageUrls !== []) {
+            $emit('status', ['text' => count($pageUrls) === 1
+                ? 'Opening the link...'
+                : 'Opening ' . count($pageUrls) . ' links...']);
+
+            $pages = $pipeline->fetchDirect(
+                $pageUrls,
+                $direct['question'],
+                [['role' => 'user', 'content' => $query]],
+                $emit,
+                $alreadyParsed
+            );
+            $fetched = $fetched === null ? $pages : self::mergeFetched($fetched, $pages);
+            $result['failed'] = array_merge($result['failed'], $pages['failed']);
+        }
+
+        $fetched ??= self::nothingFetched();
 
         $result['fit'] = $fetched['fitLevel'];
         $result['condenserCalls'] = (int) $fetched['condenserCalls'];
@@ -181,6 +313,26 @@ class ChatManager
                 'failed' => $fetched['failed'],
                 'reason' => $direct['source'],
             ], 'warn', 'ChatManager::ingestDirectSources');
+
+            // A message whose only link was a video we could not read is not a page we failed to open: there is
+            // nothing on the web to search for instead, so the turn is told what happened.
+            if ($pageUrls === [] && $videoUrls !== []) {
+                $notice = '';
+                foreach ((array) $fetched['failed'] as $failure) {
+                    $notice = trim((string) ($failure['notice'] ?? ''));
+                    if ($notice !== '') {
+                        break;
+                    }
+                }
+                $result['videoFailure'] = $notice !== ''
+                    ? $notice
+                    : 'I could not read the video you linked just now.';
+                // Which kind of sentence that is: one of our own limits (the duration cap, a language neither
+                // model transcribes), which can follow the refusal, or a technical failure, which belongs in
+                // the log and the failure row's tooltip and never in the answer.
+                $result['videoFailureIsOurs'] = $notice !== '';
+            }
+
             return $result;
         }
 
@@ -348,11 +500,17 @@ class ChatManager
         // approved it (the composer strip sends the ON list) or the message is essentially just a link.
         $failedSources = [];
         $turnEvidence = '';
+        // Set when the turn's only link was a video that could not be read: there is nothing to search for in
+        // its place, so the turn says what happened instead of looking elsewhere.
+        $unwatchedVideo = '';
+        $videoFailureIsOurs = false;
         $direct = $this->resolveDirectSources($query, $fetchUrls);
         if (!empty($direct['urls'])) {
             $directResult = $this->ingestDirectSources($sessionId, $query, $direct, $emit);
             $failedSources = array_merge($failedSources, $directResult['failed'] ?? []);
             $turnEvidence .= (string) ($directResult['evidence'] ?? '');
+            $unwatchedVideo = (string) ($directResult['videoFailure'] ?? '');
+            $videoFailureIsOurs = (bool) ($directResult['videoFailureIsOurs'] ?? false);
         }
 
         foreach (array_unique($fileRefs) as $physicalName) {
@@ -381,11 +539,128 @@ class ChatManager
             ]);
         }
 
+        if ($unwatchedVideo !== '') {
+            // The reason travels as this turn's context, so the answer can say it: the launcher's sentence is
+            // written for the user, and a turn with no evidence at all would otherwise invent one.
+            $this->db->insert('chat_history', [
+                'session_id'     => $sessionId,
+                'role'           => 'system',
+                'message'        => $unwatchedVideo,
+                'message_type'   => 'data_fetching',
+                'tool_name'      => 'video_watch',
+                'search_query'   => mb_substr($unwatchedVideo, 0, 250),
+                'atomic_context' => null,
+                'token_estimate' => ($this->countTokens)($unwatchedVideo),
+            ]);
+            $emit('context_data_added', [
+                'id' => (int) $this->db->getConnection()->lastInsertId(),
+                'label' => $unwatchedVideo,
+                'tool_name' => 'video_watch',
+                'query' => $unwatchedVideo,
+                'token_estimate' => ($this->countTokens)($unwatchedVideo),
+                'active' => true,
+            ]);
+        }
+
         $history = $this->db->selectSafe('chat_history', ['session_id' => $sessionId]);
         // Named on the first user turn. Evidence rows for that same turn (a pasted link, an attached
         // file) are already in $history, so the row count is not the first-turn signal — the
         // user-row count is. The guard lives in autoGenerateTitle.
         $updatedTitle = $this->autoGenerateTitle($sessionId, $query, $history, $emit);
+
+        // A watch that produced nothing to read IS the turn: no transcript arrived, and the page about the
+        // video is not its content. The answer is the backend's own sentence, streamed like any other so the
+        // bubble, the metrics and the client's stream check behave the same — and there is no model call and no
+        // tool, because a model asked to answer anyway fills the gap with the title, the uploader and the view
+        // count, which the user already had (measured 2026-10-09, session 1002382).
+        if ($unwatchedVideo !== '') {
+            $refusal = self::WATCH_REFUSAL;
+            if ($videoFailureIsOurs) {
+                // Our own limit (the duration cap, a language neither model transcribes) is a fact about our
+                // side, not metadata about the video, so the user is told which one it was.
+                $refusal .= ' ' . $unwatchedVideo;
+            }
+
+            $emit('status', ['text' => 'Nothing to read from that video']);
+            $emit('token', ['chunk' => $refusal]);
+
+            $this->db->insert('chat_history', [
+                'session_id'     => $sessionId,
+                'role'           => 'assistant',
+                'message'        => $refusal,
+                'image_path'     => null,
+                'token_estimate' => ($this->countTokens)($refusal),
+                'search_query'   => null,
+                'source_map'     => null,
+                'model'          => $this->agent->getModelName(),
+                'had_tool_calls' => 0,
+            ]);
+            $refusalRowId = (int) $this->db->getConnection()->lastInsertId();
+
+            $totalSessionTokens = 0;
+            foreach ($this->db->selectSafe('chat_history', ['session_id' => $sessionId]) as $row) {
+                $totalSessionTokens += (int) ($row['token_estimate'] ?? 0);
+            }
+            $this->db->update('chat_sessions', ['context_tokens' => $totalSessionTokens], ['id' => $sessionId]);
+
+            $refusalMetrics = [
+                'total_ms'  => (int) round((microtime(true) - $turnStart) * 1000),
+                'ttft_ms'   => $firstTokenTs !== null ? (int) round(($firstTokenTs - $turnStart) * 1000) : null,
+                'calls'     => $this->agent->callLog,
+                'reasoning' => ['requested' => $effort, 'mode' => null, 'effort' => null],
+            ];
+            $this->db->update('chat_history', [
+                'perf_metrics' => json_encode($refusalMetrics, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ], ['id' => $refusalRowId]);
+
+            // The failure row still belongs on the turn: the source panel is where the technical reason lives
+            // (its tooltip), and the answer itself must not carry it.
+            $refusalFailures = \App\Search\SourceFailures::finalize($failedSources, [], $turnEvidence);
+            if (!empty($refusalFailures)) {
+                $emit('sources', ['sources' => [], 'failed' => $refusalFailures]);
+                $this->db->update('chat_history', [
+                    'failed_sources' => json_encode($refusalFailures, JSON_UNESCAPED_UNICODE),
+                ], ['id' => $refusalRowId]);
+            }
+
+            \App\Logger::logEvent('watch_refused', 'A watch produced nothing to read; the turn answered with the refusal sentence', [
+                'session_id'     => $sessionId,
+                'row_id'         => $refusalRowId,
+                'reason_is_ours' => $videoFailureIsOurs,
+                'reason'         => $unwatchedVideo,
+                'model_calls'    => 0,
+            ], 'warn', 'ChatManager::processLocked');
+
+            \App\Logger::logEvent('stream_complete', 'Final response delivered to client', [
+                'response_chars'       => mb_strlen($refusal),
+                'total_ms'             => $refusalMetrics['total_ms'],
+                'ttft_ms'              => $refusalMetrics['ttft_ms'],
+                'calls'                => 0,
+                'sources'              => 0,
+                'total_session_tokens' => $totalSessionTokens,
+                'refused_watch'        => true,
+            ], 'info', 'ChatManager::processLocked');
+
+            $emit('done', [
+                'message'              => $refusal,
+                'title'                => $updatedTitle,
+                'total_session_tokens' => $totalSessionTokens,
+                'session_id'           => $sessionId,
+                'message_id'           => $refusalRowId,
+                'had_tool_calls'       => false,
+                'sources'              => [],
+                'perf_metrics'         => $refusalMetrics,
+                'content_hash'         => hash_final($contentHashCtx),
+                'content_length'       => $contentBytes,
+            ]);
+
+            return [
+                'status'  => 'success',
+                'message' => $refusal,
+                'title'   => $updatedTitle,
+                'meta'    => ['search_triggered' => false, 'search_query' => null],
+            ];
+        }
 
         $isEditorMode = !empty($activeEditFile);
         $systemPrompt = $this->promptAssemblyService->buildSystemPrompt($isEditorMode);
@@ -423,7 +698,7 @@ class ChatManager
         [$reasoningMode, $reasoningEffort] = $this->reasoningModeEffort($effort);
 
         $emit('status', ['text' => 'Analyzing request...']);
-        $first = $this->firstPass($currentMessages, $emit, $isEditorMode, $reasoningMode, $reasoningEffort);
+        $first = $this->firstPass($currentMessages, $emit, $isEditorMode, $reasoningMode, $reasoningEffort, $unwatchedVideo !== '');
 
         $freshRowIds = [];
         if (!empty($first['tool_calls'])) {
@@ -592,7 +867,7 @@ class ChatManager
 
         if (!empty($first['tool_calls'])) {
             // Tool turn: single second inference over the acquired evidence.
-            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit, $reasoningMode, $reasoningEffort, $this->buildToolSchemas($isEditorMode));
+            $aiRawResponse = $this->streamAgentResponse($currentMessages, $emit, $reasoningMode, $reasoningEffort, $this->buildToolSchemas($isEditorMode, $unwatchedVideo !== ''));
         } else {
             // Normal turn: the first pass already streamed the answer live.
             $aiRawResponse = $first['content'] ?? '';
@@ -775,7 +1050,22 @@ class ChatManager
         (new \App\Repositories\ChatSessionRepository($this->db))->ensureExists($sessionId);
     }
 
-    private function buildToolSchemas(bool $isEditorMode = false): array
+    private function buildToolSchemas(bool $isEditorMode = false, bool $noSearch = false): array
+    {
+        $tools = $this->buildToolSchemasAll($isEditorMode);
+
+        // A turn whose only source was a video that could not be read has nothing to search for: the video is
+        // not on the web, and searching its address returned pages about the subject instead of the clip. The
+        // answer says what happened rather than looking somewhere else.
+        if ($noSearch) {
+            $tools = array_values(array_filter($tools, static fn(array $tool): bool =>
+                !in_array($tool['function']['name'] ?? '', ['search_web', 'search_local'], true)));
+        }
+
+        return $tools;
+    }
+
+    private function buildToolSchemasAll(bool $isEditorMode = false): array
     {
         if ($isEditorMode) {
             return [
@@ -981,7 +1271,7 @@ class ChatManager
      * @return array{finish_reason:string, content:string, tool_calls:?array, usage:?array}
      */
 
-    private function firstPass(array $messages, callable $emit, bool $isEditorMode = false, ?string $mode = null, ?string $effort = null): array
+    private function firstPass(array $messages, callable $emit, bool $isEditorMode = false, ?string $mode = null, ?string $effort = null, bool $noSearch = false): array
     {
         $utf8Buffer = '';
         $contentEmitted = false;
@@ -991,7 +1281,7 @@ class ChatManager
 
         $result = $this->agent->chatToolCapable(
             $messages,
-            $this->buildToolSchemas($isEditorMode),
+            $this->buildToolSchemas($isEditorMode, $noSearch),
             'auto',
             function ($chunk, $type) use ($emit, &$utf8Buffer, &$contentEmitted, &$contentChars, &$thoughtCompleteSent, &$firstReasoningTs) {
                 if ($type === 'reasoning') {

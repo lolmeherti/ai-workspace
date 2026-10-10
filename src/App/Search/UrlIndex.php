@@ -119,7 +119,10 @@ final class UrlIndex
      */
     public static function defaultSelection(array $index, string $text): array
     {
-        $fetchable = array_values(array_filter($index['entries'], static fn(array $e): bool => $e['fetchable']));
+        // A video is not fetchable as a page, but this turn can still open one: the watch path claims it. The
+        // selection rules below therefore consider videos too, and only the page path filters on fetchable-ness.
+        $fetchable = array_values(array_filter($index['entries'], static fn(array $e): bool =>
+            $e['fetchable'] || ($e['reason'] ?? '') === 'video'));
         $prose = trim((string) preg_replace('~https?://\S+~iu', ' ', $text));
         $prose = trim((string) preg_replace('~\s+~u', ' ', $prose));
         $basicallyALink = count($fetchable) > 0 && count($fetchable) <= 2 && mb_strlen($prose) <= 200;
@@ -280,6 +283,11 @@ final class UrlIndex
             return [false, 'no-host'];
         }
         $host = strtolower((string) $parts['host']);
+        if (VideoSources::match($url) !== null) {
+            // A video is not a page. Marked here so the page path can never scrape it and hand the scrape over
+            // as the video's content; the video pipeline claims the URL, and the URL stays a citation anchor.
+            return [false, 'video'];
+        }
         if ($host === 'localhost' || str_ends_with($host, '.localhost') || str_ends_with($host, '.local')) {
             return [false, 'localhost'];
         }

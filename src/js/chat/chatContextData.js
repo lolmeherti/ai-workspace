@@ -207,9 +207,12 @@ function sourceFeed(d) {
     if (d.parsed?.length) {
         return d.parsed.map(s => {
             const meta = map[s.id] || {};
-            // Condenser sources carry claims and no chunks; both are content the model read.
-            const text = [...(s.chunks || []), ...(s.claims || [])].join('\n').trim();
-            return { id: s.id, title: s.title || meta.title || s.id, domain: s.domain || meta.domain || '', url: meta.url || '', text, tokens: estimateTokens(text) };
+            // A source's text is the words that were stored for it. A block fitted at level 3 carries the
+            // condenser's claims instead of any text, and those are the fitted form the prompt reads — an AI
+            // answer, not the source. The server puts the stored text back (ContextDataViewAction::storedSources),
+            // so the card shows the source and the claims are listed beside it as what they are.
+            const text = (s.chunks || []).join('\n').trim();
+            return { id: s.id, title: s.title || meta.title || s.id, domain: s.domain || meta.domain || '', url: meta.url || '', text, claims: s.claims || [], tokens: estimateTokens(text) };
         });
     }
     const ids = Object.keys(map);
@@ -348,6 +351,15 @@ function renderSourceCard(src, { endpoint = null } = {}) {
     const snippetHtml = renderMd(src.text || 'No source text available.');
     if (snippetHtml !== null) snippet.innerHTML = snippetHtml; else snippet.textContent = src.text || 'No source text available.';
     body.append(snippet);
+    if (src.claims?.length) {
+        const facts = el('div', 'context-source-claims p-3 border-t border-[#142337] space-y-1');
+        facts.append(el('div', 'text-[10px] font-bold uppercase tracking-wider text-slate-500', 'Key facts fitted for the prompt'));
+        const list = el('div', 'markdown-content text-xs text-slate-400 leading-relaxed');
+        const listHtml = renderMd(src.claims.map(c => `- ${c}`).join('\n'));
+        if (listHtml !== null) list.innerHTML = listHtml; else list.textContent = src.claims.join('\n');
+        facts.append(list);
+        body.append(facts);
+    }
 
     head.addEventListener('click', () => {
         const open = body.classList.toggle('hidden');

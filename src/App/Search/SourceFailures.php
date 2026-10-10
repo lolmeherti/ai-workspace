@@ -192,7 +192,15 @@ final class SourceFailures
                 continue;
             }
             $seen[$url] = true;
-            $out[] = self::entry($url, (string) ($f['status'] ?? 'error'), $f['reason'] ?? $f['error'] ?? null);
+            // A failure that came with an explanation carries the sentence written for the user (the launcher's
+            // own, for a video): prefer it over the terse status word, and keep the page's title so the row says
+            // which page or video this was.
+            $out[] = self::entry(
+                $url,
+                (string) ($f['status'] ?? 'error'),
+                $f['notice'] ?? $f['reason'] ?? $f['error'] ?? null,
+                (string) ($f['title'] ?? '')
+            );
         }
 
         foreach (self::unused($sourceMap, $evidence) as $u) {

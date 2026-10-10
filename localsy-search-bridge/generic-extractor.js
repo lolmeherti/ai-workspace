@@ -18,6 +18,64 @@
   if (!probe?.allowed) return;
   const cfMitigated = (probe?.cf_mitigated || "").toLowerCase();
 
+  // ── YouTube acquisition probe ──
+  // youtube-probe.js runs in the page's own world (hook before the player starts, then measure) and
+  // cannot reach the relay from there; it reports by postMessage and this script carries the report out
+  // inside its own fetch result. On a watch page the result waits for it, because the payload the
+  // pipeline wants from a watch page is the measurement, not the player chrome the DOM walk returns.
+  let probeReport = null;
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (event.source !== window || !data) return;
+    if (data.__localsy_probe === true) {
+      probeReport = data.report || null;
+      return;
+    }
+    // The probe's own requests that only the extension can make — a media URL resolved for the page is
+    // cross-origin to it, so a page-context fetch of it answers to googlevideo's CORS headers, while the
+    // extension's worker (host_permissions: <all_urls>) is not subject to them.
+    const request = data.__localsy_probe_request;
+    if (request && request.kind === "sw_fetch") {
+      chrome.runtime.sendMessage({ type: "localsy_sw_fetch", url: request.url, range: request.range || null })
+        .then((result) => {
+          window.postMessage({ __localsy_probe_answer: { id: request.id, result: result || null } }, "*");
+        })
+        .catch((e) => {
+          window.postMessage({ __localsy_probe_answer: { id: request.id, error: String((e && e.message) || e) } }, "*");
+        });
+    }
+  });
+
+  async function waitForYoutubeProbe() {
+    if (!/(^|\.)youtube\.com$/i.test(location.hostname)) return null;
+    if (!/^\/(watch|shorts)/.test(location.pathname)) return null;
+    const deadline = Date.now() + 12_000;
+    while (Date.now() < deadline) {
+      if (probeReport) return probeReport;
+      await sleep(500);
+    }
+    return probeReport || { _error: "youtube-probe reported nothing inside 12s" };
+  }
+
+  // A watch page is measured by the probe, not by the DOM walk. The text a watch page offers is player
+  // chrome, and waiting for it to "settle" spends the whole fetch job's budget (and, before this, fed the
+  // answer from the title and view count). So: report the probe's answer and skip the extraction.
+  if (/(^|\.)youtube\.com$/i.test(location.hostname) && /^\/(watch|shorts)/.test(location.pathname)) {
+    const probeAnswer = await waitForYoutubeProbe();
+    await sendResult("success", {
+      url: location.href,
+      title: document.title,
+      fetched_at: new Date().toISOString(),
+      // The video's own words, when the page's player is the one that fetched the caption track: the
+      // payload the watch pipeline wants from a watch page. It rides at a fixed place so the caller does
+      // not have to know the probe's internals; `probe` keeps the whole measurement for diagnostics.
+      captions: (probeAnswer && probeAnswer.caption_payload) || null,
+      probe: probeAnswer,
+      _debug: { probe_only: true }
+    });
+    return;
+  }
+
   // Redirect safety — reject if the browser landed on a private IP
   if (isPrivateHost(location.hostname)) {
     await chrome.runtime.sendMessage({
@@ -61,10 +119,12 @@
   }
 
   const finalCandidate = out.candidate || { body: "", sections: [], links: [] };
+  const probeReportForResult = await waitForYoutubeProbe();
   await sendResult("success", {
     url: location.href,
     title: document.title,
     fetched_at: new Date().toISOString(),
+    probe: probeReportForResult,
     date_posted: extractJsonLdDatePosted(),
     dates: resolveSourceDates(),
     links: finalCandidate.links,

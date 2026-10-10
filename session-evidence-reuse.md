@@ -142,3 +142,21 @@ Offline measurement on real sessions:
 - Cross-session / global cache with TTL.
 - Removing `search_session_evidence` (its rehydrate + BM25 code is exactly what
   the intercept reuses).
+
+---
+
+# Update 2026-10-10 — shipped behaviour vs invariant 5, and where this is written down
+
+**Invariant 5 above ("model behaviour unchanged; the intercept is transparent to it") does not describe the shipped
+system.** The deterministic intercept is a spec that was never wired; the path that runs is the *model* choosing
+`search_session_evidence` — and it chooses on user pressure, not judgement, because it cannot see the raw text and
+has no signal about what the retained chunks contain. Counted on session 1002417: retained 10 chunks / 32,318 chars,
+first answer 1,040 chars, re-read only after the user said "insufficient explanation", tool returned the whole
+transcript (32,631 chars — the source is exactly `MAX_RESULTS` = 10 chunks), answer 4,082 chars with the source's own
+examples.
+
+The access fix decided from that observation — let the re-read tool accept a **chunk id**, so a citation the model
+already wrote becomes a direct address instead of hoping a phrase ranks that chunk — is recorded with the rest of the
+context-management picture in `docs/context-data/context-management.md` (see its "Decisions — 2026-10-10" section for
+the full set: browsing via a question-free table of contents, auto-atomization by default, and the ordering
+dependencies). Keep the pipeline view there; keep this file about the reuse intercept and its precision gate.

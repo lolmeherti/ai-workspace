@@ -285,6 +285,130 @@ final class SearchPipeline
         ];
     }
 
+    /**
+     * Evidence from a document this turn produced itself — a video's transcript, above all. It goes through
+     * the same chunking and fitting a fetched page goes through, so citations, Context Data, deferred
+     * atomization and later `search_session_evidence` reads all work without new plumbing.
+     *
+     * @param array<int,array{url:string,title:string,domain:string,text:string,sectionType?:string}> $docs
+     * @return array<string,mixed> the same shape fetchDirect returns
+     */
+    public function ingestDocument(array $docs, string $query, array $messages = []): array
+    {
+        $sourceId = $this->sourceStartSeq - 1;
+        $allChunks = [];
+        $sourceMap = [];
+
+        foreach ($docs as $doc) {
+            $text = trim((string) ($doc['text'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $sourceId++;
+            $sid = "S{$sourceId}";
+            $url = (string) ($doc['url'] ?? '');
+            $domain = (string) ($doc['domain'] ?? (parse_url($url, PHP_URL_HOST) ?: ''));
+            $title = (string) ($doc['title'] ?? '');
+            $sourceMap[$sid] = ['domain' => $domain, 'url' => $url, 'title' => $title];
+            $allChunks = array_merge($allChunks, $this->chunksFromText(
+                $text, $sid, $url, $domain, $title, (string) ($doc['sectionType'] ?? 'transcript')
+            ));
+        }
+
+        if ($allChunks === []) {
+            return [
+                'evidence' => '', 'sourceIds' => [], 'sourceMap' => [], 'backingChunks' => [],
+                'selectedChunks' => [], 'failed' => [], 'fitLevel' => 'none', 'condenserCalls' => 0,
+                'counts' => ['unique' => 0],
+            ];
+        }
+
+        $callsBefore = count($this->agent->callLog);
+        $fit = $this->threeLevelFit($allChunks, $query, $messages);
+        $condenserCalls = count($this->agent->callLog) - $callsBefore;
+        $selected = $fit['chunks'] ?? $allChunks;
+
+        \App\Logger::logEvent('document_ingested', 'A document this turn produced became evidence', [
+            'sources' => count($sourceMap),
+            'chunks' => count($allChunks),
+            'fit_level' => $fit['level'] ?? 'unknown',
+            'evidence_chars' => strlen((string) ($fit['evidence'] ?? '')),
+        ], 'info', 'SearchPipeline::ingestDocument');
+
+        return [
+            'evidence'       => (string) ($fit['evidence'] ?? ''),
+            'sourceIds'      => array_keys($sourceMap),
+            'sourceMap'      => $sourceMap,
+            'backingChunks'  => $allChunks,
+            'selectedChunks' => $selected instanceof \ArrayObject ? iterator_to_array($selected) : $selected,
+            'failed'         => [],
+            'fitLevel'       => (string) ($fit['level'] ?? 'unknown'),
+            'condenserCalls' => $condenserCalls,
+            'counts'         => ['unique' => count($sourceMap)],
+        ];
+    }
+
+    /**
+     * One chunk per paragraph, split further only when a paragraph would be heavy on its own. A transcript
+     * arrives as timestamped lines and has no headings, so the heading path stays empty rather than invented.
+     */
+    private function chunksFromText(string $text, string $sourceId, string $url, string $domain, string $title, string $sectionType): array
+    {
+        $chunks = [];
+        $position = 0;
+        $fetchedAt = date('c');
+
+        foreach (preg_split('/\n\s*\n/', $text) ?: [] as $paragraph) {
+            $paragraph = trim($paragraph);
+            if ($paragraph === '') {
+                continue;
+            }
+            foreach (self::splitHeavy($paragraph) as $piece) {
+                $position++;
+                $chunks[] = new WebChunk(
+                    sourceId: $sourceId,
+                    chunkId: "{$sourceId}-C{$position}",
+                    url: $url,
+                    finalUrl: $url,
+                    title: $title,
+                    domain: $domain,
+                    publishedAt: null,
+                    updatedAt: null,
+                    fetchedAt: $fetchedAt,
+                    headingPath: [],
+                    sectionType: $sectionType,
+                    text: $piece,
+                    position: $position,
+                );
+            }
+        }
+
+        return $chunks;
+    }
+
+    /** A paragraph too heavy to send whole is cut on its own line boundaries. */
+    private static function splitHeavy(string $paragraph, int $limit = 4000): array
+    {
+        if (strlen($paragraph) <= $limit) {
+            return [$paragraph];
+        }
+
+        $pieces = [];
+        $current = '';
+        foreach (preg_split('/\n/', $paragraph) ?: [] as $line) {
+            if ($current !== '' && strlen($current) + strlen($line) + 1 > $limit) {
+                $pieces[] = $current;
+                $current = '';
+            }
+            $current .= ($current === '' ? '' : "\n") . $line;
+        }
+        if (trim($current) !== '') {
+            $pieces[] = $current;
+        }
+
+        return $pieces;
+    }
+
     // ── Bridge mode (browser SERP + full extraction) ────────────────────
 
     private function runBridgeMode(string $query, array $messages, callable $emit, BridgeFetcher $bridge): array

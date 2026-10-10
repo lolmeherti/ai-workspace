@@ -19,7 +19,8 @@ class ContextDataViewAction extends BaseAction
         }
 
         $rows = $this->db->query(
-            "SELECT message, source_map, tool_name, search_query, raw_evicted, atomic_context, atomic_tokens, token_estimate
+            "SELECT message, source_map, tool_name, search_query, raw_evicted, atomic_context, atomic_tokens,
+                    token_estimate, selected_chunks, backing_chunks
              FROM chat_history
              WHERE id = :id AND message_type = 'data_fetching'",
             [':id' => $historyId]
@@ -58,7 +59,7 @@ class ContextDataViewAction extends BaseAction
             'atomic_context' => $atoms,
             'atomic_tokens' => (int)($row['atomic_tokens'] ?? 0),
             'token_estimate' => (int)($row['token_estimate'] ?? 0),
-            'parsed' => self::parseSources($row['message'] ?? ''),
+            'parsed' => self::storedSources($row),
         ]);
     }
 
@@ -94,14 +95,14 @@ class ContextDataViewAction extends BaseAction
             $chunks = [];
             if (preg_match_all('/<chunk id="[^"]*"[^>]*>(.*?)<\/chunk>/s', $inner, $c, PREG_SET_ORDER)) {
                 foreach ($c as $chunk) {
-                    $chunks[] = self::unescape($chunk[1]);
+                    $chunks[] = trim(self::unescape($chunk[1]));
                 }
             }
 
             $claims = [];
             if (preg_match_all('/<claim\b[^>]*>(.*?)<\/claim>/s', $inner, $cl, PREG_SET_ORDER)) {
                 foreach ($cl as $claim) {
-                    $claims[] = self::unescape($claim[1]);
+                    $claims[] = trim(self::unescape($claim[1]));
                 }
             }
 
@@ -110,6 +111,78 @@ class ContextDataViewAction extends BaseAction
             }
         }
         return $sources;
+    }
+
+    /**
+     * The row's sources, each carrying the text that is actually stored for it.
+     *
+     * @param array<string,mixed> $row
+     * @return array<int, array{id: string, title: string, domain: string, chunks: string[], claims: string[]}>
+     */
+    public static function storedSources(array $row): array
+    {
+        return self::withStoredText(
+            self::parseSources((string) ($row['message'] ?? '')),
+            (string) ($row['selected_chunks'] ?? ''),
+            (string) ($row['backing_chunks'] ?? '')
+        );
+    }
+
+    /**
+     * Give every source the text it was stored with, when the block it was sent as carries none.
+     *
+     * A level-3 fit does not shrink a source, it replaces it: the source is condensed into a per-source
+     * claim ledger, so the persisted block carries <claim> items and no <chunk> text at all. Reading the
+     * block alone therefore presents an AI-written digest as the source itself — measured on session
+     * 1002120, a 41,990-character transcript reached this view as 37 claims of ~5,700 characters, and the
+     * words that were actually spoken were nowhere in it.
+     *
+     * The exact chunks are on the same row, so a source whose block carries no text gets its own words back
+     * from there. The claims are left exactly where they are: they are the fitted form the prompt carries,
+     * not the source, and the two are shown as what they are.
+     *
+     * @param array<int, array{id: string, title: string, domain: string, chunks: string[], claims: string[]}> $sources
+     * @return array<int, array{id: string, title: string, domain: string, chunks: string[], claims: string[]}>
+     */
+    public static function withStoredText(array $sources, string $selectedChunks, string $backingChunks): array
+    {
+        $stored = self::storedTextBySource($selectedChunks);
+        if ($stored === []) {
+            $stored = self::storedTextBySource($backingChunks);
+        }
+        if ($stored === []) {
+            return $sources;
+        }
+
+        foreach ($sources as $index => $source) {
+            if ($source['chunks'] !== []) {
+                continue;
+            }
+            $text = $stored[(string) $source['id']] ?? [];
+            if ($text !== []) {
+                $sources[$index]['chunks'] = $text;
+            }
+        }
+
+        return $sources;
+    }
+
+    /**
+     * The stored chunk texts, per source id, in document order.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private static function storedTextBySource(string $chunksJson): array
+    {
+        $bySource = [];
+        foreach (\App\ChatManager::decodeChunks($chunksJson) as $chunk) {
+            if ($chunk->text === '') {
+                continue;
+            }
+            $bySource[$chunk->sourceId][] = $chunk->text;
+        }
+
+        return $bySource;
     }
 
     private static function unescape(string $text): string

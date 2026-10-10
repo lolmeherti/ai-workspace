@@ -278,7 +278,11 @@ class ChatExportAction extends BaseAction
             return $record;
         }
 
-        $parsed = ContextDataViewAction::parseSources($message);
+        $parsed = ContextDataViewAction::withStoredText(
+            ContextDataViewAction::parseSources($message),
+            (string) ($row['selected_chunks'] ?? ''),
+            (string) ($row['backing_chunks'] ?? '')
+        );
         if ($sources === [] && $parsed !== []) {
             foreach ($parsed as $p) {
                 $sources[] = [
@@ -372,13 +376,13 @@ class ChatExportAction extends BaseAction
      */
     private function withSourceLinks(string $text, mixed $rawMap): string
     {
-        if (str_contains($text, '#REFID_')) {
+        if (preg_match('/[\[(]?#?REFID_/', $text) === 1) {
             $byId = [];
             foreach ($this->decodeSources($rawMap) as $source) {
                 $byId[(string) $source['id']] = $source;
             }
 
-            $text = preg_replace_callback('/#REFID_(\d+)(?:-C\d+)?/', static function (array $m) use ($byId): string {
+            $text = preg_replace_callback('/[\[(]?#?REFID_(\d+)(?:-C\d+)?[)\]]?/', static function (array $m) use ($byId): string {
                 $source = $byId['S' . (int) $m[1]] ?? null;
                 $url = (string) ($source['url'] ?? '');
                 if ($url === '') {

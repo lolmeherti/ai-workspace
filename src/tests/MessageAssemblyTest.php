@@ -287,8 +287,12 @@ class MessageAssemblyTest
         $b = $this->prompt->buildSystemPrompt(false);
         $this->test('buildSystemPrompt is byte-stable across calls', $a === $b);
         $this->test('buildSystemPrompt has no date/time line', !str_contains($a, "Today's date"));
-        $this->test('buildSystemPrompt carries runtime-timestamp statement',
-            str_contains($a, 'current time is supplied to you as a runtime timestamp'));
+        $this->test('buildSystemPrompt carries the recent-events statement',
+            str_contains($a, 'You may not know recent events. Where a question needs information newer than your training, search the web rather than guessing.'));
+        $this->test('buildSystemPrompt states how the time arrives',
+            str_contains($a, '[sent at 2026-10-06 03:20] in front of what the user wrote'));
+        $this->test('buildSystemPrompt no longer claims a cutoff it cannot know',
+            !str_contains($a, 'knowledge cutoff is'));
         $this->test('buildSystemPrompt carries untrusted-data rule',
             str_contains($a, 'untrusted reference material'));
 
@@ -320,8 +324,16 @@ class MessageAssemblyTest
         $this->test('system message identical with/without evidence',
             $m1[0]['content'] === $m2[0]['content'] && $m1[0]['content'] === $sys);
 
-        // current_time appended as a trailing message, not in the system prompt
-        // or the user turn (so it can't bust cross-turn prefix reuse).
+        // current_time rides the turn it belongs to, not a message of its own: the model must never be handed
+        // a bare user utterance containing only a clock — that is what it answered instead of the question.
+        $stamped = [['role' => 'user', 'message' => 'what about plastic?', 'message_type' => 'text', 'time_note' => '2026-10-06 03:20']];
+        $m4 = $this->prompt->buildMessagesArray($sys, $stamped);
+        $this->test('the time is prefixed to the user turn it times',
+            isset($m4[1]) && is_string($m4[1]['content']) && str_starts_with($m4[1]['content'], "[sent at 2026-10-06 03:20]\n"));
+        $this->test('and the user\'s own words follow it',
+            str_contains((string) ($m4[1]['content'] ?? ''), 'what about plastic?'));
+        $this->test('no separate message carries the clock',
+            count(array_filter($m4, static fn(array $m): bool => is_string($m['content'] ?? null) && trim($m['content']) === 'current_time = 2026-10-06 03:20')) === 0);
         $t = "current_time = 2026-09-22T19:00:00+02:00\n";
         $m3 = $this->prompt->buildMessagesArray($sys, $noEvidence, [], $t);
         $this->test('current_time not in system prompt', !str_contains($m3[0]['content'], 'current_time ='));

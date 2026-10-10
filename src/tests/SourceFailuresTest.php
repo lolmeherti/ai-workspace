@@ -76,6 +76,21 @@ class SourceFailuresTest
         $this->testEq('a turn with nothing unread reports nothing', [], SourceFailures::finalize(
             [], ['S1' => $map['S1'], 'S2' => $map['S2']], $evidence));
 
+        // ── a failure that came with a reason keeps it ───────────────────────────────────────────────────
+        // A video the launcher could not read arrives with its own sentence and its title; the row is the only
+        // place the panel can say why, so neither may be dropped on the way in.
+        $explained = SourceFailures::finalize([[
+            'url' => 'https://www.youtube.com/shorts/x',
+            'status' => 'empty',
+            'error' => 'the watch produced no transcript',
+            'notice' => 'I could not tell what language this video is in.',
+            'title' => 'This May Be One Of The Wisest Movie Quotes Of All Time.',
+        ]], [], '');
+        $this->test('the failure keeps the sentence written for the user',
+            str_contains((string) ($explained[0]['tooltip'] ?? ''), 'I could not tell what language this video is in.'));
+        $this->test('and the title, so the row says which video it was',
+            ($explained[0]['title'] ?? '') === 'This May Be One Of The Wisest Movie Quotes Of All Time.');
+
         // ── the panel's two groups never overlap ─────────────────────────────
         // The map is everything the turn fetched; the panel must not list the same page as both read and
         // unread (measured: every source shown twice, all of them red).

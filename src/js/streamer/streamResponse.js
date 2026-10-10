@@ -1271,11 +1271,11 @@ export async function streamResponse(formData, originalMessage) {
                                             thinkingTypewriter.push(thinkingText);
                                             thinkingTypewriter.flush();
                                             const displayed = thinkingTypewriter.displayedText;
-                                            const html = marked.parse(displayed);
+                                            const html = marked.parse(substituteRefBadges(displayed, currentRefs));
                                             thinkingContent.innerHTML = html;
                                             thinkingContent.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
                                         } else {
-                                            const html = marked.parse(thinkingText);
+                                            const html = marked.parse(substituteRefBadges(thinkingText, currentRefs));
                                             thinkingContent.innerHTML = html;
                                             thinkingContent.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
                                         }
@@ -1376,7 +1376,7 @@ export async function streamResponse(formData, originalMessage) {
                                     thinkingTypewriter.flush();
                                     const displayed = thinkingTypewriter.displayedText;
                                     if (displayed && !thinkingContent.querySelector('pre code')) {
-                                        const html = marked.parse(displayed);
+                                        const html = marked.parse(substituteRefBadges(displayed, currentRefs));
                                         thinkingContent.innerHTML = html;
                                         thinkingContent.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
                                     }
@@ -1473,8 +1473,8 @@ export async function streamResponse(formData, originalMessage) {
 
 }
 
-function renderThinkingContent(container, text) {
-    const html = marked.parse(text);
+function renderThinkingContent(container, text, refs = {}) {
+    const html = marked.parse(substituteRefBadges(text, refs));
     container.innerHTML = html;
     container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
 }

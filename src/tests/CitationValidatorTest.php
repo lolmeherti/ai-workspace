@@ -154,6 +154,13 @@ class CitationValidatorTest
 
         $asToken = $this->validator->sanitizeCitations('Tea. #REFID_2', ['#REFID_1', '#REFID_2']);
         $this->test('an already-tokenised valid list works too', str_contains($asToken, '#REFID_2'));
+
+        // The model does not always write the asked-for shape: "[REFID_1-C2]" in brackets without the hash was
+        // measured leaking through every renderer as literal text. Stored text is normalised to the one shape.
+        $this->testEq('a bracketed, hash-less token is normalised to the canonical token',
+            'Loose leaf tea helps. #REFID_2.', $this->validator->sanitizeCitations('Loose leaf tea helps. [REFID_2-C1].', ['S2']));
+        $this->testEq('a bracketed token with no source behind it is removed, brackets and all',
+            'Loose leaf tea helps. .', $this->validator->sanitizeCitations('Loose leaf tea helps. [REFID_9-C1].', ['S2']));
     }
 
     // ===================================================================

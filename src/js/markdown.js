@@ -11,7 +11,7 @@ const THINKING_FORMATS = [
 ];
 
 const REF_BADGE_ICON = '<svg class="ref-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-const REF_LABEL_MAX = 24;
+const REF_LABEL_MAX = 40;
 
 function escapeHtml(text) {
     return String(text).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -73,19 +73,54 @@ function hostLabel(ref) {
     return String(ref.domain || '').replace(/^www\./, '');
 }
 
-/** The page's identity as a reader sees it: its title, else the bare host, else the address. */
-function refLabel(ref) {
-    return String(ref.title || '') || hostLabel(ref) || String(ref.url || '');
+/**
+ * The page a chip names, for collapsing: one turn can register the same page under two source numbers (two
+ * searches, one page), and the reader should not be told about it twice. Mirrors UrlIndex::key() — host
+ * lowercased, "www." dropped, default port and fragment dropped, trailing slash trimmed — without folding
+ * tracking parameters, so two different videos (same path, different query) stay two pages.
+ */
+function pageKey(ref) {
+    const raw = String(ref.url || '').trim();
+    if (raw === '') return '';
+    let url;
+    try { url = new URL(raw); } catch { return raw.replace(/\/+$/, ''); }
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const defaultPort = (url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80');
+    const port = url.port && !defaultPort ? ':' + url.port : '';
+    const path = (url.pathname || '/').replace(/\/+$/, '');
+    return host + port + path + (url.search || '');
 }
 
-function refBadge(ref) {
+/** The page's identity as a reader sees it: its site first, then its title, so two pages of one site are told
+ *  apart — "hak5.org · WiFi Pineapple Enterprise" against "hak5.org · WiFi Pineapple - Hak5" — and a page with
+ *  no title still says where it came from. */
+function refLabel(ref) {
+    const site = hostLabel(ref);
+    const title = String(ref.title || '').trim();
+    if (site && title) return site + ' · ' + title;
+    return site || title || String(ref.url || '');
+}
+
+function refBadge(ref, number, page = '') {
     const url = String(ref.url || '');
     const title = String(ref.title || '');
     let label = refLabel(ref);
     if (label.length > REF_LABEL_MAX) label = label.slice(0, REF_LABEL_MAX - 1).trimEnd() + '…';
     const tip = (title ? title + ' — ' : '') + (url || hostLabel(ref));
-    return `<a class="ref-badge" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(tip)}">`
-        + REF_BADGE_ICON + `<span>${escapeHtml(label)}</span></a>`;
+    // The number comes first: it is what the bare numbers further down the answer refer to, so the tie between a
+    // chip and a "3" two paragraphs later is visible, not only in the hover.
+    return `<a class="ref-badge" data-ref="${number}" data-page="${page}" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(tip)}">`
+        + `<span class="ref-badge-num">${number}</span>` + REF_BADGE_ICON
+        + `<span class="ref-badge-label">${escapeHtml(label)}</span></a>`;
+}
+
+/** A source this answer has already named: the bare number stands in for the chip and links the same page, so a
+ *  paragraph citing one page throughout does not read as a wall of identical chips. */
+function refSup(ref, number) {
+    const url = String(ref.url || '');
+    const title = String(ref.title || '');
+    const tip = (title ? title + ' — ' : '') + (url || hostLabel(ref));
+    return `<a class="ref-badge-sup" data-ref="${number}" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(tip)}">${number}</a>`;
 }
 
 /** Older citation shapes have no badge and no link: they are removed wherever the answer is rendered or copied. */
@@ -110,11 +145,35 @@ export function substituteRefBadges(text, refs = {}, { holdPartial = false } = {
 
     // A source number or chunk suffix may still be arriving. Hold the whole trailing
     // token until a delimiter or final render, before replacing any part with a badge.
-    if (holdPartial) out = out.replace(/#(?:R(?:E(?:F(?:I(?:D(?:_\d*(?:-C?\d*)?)?)?)?)?)?)?$/, '');
+    if (holdPartial) out = out.replace(/(?:[\[(]#?|#)R(?:E(?:F(?:I(?:D(?:_\d*(?:-C?\d*)?)?)?)?)?)?$|(?:[\[(]?#)$/, '');
 
-    out = out.replace(/#REFID_(\d+)(?:-C\d+)?/g, (match, digits) => {
-        const ref = refs[Number(digits)];
-        return ref ? refBadge(ref) : '';
+    // Which sources this text has already named in full, and under which number each page was named. Markers
+    // already in the text are counted first: the streaming path rewrites its buffer with this function's own
+    // output on every frame, and re-scanning it must not hand the same source a second full chip.
+    const named = new Set();
+    const namedPages = new Map();
+    for (const marker of out.matchAll(/data-ref="(\d+)" data-page="([^"]*)"/g)) {
+        named.add(Number(marker[1]));
+        if (marker[2] !== '') namedPages.set(marker[2], Number(marker[1]));
+    }
+    for (const marker of out.matchAll(/data-ref="(\d+)"/g)) named.add(Number(marker[1]));
+
+    // The model is asked for "#REFID_7" but writes what it likes: "[REFID_1-C2]" in brackets, without the hash,
+    // with a chunk suffix. Anything but the one shape used to survive every renderer as literal text — measured:
+    // 76 of them on one chat page. The brackets and the hash are therefore part of the marker.
+    out = out.replace(/[\[(]?#?REFID_(\d+)(?:-C\d+)?[)\]]?/g, (match, digits) => {
+        const number = Number(digits);
+        const ref = refs[number];
+        if (!ref) return '';
+        if (named.has(number)) return refSup(ref, number);
+        const page = pageKey(ref) === '' ? '' : encodeURIComponent(pageKey(ref));
+        // A second registration of a page this answer already named is a repeat, and it repeats the number the
+        // page was named under — not its own, which would point at a chip that does not exist.
+        const namedAs = page === '' ? 0 : (namedPages.get(page) || 0);
+        if (namedAs) return refSup(ref, namedAs);
+        named.add(number);
+        if (page !== '') namedPages.set(page, number);
+        return refBadge(ref, number, page);
     });
 
     out = stripLegacyCitations(out);
@@ -127,7 +186,7 @@ export function substituteRefBadges(text, refs = {}, { holdPartial = false } = {
  * reader can follow, instead of a token nothing outside the chat window can resolve.
  */
 export function refsToLinks(text, refs = {}) {
-    const out = String(text).replace(/#REFID_(\d+)(?:-C\d+)?/g, (match, digits) => {
+    const out = String(text).replace(/[\[(]?#?REFID_(\d+)(?:-C\d+)?[)\]]?/g, (match, digits) => {
         const ref = refs[Number(digits)];
         if (!ref || !ref.url) return '';
         // Same label as the chip, without the truncation: a link someone pastes elsewhere can carry the
@@ -155,7 +214,7 @@ export function extractThinking(text) {
     return { thinking: '', response: text, format: null };
 }
 
-export function createThinkingAccordion(thinkingText) {
+export function createThinkingAccordion(thinkingText, refs = {}) {
     const details = document.createElement('details');
     details.className = 'w-full mb-4 overflow-hidden group thinking-accordion rounded-xl border border-cyan-500/20 bg-gradient-to-b from-[#0d1321]/90 to-[#0d1321]/70 backdrop-blur-sm shadow-[0_0_25px_rgba(6,182,212,0.06),inset_0_1px_0_rgba(6,182,212,0.05)] transition-all duration-300';
     details.open = false;
@@ -182,7 +241,9 @@ export function createThinkingAccordion(thinkingText) {
     `;
 
     const content = details.querySelector('.thinking-content');
-    const html = marked.parse(thinkingText);
+    // The reasoning plans the answer, so it carries the same citation tokens: they are replaced here exactly as
+    // they are in the answer, or a token the model was thinking about shows up as text while it streams.
+    const html = marked.parse(substituteRefBadges(thinkingText, refs));
     content.innerHTML = html;
     if (typeof hljs !== 'undefined') {
         content.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
@@ -212,7 +273,7 @@ export function parseMarkdownElements() {
         el.classList.add('parsed', 'markdown-content');
 
         if (thinking && !el.parentNode.querySelector('.thinking-accordion')) {
-            const accordion = createThinkingAccordion(thinking);
+            const accordion = createThinkingAccordion(thinking, refs);
             el.parentNode.insertBefore(accordion, el);
         }
 

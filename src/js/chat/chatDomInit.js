@@ -68,7 +68,7 @@ export function initChatDom() {
                 el.classList.add('parsed', 'markdown-content');
 
                 if (thinking && !el.parentNode.querySelector('.thinking-accordion')) {
-                    const accordion = createThinkingAccordion(thinking);
+                    const accordion = createThinkingAccordion(thinking, refMapFromDocument());
                     el.parentNode.insertBefore(accordion, el);
                 }
 
