@@ -157,6 +157,7 @@ examples.
 
 The access fix decided from that observation — let the re-read tool accept a **chunk id**, so a citation the model
 already wrote becomes a direct address instead of hoping a phrase ranks that chunk — is recorded with the rest of the
-context-management picture in `docs/context-data/context-management.md` (see its "Decisions — 2026-10-10" section for
-the full set: browsing via a question-free table of contents, auto-atomization by default, and the ordering
-dependencies). Keep the pipeline view there; keep this file about the reuse intercept and its precision gate.
+context-management picture in `docs/context-data/context-data-overview.md` (and the decisions behind it in
+`.hermes/plans/evidence/2026-10-10_evidence-browsing-and-auto-atomization.md`: browsing via a model-authored table of
+contents, auto-atomization by default, and the ordering dependencies). Keep the pipeline view there; keep this file
+about the reuse intercept and its precision gate.

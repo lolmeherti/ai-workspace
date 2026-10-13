@@ -61,12 +61,21 @@
                             continue;
                         endif;
                         if (($msg['role'] ?? '') === 'system') continue;
+                        // A message the user sent while the engine was busy (held for the assistant), or one the stop
+                        // control dropped before it was answered. Both are real bubbles — the state travels with them
+                        // so a reload says the same thing the live view did.
+                        $stateClass = $msgType === 'queued' ? ' is-waiting' : ($msgType === 'stopped' ? ' is-not-sent' : '');
+                        $stateBadge = $msgType === 'queued' ? 'Queued'
+                            : ($msgType === 'stopped' ? 'not sent' : '');
                         ?>
-                        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
+                        <div class="flex flex-col w-full max-w-[92%] mx-auto space-y-1 chat-message-container<?php echo $stateClass; ?> <?php echo $msg['role'] === 'user' ? 'items-end' : 'items-start'; ?>">
 
                             <div class="flex items-center gap-2 <?php echo $msg['role'] === 'user' ? 'flex-row-reverse mr-1' : 'ml-1'; ?>">
                                 <span class="text-xs text-slate-500 font-semibold normal-case tracking-normal flex items-center gap-2">
                                     <?php echo $msg['role'] === 'user' ? 'You' : htmlspecialchars($msg['model'] ?? $msg['model_name'] ?? \App\Config::get('LLM_MODEL_NAME', 'Assistant')); ?>
+                                    <?php if ($stateBadge !== ''): ?>
+                                        <span class="msg-state"><?php echo htmlspecialchars($stateBadge); ?></span>
+                                    <?php endif; ?>
                                     <?php if ($msg['role'] !== 'user'): ?>
                                         <?php if (!empty($msg['search_query'])): ?>
                                             <span class="text-[0.65rem] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 normal-case tracking-normal shadow-sm">

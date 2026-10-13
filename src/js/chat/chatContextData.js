@@ -140,6 +140,44 @@ export async function refreshContextItem(id, { root = list(), updateViewer = tru
     if (updateViewer && version === epoch && currentData?.id == id && !dirty) fill(d);
     return d;
 }
+/** The house spinner — the same markup the file accordion and the job loader use, so it looks like the rest of the app. */
+const SPINNER_SVG = '<svg class="animate-spin h-3 w-3 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">'
+    + '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>'
+    + '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+
+/**
+ * Show a row as being atomized right now: a spinner in front of the words, and its buttons quiet so the same work cannot
+ * be started twice from here. This only paints — whether the work is really running is the server's answer, and the
+ * pipeline poll is what asks.
+ */
+export function markItemAtomizing(id, { root = list() } = {}) {
+    const row = root && root.querySelector(`.context-item[data-id="${Number(id)}"]`);
+    const badge = row ? row.querySelector('.context-badge') : null;
+    if (!badge || badge.dataset.atomizing === '1') return;
+
+    badge.dataset.atomizing = '1';
+    badge.dataset.wasCls = badge.className;
+    badge.dataset.wasText = badge.textContent || '';
+    badge.className = 'context-badge text-xs font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1.5 bg-amber-500/15 border-amber-400/30 text-amber-200';
+    badge.innerHTML = SPINNER_SVG + '<span>Atomizing…</span>';
+    row.dataset.wasState = row.dataset.state;
+    row.dataset.state = 'atomizing';
+    row.querySelectorAll('.context-btns button').forEach(b => { b.disabled = true; b.classList.add('opacity-40', 'pointer-events-none'); });
+}
+
+/** Take the spinner away again, for work that ended without producing notes. */
+export function clearItemAtomizing(id, { root = list() } = {}) {
+    const row = root && root.querySelector(`.context-item[data-id="${Number(id)}"]`);
+    const badge = row ? row.querySelector('.context-badge') : null;
+    if (!badge || badge.dataset.atomizing !== '1') return;
+
+    badge.className = badge.dataset.wasCls || 'context-badge text-xs font-medium px-2 py-0.5 rounded-full border';
+    badge.textContent = badge.dataset.wasText || '';
+    delete badge.dataset.atomizing;
+    if (row.dataset.wasState) row.dataset.state = row.dataset.wasState;
+    row.querySelectorAll('.context-btns button').forEach(b => { b.disabled = false; b.classList.remove('opacity-40', 'pointer-events-none'); });
+}
+
 export function addContextItem(item, root = list()) {
     if (!root || root.querySelector(`.context-item[data-id="${Number(item.id)}"]`)) return;
     root.querySelector('#context-data-empty')?.remove();

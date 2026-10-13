@@ -14,4 +14,5 @@ enum Tool: string
     case UPDATE_CALENDAR_TASK = 'update_calendar_task';
     case SEARCH_MEMORIES = 'search_memories';
     case SEARCH_SESSION_EVIDENCE = 'search_session_evidence';
+    case CALCULATE = 'calculate';
 }

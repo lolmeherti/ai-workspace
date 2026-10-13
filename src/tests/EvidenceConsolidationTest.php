@@ -399,10 +399,40 @@ class EvidenceConsolidationTest
 
             public function condenseBatched(array $chunks, string $searchQuery): array
             {
+                $this->failIfStubbed();
+                return $this->claims;
+            }
+
+            /**
+             * The enrichment entry point the deferred pass actually calls: one call, both artifacts.
+             * The stub builds a map from the chunk ids its claims cite — one entry per id, which is
+             * what ChunkMap::build() produces for a source the model described.
+             */
+            public function enrichBatched(array $chunks, string $searchQuery): array
+            {
+                $this->failIfStubbed();
+
+                $map = [];
+                foreach ($this->claims as $claim) {
+                    foreach ($claim['chunk_ids'] ?? [] as $id) {
+                        $map[$id] ??= [
+                            'chunkId' => (string)$id,
+                            'headline' => mb_substr((string)($claim['claim'] ?? ''), 0, 40),
+                            'description' => 'stub description',
+                            'chars' => 100,
+                            'described' => true,
+                        ];
+                    }
+                }
+
+                return ['claims' => $this->claims, 'map' => array_values($map), 'formatted' => true];
+            }
+
+            private function failIfStubbed(): void
+            {
                 if ($this->throw) {
                     throw new \RuntimeException('stub consolidation failure');
                 }
-                return $this->claims;
             }
         };
         $stub->claims = $claims;

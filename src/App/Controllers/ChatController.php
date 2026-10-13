@@ -17,6 +17,7 @@ use App\Actions\Chat\ChatSessionDeleteAction;
 use App\Actions\Chat\ContextDataToggleAction;
 use App\Actions\Chat\ContextDataViewAction;
 use App\Actions\Chat\ContextDataAtomizeAction;
+use App\Actions\Chat\StopTurnAction;
 use App\Actions\Chat\ChatExportAction;
 
 class ChatController extends BaseController
@@ -44,6 +45,15 @@ class ChatController extends BaseController
         // (chat turns, condense, briefing, star/toggle actions all read session_id).
         $ambientSessionId = (int)($_POST['session_id'] ?? $_GET['session_id'] ?? 0);
         \App\Logger::setSessionId($ambientSessionId > 0 ? $ambientSessionId : null);
+
+        // The stop control is handled here, before the request is split into "page" and "API" shapes: the client posts
+        // JSON (`Accept: application/json`) while a curl or an older form post may not, and a stop must not depend on
+        // which branch the request happens to take. It has to run before the chat path's empty-prompt check, or a stop
+        // would be answered with "Empty prompt." (learned the hard way).
+        if ($method === 'POST' && ($_POST['action'] ?? '') === Action::STOP_TURN->value) {
+            (new StopTurnAction($this->db))->execute();
+            return;
+        }
 
         if ($method === 'POST') {
             $this->handlePost();

@@ -183,19 +183,30 @@ class AgentManager
             $reasoningChars = 0;
             $contentChars = 0;
             $clientAborted = false;
+            // A browser that walked away and a browser whose user pressed Stop look identical on the wire; only the
+            // stop flag tells them apart, and they must not be treated the same (plan R14). The decision is made once,
+            // on the first disconnect check, so this costs no Redis read per chunk.
+            $abortDecision = null;
+            $deliveryDropped = false;
 
             // Raw bytes exactly as the endpoint sent them, used only to report an
             // error body: the assembled chat text lives in $fullResponse.
             $rawBody = '';
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, $stream) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, &$abortDecision, &$deliveryDropped, $stream) {
                 $rawBody .= $data;
-                // Abort the transfer the instant the client disconnects so the
-                // enclosing finally() releases the inference lock instead of
-                // holding it until the model finishes generating.
                 if (connection_aborted()) {
-                    $clientAborted = true;
-                    return 0;
+                    if ($abortDecision === null) {
+                        // Stop was pressed → abort the transfer, as this path always did. The browser merely
+                        // vanished → keep consuming: the generation finishes and the complete answer is persisted,
+                        // and only the delivery to nobody is dropped.
+                        $abortDecision = self::stoppedByUser();
+                        $deliveryDropped = !$abortDecision;
+                    }
+                    if ($abortDecision) {
+                        $clientAborted = true;
+                        return 0;
+                    }
                 }
                 $lines = explode("\n", $data);
 
@@ -219,7 +230,7 @@ class AgentManager
                                 $firstReasoningTs = microtime(true);
                             }
                             $reasoningChars += mb_strlen($chunk);
-                            if ($stream && $streamCallback !== null) {
+                            if ($stream && !$deliveryDropped && $streamCallback !== null) {
                                 $streamCallback($chunk, 'reasoning');
                             }
                         }
@@ -232,7 +243,7 @@ class AgentManager
                             $contentChars += mb_strlen($chunk);
                             $fullResponse .= $chunk;
 
-                            if ($stream && $streamCallback !== null) {
+                            if ($stream && !$deliveryDropped && $streamCallback !== null) {
                                 $streamCallback($chunk, 'content');
                             }
                         }
@@ -243,6 +254,14 @@ class AgentManager
 
             $result = curl_exec($ch);
             $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($deliveryDropped && !$clientAborted) {
+                \App\Logger::logEvent('generation_unwatched', "Client disconnected — generation continued so the answer is complete after {$elapsed}ms", [
+                    'elapsed_ms' => $elapsed,
+                    'purpose' => $purpose,
+                    'chars' => strlen($fullResponse),
+                ], 'info', 'AgentManager::chat');
+            }
 
             if ($clientAborted) {
                 curl_close($ch);
@@ -463,6 +482,27 @@ class AgentManager
     }
 
     /**
+     * Did the user press Stop? The stop control sets `turn_stop:<session>` and then aborts its own fetch, so a stop and
+     * a browser that walked away are indistinguishable on the wire — and they are treated differently on purpose
+     * (plan R14): a stop aborts the generation, a vanished browser lets it finish so the persisted answer is not a
+     * fragment. Read-only: the flag is consumed by the turn itself, so one stop ends exactly one turn.
+     */
+    private static function stoppedByUser(): bool
+    {
+        $sessionId = \App\Logger::currentSessionId();
+        if ($sessionId === null || $sessionId <= 0) {
+            return false;
+        }
+
+        try {
+            return \App\Cache::get('turn_stop:' . $sessionId) !== null;
+        } catch (\Throwable $e) {
+            // Redis trouble must never be read as "the user stopped".
+            return false;
+        }
+    }
+
+    /**
      * Tool-capable streaming call (the integrated first pass). Streams
      * reasoning + content to the callback (fn(string $chunk, string $type)
      * where $type is 'reasoning'|'content'), assembles streamed tool_calls by
@@ -529,6 +569,9 @@ class AgentManager
         $reasoningChars = 0;
         $contentChars = 0;
         $clientAborted = false;
+        // Same rule as the plain chat path (plan R14): the decision is taken once, on the first disconnect check.
+        $abortDecision = null;
+        $deliveryDropped = false;
 
         try {
             $ch = curl_init($endpoint);
@@ -547,13 +590,18 @@ class AgentManager
             // error body: the assembled chat text lives in $fullResponse.
             $rawBody = '';
 
-            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted) {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($streamCallback, &$fullResponse, &$rawBody, &$lastUsage, &$lastTimings, &$finishReason, &$toolCalls, &$toolCallSeen, &$firstReasoningTs, &$firstContentTs, &$reasoningChars, &$contentChars, &$clientAborted, &$abortDecision, &$deliveryDropped) {
                 $rawBody .= $data;
-                // Abort the transfer the instant the client disconnects so the
-                // enclosing finally() releases the inference lock.
                 if (connection_aborted()) {
-                    $clientAborted = true;
-                    return 0;
+                    if ($abortDecision === null) {
+                        // Same rule as the plain chat path: Stop aborts, a vanished browser does not (plan R14).
+                        $abortDecision = self::stoppedByUser();
+                        $deliveryDropped = !$abortDecision;
+                    }
+                    if ($abortDecision) {
+                        $clientAborted = true;
+                        return 0;
+                    }
                 }
                 $lines = explode("\n", $data);
                 foreach ($lines as $line) {
@@ -583,7 +631,7 @@ class AgentManager
                             $firstReasoningTs = microtime(true);
                         }
                         $reasoningChars += mb_strlen($chunk);
-                        if ($streamCallback !== null) {
+                        if ($streamCallback !== null && !$deliveryDropped) {
                             $streamCallback($chunk, 'reasoning');
                         }
                     }
@@ -600,7 +648,7 @@ class AgentManager
                         }
                         $contentChars += mb_strlen($chunk);
                         $fullResponse .= $chunk;
-                        if ($streamCallback !== null) {
+                        if ($streamCallback !== null && !$deliveryDropped) {
                             $streamCallback($chunk, 'content');
                         }
                     }
@@ -634,6 +682,14 @@ class AgentManager
 
             $result = curl_exec($ch);
             $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if ($deliveryDropped && !$clientAborted) {
+                \App\Logger::logEvent('generation_unwatched', "Client disconnected — tool-capable generation continued so the answer is complete after {$elapsed}ms", [
+                    'elapsed_ms' => $elapsed,
+                    'purpose' => $purpose,
+                    'chars' => strlen($fullResponse),
+                ], 'info', 'AgentManager::chatToolCapable');
+            }
 
             if ($clientAborted) {
                 curl_close($ch);

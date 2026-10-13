@@ -14,7 +14,7 @@ RUN echo "xdebug.mode=debug" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.
     && echo "xdebug.discover_client_host=0" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
     && echo "xdebug.start_with_request=yes" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
 
-RUN docker-php-ext-install pdo_mysql pdo zip \
+RUN docker-php-ext-install pdo_mysql pdo zip bcmath \
     && pecl install redis \
     && docker-php-ext-enable redis
 

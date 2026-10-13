@@ -75,6 +75,16 @@ class ModelLockTest
     {
         echo "\n=== acquire / release lifecycle ===\n";
 
+        // A live worker holds this lock while it runs a turn, and that is legitimate — but then the lifecycle checks below
+        // can only fail for the wrong reason (the engine being busy is not a defect in the lock). Assert the invariant
+        // that holds either way — a second owner cannot take a held engine — and skip the rest, saying so.
+        if (ModelLock::availability()['busy']) {
+            $this->test('a held engine cannot be taken by a second owner', ModelLock::acquire(ModelLock::DEFAULT_TTL_MS) === null);
+            echo "  [SKIP] acquire / release lifecycle: the engine is held by a worker right now\n";
+
+            return;
+        }
+
         $token = ModelLock::acquire(ModelLock::DEFAULT_TTL_MS);
         $this->test('acquire returns a token', $token !== null);
         $this->test('acquire sets owner', ModelLock::isOwner());

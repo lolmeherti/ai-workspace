@@ -35,6 +35,12 @@ class Logger
         self::$sessionId = null;
     }
 
+    /** The ambient session id, so a caller can scope one log line and restore the ambient value afterwards. */
+    public static function currentSessionId(): ?int
+    {
+        return self::$sessionId;
+    }
+
     /** Set the ambient model name for the current request (attribution for metrics/errors). */
     public static function setModelName(?string $modelName): void
     {

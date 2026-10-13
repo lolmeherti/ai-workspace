@@ -188,6 +188,11 @@ func Bootstrap() {
 
 	_ = ctxSize
 
+	// The queue needs a consumer that is simply there: every turn is a queue item now, and a job handed back has nobody
+	// guaranteed to pick it up until somebody starts a worker. Supervised here, beside the engine, so a container
+	// restart brings the worker back with it. The app's own spawn stays as the fallback for the boot window.
+	StartWorkerSupervisor()
+
 	util.LogPrint("[+] %s: Startup complete. App reachable at http://localhost:8080\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	if !DebugMode {

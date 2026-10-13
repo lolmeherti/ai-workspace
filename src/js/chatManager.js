@@ -18,13 +18,18 @@ export async function handleChatSubmit(e) {
         notify('Your document is being saved. Wait for it to finish before sending.', { target: document.getElementById('composer-notices'), kind: 'info' });
         return;
     }
-    if (!ensureAIAvailable(document.getElementById('composer-notices')) || state.isGenerating) return;
+    // No `state.isGenerating` gate: a message sent while an answer streams is a message, and the server holds it and
+    // answers it when the engine frees — the queue's whole purpose. This gate was silent (no notice, draft kept), which
+    // is what made sending during an answer look like a dead button (measured: the second message never reached the
+    // server: no `user_message_persisted` row for it). Double submits are fine in the same way: the second becomes a
+    // held message rather than a second interleaved turn.
+    if (!ensureAIAvailable(document.getElementById('composer-notices'))) return;
     if (state.contextLocked) {
         notify('Context is full. Review Context Data or condense this conversation before sending.', { id: 'context-full', kind: 'warning' });
         return;
     }
     if (state.editorVisible) { try { await flushDraftChanges(); } catch { return; } }
-    if (state.isGenerating || state.navigationPending || state.editorSaving) return;
+    if (state.navigationPending || state.editorSaving) return;
     const submittedDraft = captureDraft();
     const submittedSession = state.sessionId;
     

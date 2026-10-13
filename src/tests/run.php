@@ -49,11 +49,19 @@ require_once __DIR__ . '/UrlIndexTest.php';
 require_once __DIR__ . '/ToolArgumentTest.php';
 require_once __DIR__ . '/SourceFailuresTest.php';
 require_once __DIR__ . '/SessionTitleTest.php';
+require_once __DIR__ . '/ChunkMapTest.php';
+require_once __DIR__ . '/ToolLoopTest.php';
 require_once __DIR__ . '/TranscriptFusionTest.php';
 require_once __DIR__ . '/VideoWatchRunnerTest.php';
 require_once __DIR__ . '/VideoSourcesTest.php';
 require_once __DIR__ . '/VideoWatchIngestTest.php';
 require_once __DIR__ . '/ContextSourceTextTest.php';
+require_once __DIR__ . '/JobQueueTest.php';
+require_once __DIR__ . '/EnrichmentJobTest.php';
+require_once __DIR__ . '/PendingPromptQueueTest.php';
+require_once __DIR__ . '/OwedWorkTest.php';
+require_once __DIR__ . '/QueueReconciliationTest.php';
+require_once __DIR__ . '/CalculatorTest.php';
 
 use App\Config;
 use App\Database;
@@ -98,6 +106,14 @@ use App\Tests\UrlIndexTest;
 use App\Tests\ToolArgumentTest;
 use App\Tests\SourceFailuresTest;
 use App\Tests\SessionTitleTest;
+use App\Tests\ChunkMapTest;
+use App\Tests\ToolLoopTest;
+use App\Tests\JobQueueTest;
+use App\Tests\EnrichmentJobTest;
+use App\Tests\PendingPromptQueueTest;
+use App\Tests\OwedWorkTest;
+use App\Tests\QueueReconciliationTest;
+use App\Tests\CalculatorTest;
 use App\Tests\TranscriptFusionTest;
 use App\Tests\VideoWatchRunnerTest;
 use App\Tests\VideoSourcesTest;
@@ -257,6 +273,30 @@ $allOk = (new VideoWatchIngestTest())->run() && $allOk;
 
 echo "\n=== Phase 45: Context Data source text ===\n";
 $allOk = (new ContextSourceTextTest())->run() && $allOk;
+
+echo "\n=== Phase 46: Evidence Map + Unit Reads ===\n";
+$allOk = (new ChunkMapTest($db))->run() && $allOk;
+
+echo "\n=== Phase 47: Tool Loop Mechanics ===\n";
+$allOk = (new ToolLoopTest($db))->run() && $allOk;
+
+echo "\n=== Phase 48: Background Job Queue ===\n";
+$allOk = (new JobQueueTest())->run() && $allOk;
+
+echo "\n=== Phase 49: Enrichment job body ===\n";
+$allOk = (new EnrichmentJobTest($db))->run() && $allOk;
+
+echo "\n=== Phase 50: Held messages + stop control ===\n";
+$allOk = (new PendingPromptQueueTest($db))->run() && $allOk;
+
+echo "\n=== Phase 51: The terminal link + owed work ===\n";
+$allOk = (new OwedWorkTest($db))->run() && $allOk;
+
+echo "\n=== Phase 52: Boot reconciliation ===\n";
+$allOk = (new QueueReconciliationTest($db))->run() && $allOk;
+
+echo "\n=== Phase 53: The calculate tool ===\n";
+$allOk = (new CalculatorTest())->run() && $allOk;
 
 echo "\n" . str_repeat('=', 55) . "\n";
 echo $allOk ? "ALL PHASES PASSED\n" : "SOME PHASES FAILED\n";

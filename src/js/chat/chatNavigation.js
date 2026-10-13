@@ -145,7 +145,11 @@ export async function navigateConversation(id, { fromHistory = false, refresh = 
         document.getElementById('context-data-items').replaceWith(entry.context);
         if (state.editorVisible) window.closeEditorDrawer?.();
         conversations.set(id, entry);
-        state.sessionId = id;
+        // The id arrives as a string from a dataset attribute here and as a number from the form on load, so the two
+        // never compare equal with ===. Every comparison of conversation ids goes through sameConversation(); this line
+        // keeps the value itself numeric so `state.sessionId === generation.sessionId` cannot be true on one side and
+        // false on the other (measured: that is what made the send button show Send while the guard refused the send).
+        state.sessionId = Number(id) || 0;
         state.contextLocked = !!entry.contextLocked;
         document.querySelector('#chatForm input[name="session_id"]').value = id;
         document.getElementById('conversation-title').textContent = entry.title;
@@ -203,7 +207,7 @@ export function updateConversation(id, { title, tokens, newId, contextLocked } =
         if (entry) { conversations.set(newId, entry); conversations.delete(id); }
         if (drafts.has(id)) { drafts.set(newId, drafts.get(id)); drafts.delete(id); }
         if (state.sessionId === id) {
-            state.sessionId = newId;
+            state.sessionId = Number(newId) || 0;
             document.querySelector('#chatForm input[name="session_id"]').value = newId;
             setURL(newId, true);
         }

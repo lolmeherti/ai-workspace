@@ -45,6 +45,113 @@ final class SearchPipeline
     /** Normalized URL => source id, for the pages already read earlier in this turn. */
     private array $alreadyRead = [];
 
+    /** Video references this query asked for that web search refused, named in the tool result. */
+    private array $deferredVideos = [];
+
+    /**
+     * Video references in a query: a full URL, or the bare forms a model writes from memory
+     * (`youtube.com/watch?v=…`, `youtu.be/…`) with or without a scheme.
+     *
+     * @return string[] the references as they appeared
+     */
+    public static function videoReferences(string $query): array
+    {
+        $found = [];
+        $seen = [];
+        // One video, one entry: the full URL and the bare form of the same video are the same reference, and the
+        // spelling that came first (the full URL) is the one kept.
+        $add = static function (string $reference) use (&$found, &$seen): void {
+            $url = str_starts_with($reference, 'http') ? $reference : 'https://' . $reference;
+            $match = VideoSources::match($url);
+            $identity = $match === null
+                ? $reference
+                : ($match['platform'] ?? 'video') . ':' . ($match['video_id'] ?? $reference);
+            if (isset($seen[$identity])) {
+                return;
+            }
+            $seen[$identity] = true;
+            $found[] = $reference;
+        };
+
+        foreach (UrlIndex::extract($query) as $url) {
+            if (VideoSources::match($url) !== null) {
+                $add($url);
+            }
+        }
+        if (preg_match_all(
+            // The lookbehind keeps a lookalike host out: `notyoutube.com/watch?v=…` must not be read as a YouTube
+            // reference, or web search would defer a page the app is supposed to fetch.
+            '~(?<![\w.-])(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/watch\?[^\s"\'<>]+|youtu\.be/[^\s"\'<>]+|youtube-nocookie\.com/[^\s"\'<>]+)~iu',
+            $query,
+            $matches
+        )) {
+            foreach ($matches[0] as $hit) {
+                $add($hit);
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Split search candidates into the ones web search may fetch and the video pages it must not.
+     *
+     * A video is not a page: fetching one yields a watch page with no readable content (measured — the SERP for a
+     * video URL returns that page, the bridge extracts nothing, and the turn spends round after round rephrasing).
+     * The app owns these URLs through its own watch path, so the search path defers them and says so.
+     *
+     * @param array<int, object|string> $candidates
+     * @return array{kept:array<int,mixed>,deferred:string[]}
+     */
+    public static function deferVideoCandidates(array $candidates): array
+    {
+        $kept = [];
+        $deferred = [];
+        foreach ($candidates as $candidate) {
+            $url = is_object($candidate) ? (string)($candidate->url ?? '') : (string)$candidate;
+            if ($url !== '' && VideoSources::match($url) !== null) {
+                $deferred[] = $url;
+                continue;
+            }
+            $kept[] = $candidate;
+        }
+
+        return ['kept' => $kept, 'deferred' => array_values(array_unique($deferred))];
+    }
+
+    /** What the model is told when a video reference reaches web search. Written to end the retry loop, not to hint. */
+    public static function videoDeferralNote(array $references): string
+    {
+        $named = implode(', ', array_slice($references, 0, 3));
+
+        return "Not searched: {$named} is a video page, not a page with text. The app reads videos through its own "
+            . 'watch path and web search cannot read one — rephrasing this query will not change that. Do not search for '
+            . "this URL again: answer from the video's transcript if it is already in context, otherwise say the video "
+            . 'could not be read.';
+    }
+
+    private static function logVideoDeferral(string $query, array $references, string $where): void
+    {
+        \App\Logger::logEvent('search_deferred_video', 'Web search deferred a video reference to the watch path', [
+            'query' => $query,
+            'where' => $where,
+            'references' => $references,
+        ], 'info', 'SearchPipeline');
+    }
+
+    /** Ride the deferral note on whatever this query returned, so the model is told once per call. */
+    private function withVideoDeferral(array $result): array
+    {
+        if ($this->deferredVideos === []) {
+            return $result;
+        }
+        $note = self::videoDeferralNote($this->deferredVideos);
+        $evidence = trim((string)($result['evidence'] ?? ''));
+        $result['evidence'] = $evidence === '' ? $note : $evidence . "\n\n" . $note;
+
+        return $result;
+    }
+
     /**
      * Pages already fetched and numbered earlier in this turn, keyed by normalized URL.
      *
@@ -87,6 +194,20 @@ final class SearchPipeline
      */
     public function run(string $query, array $messages, callable $emit): array
     {
+        $this->deferredVideos = [];
+
+        // A video link is not a page and never goes to the search engine: the app owns that URL through its watch path,
+        // and searching it produces a scrape of a watch page with no readable content. Answered before the bridge is
+        // even created, so a deferred video also works while the browser bridge is offline.
+        $videos = self::videoReferences($query);
+        if ($videos !== []) {
+            self::logVideoDeferral($query, $videos, 'query');
+            $this->emitProgress('search_deferred_video', 'Deferred a video link to the watch path', $emit);
+            $this->deferredVideos = $videos;
+
+            return $this->withVideoDeferral(self::emptyResult(''));
+        }
+
         $bridge = new BridgeFetcher();
 
         if (!$bridge->isConnected()) {
@@ -432,6 +553,20 @@ final class SearchPipeline
         $candidates = $deduplicator->deduplicate($candidates);
         $candidates = CandidateRanker::deprioritize($candidates);
 
+        // A video page is not a source to scrape. The SERP happily returns one for a video URL, the bridge extracts
+        // nothing from it, and the turn then rephrases the query and tries again — three rounds, measured. Defer them.
+        $split = self::deferVideoCandidates($candidates);
+        $candidates = $split['kept'];
+        if ($split['deferred'] !== []) {
+            self::logVideoDeferral($query, $split['deferred'], 'candidates');
+            $this->deferredVideos = array_values(array_unique(array_merge($this->deferredVideos, $split['deferred'])));
+        }
+        if ($candidates === []) {
+            $this->emitProgress('search_deferred_video', 'Every result for this query was a video page', $emit);
+
+            return $this->withVideoDeferral(self::emptyResult('No pages were searched for this query.'));
+        }
+
         // ── Sequential fetch via bridge ──────────────────────────────
         $limit = (int) \App\Config::get('MAX_SEARCH_RESULTS_TO_SCRAPE', 3);
         if (count($candidates) > $limit) {
@@ -576,21 +711,21 @@ final class SearchPipeline
                     'query' => $query,
                     'source_ids' => array_keys($reused),
                 ], 'info', 'SearchPipeline::runBridgeMode');
-                return [
+                return $this->withVideoDeferral([
                     'evidence' => self::reuseNote($reused),
                     'sourceIds' => [],
                     'sourceMap' => [],
                     'backingChunks' => [],
                     'selectedChunks' => [],
                     'failed' => $failed,
-                ];
+                ]);
             }
             $this->emitProgress('search_no_results', 'No usable page content was extracted', $emit);
             \App\Logger::logEvent('search_no_results', 'All bridge fetches failed or yielded no content', [
                 'query' => $query,
                 'candidates_attempted' => count($candidates),
             ], 'warn', 'SearchPipeline::runBridgeMode');
-            return self::emptyResult('Web pages could not be fetched for this query.');
+            return $this->withVideoDeferral(self::emptyResult('Web pages could not be fetched for this query.'));
         }
 
         // ── Final BM25 retrieval across all fetched chunks ───────────
@@ -603,7 +738,7 @@ final class SearchPipeline
                 'query' => $query,
                 'total_chunks_extracted' => count($allChunks),
             ], 'warn', 'SearchPipeline::runBridgeMode');
-            return self::emptyResult('No relevant content was found in the fetched pages.');
+            return $this->withVideoDeferral(self::emptyResult('No relevant content was found in the fetched pages.'));
         }
 
         // ── Three-level evidence fitting ────────────────────────────
@@ -657,14 +792,14 @@ final class SearchPipeline
             $evidence = self::reuseNote($reused) . "\n" . $evidence;
         }
 
-        return [
+        return $this->withVideoDeferral([
             'evidence'  => $evidence,
             'sourceIds' => $sourceIds,
             'sourceMap' => $sourceMap,
             'backingChunks' => $allChunks,
             'selectedChunks' => $selected,
             'failed'    => $failed,
-        ];
+        ]);
     }
 
     /**
@@ -707,27 +842,33 @@ final class SearchPipeline
             $published  = $entity['published'] ?? $dates['published'] ?? $content['date_posted'] ?? null;
             $updated    = $dates['updated'] ?? null;
 
-            $chunkNum++;
+            // A fetched page is a book with chapters — intro, specs, price — so its body becomes one chunk
+            // per section. Storing the whole page as a single chunk made the ledger a list of pages, and a
+            // one-entry ledger for a pasted link: nothing to navigate by. The entity's own metadata is
+            // carried onto every unit, so provenance survives the split.
+            foreach ($this->chunker->units($body) as $unit) {
+                $chunkNum++;
 
-            $chunks[] = new WebChunk(
-                sourceId:    $sourceId,
-                chunkId:     "{$sourceId}-C{$chunkNum}",
-                url:         $sourceUrl,
-                finalUrl:    $finalUrl,
-                title:       $title,
-                domain:      $domain,
-                publishedAt: $published,
-                updatedAt:   $updated,
-                fetchedAt:   $fetchedAt,
-                headingPath: [],
-                sectionType: $entityType ?? 'entity',
-                text:        $body,
-                position:    $chunkNum,
-                entityId:    $entityId,
-                entityType:  $entityType,
-                author:      $author,
-                score:       $score,
-            );
+                $chunks[] = new WebChunk(
+                    sourceId:    $sourceId,
+                    chunkId:     "{$sourceId}-C{$chunkNum}",
+                    url:         $sourceUrl,
+                    finalUrl:    $finalUrl,
+                    title:       $title,
+                    domain:      $domain,
+                    publishedAt: $published,
+                    updatedAt:   $updated,
+                    fetchedAt:   $fetchedAt,
+                    headingPath: array_values(array_filter((array)($unit['headingTitles'] ?? []), static fn($h): bool => (string)$h !== '')),
+                    sectionType: (string)($unit['type'] ?? ''),
+                    text:        (string)$unit['text'],
+                    position:    $chunkNum,
+                    entityId:    $entityId,
+                    entityType:  $entityType,
+                    author:      $author,
+                    score:       $score,
+                );
+            }
         }
 
         return $chunks;

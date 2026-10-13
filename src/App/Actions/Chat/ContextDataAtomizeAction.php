@@ -5,6 +5,7 @@ namespace App\Actions\Chat;
 use App\Actions\BaseAction;
 use App\AgentManager;
 use App\ChatManager;
+use App\Search\ChunkMap;
 use App\Search\SourceCondenser;
 use App\Search\TokenCounter;
 use App\Search\EvidenceBuilder;
@@ -211,12 +212,16 @@ class ContextDataAtomizeAction extends BaseAction
 
         $condenser = new SourceCondenser($this->agent);
         try {
-            $claims = $condenser->condenseBatched($chunks, (string)($row['search_query'] ?? ''));
+            // One call, two artifacts: the facts, and the map of what each passage contains. The map is
+            // built from the stored raw units (never from a condensed form) and describes the source
+            // rather than the question, so it stays usable for a later question about another part.
+            $enriched = $condenser->enrichBatched($chunks, (string)($row['search_query'] ?? ''));
         } catch (\Throwable $e) {
             $this->jsonResponse(['status' => 'error', 'message' => 'Atomization failed: ' . $e->getMessage()], 500);
             return;
         }
 
+        $claims = $enriched['claims'];
         if (empty($claims)) {
             $this->jsonResponse(['status' => 'empty', 'message' => 'No durable facts could be extracted.'], 200);
             return;
@@ -226,6 +231,8 @@ class ContextDataAtomizeAction extends BaseAction
             'status' => 'preview',
             'id' => $id,
             'claims' => $claims,
+            'map' => $enriched['map'],
+            'map_formatted' => $enriched['formatted'],
             'raw_tokens' => (int)($row['token_estimate'] ?? 0),
             'atom_tokens' => self::countAtomTokens($claims),
         ]);
@@ -240,7 +247,7 @@ class ContextDataAtomizeAction extends BaseAction
             return;
         }
 
-        $this->writeAtoms($id, $claims, 1);
+        $this->writeAtoms($id, $claims, 1, $this->readMap());
     }
 
     /** Write hand-edited atoms verbatim (no LLM); raw_evicted untouched. */
@@ -279,7 +286,7 @@ class ContextDataAtomizeAction extends BaseAction
     }
 
     /** Persist a claim set; when $rawEvicted is non-null it also updates raw_evicted. */
-    private function writeAtoms(int $id, array $claims, ?int $rawEvicted): void
+    private function writeAtoms(int $id, array $claims, ?int $rawEvicted, ?array $map = null): void
     {
         $before = $this->loadRow($id);
         $atomTokens = self::countAtomTokens($claims);
@@ -287,6 +294,9 @@ class ContextDataAtomizeAction extends BaseAction
             'atomic_context' => json_encode($claims, JSON_UNESCAPED_UNICODE),
             'atomic_tokens' => $atomTokens,
         ];
+        if ($map !== null) {
+            $fields['chunk_map'] = ChunkMap::encode($map);
+        }
         if ($rawEvicted !== null) {
             $fields['raw_evicted'] = $rawEvicted;
         }
@@ -327,6 +337,44 @@ class ContextDataAtomizeAction extends BaseAction
             }
         }
         return !empty($claims) ? $claims : null;
+    }
+
+    /**
+     * Decode the `chunk_map` POST field: the entries the preview returned, edited or not. Absent
+     * means "leave the stored map alone" — saving hand-edited atoms must not silently drop the map
+     * that belongs to their source.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function readMap(): ?array
+    {
+        $raw = (string)($_POST['chunk_map'] ?? '');
+        if ($raw === '') {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        // Accept either the entry list or the stored envelope {status, entries}.
+        $entries = isset($decoded['entries']) && is_array($decoded['entries']) ? $decoded['entries'] : $decoded;
+
+        $map = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry) || empty($entry['chunkId'])) {
+                continue;
+            }
+            $map[] = [
+                'chunkId' => (string)$entry['chunkId'],
+                'headline' => (string)($entry['headline'] ?? ''),
+                'description' => (string)($entry['description'] ?? ''),
+                'chars' => (int)($entry['chars'] ?? 0),
+                'described' => (bool)($entry['described'] ?? false),
+            ];
+        }
+
+        return $map === [] ? null : $map;
     }
 
     private function isRawEvicted(int $id): bool

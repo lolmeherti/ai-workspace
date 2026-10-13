@@ -26,10 +26,10 @@
             $state = $hasAtoms ? 'raw_atoms' : 'raw';
         }
         $badgeMap = [
-            'raw' => ['Full evidence', 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'],
-            'raw_atoms' => ['Evidence + key facts', 'bg-sky-500/10 border-sky-500/20 text-sky-400'],
-            'atomized' => ['Key facts only', 'bg-violet-500/10 border-violet-500/20 text-violet-400'],
-            'evicted' => ['Excluded', 'bg-rose-500/10 border-rose-500/20 text-rose-400'],
+            'raw' => ['Full evidence', 'bg-cyan-500/15 border-cyan-400/30 text-cyan-200'],
+            'raw_atoms' => ['Evidence + key facts', 'bg-sky-500/15 border-sky-400/30 text-sky-200'],
+            'atomized' => ['Key facts only', 'bg-violet-500/15 border-violet-400/30 text-violet-200'],
+            'evicted' => ['Excluded', 'bg-rose-500/15 border-rose-400/30 text-rose-200'],
         ];
         $badgeText = $badgeMap[$state][0];
         $badgeCls = $badgeMap[$state][1];
@@ -102,7 +102,7 @@
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <span class="context-badge text-xs px-1.5 py-0.5 rounded-full border <?php echo $item['badgeCls']; ?>"<?php if ($item['state'] === 'evicted'): ?> title="This raw data is not part of the chat anymore. Restore loads the full data back in."<?php endif; ?>><?php echo $item['badgeText']; ?></span>
+                        <span class="context-badge text-xs font-medium px-2 py-0.5 rounded-full border <?php echo $item['badgeCls']; ?>"<?php if ($item['state'] === 'evicted'): ?> title="This raw data is not part of the chat anymore. Restore loads the full data back in."<?php endif; ?>><?php echo $item['badgeText']; ?></span>
                         <div class="context-btns">
                             <button type="button" data-action="view" data-id="<?php echo $item['id']; ?>" class="ui-button">View</button>
                             <button type="button" data-action="edit_raw" data-id="<?php echo $item['id']; ?>" class="ui-button ui-button--secondary">Edit evidence</button>

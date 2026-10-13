@@ -5,6 +5,10 @@
 
 import './chatMarkedInit.js';
 import './chatDomInit.js';
+// The chat window's own state (the app's background work, held messages, the engine's availability) is pushed over a
+// stream the moment it changes: this is what subscribes to it, and it must be loaded with the window rather than only
+// when a message is sent — a page that was merely opened should still be in step.
+import './pipelineStatus.js';
 import { toggleFileAccordion, showFileInExplorer, appendFileFromAccordion } from './chatFileAccordion.js';
 import { deleteTodoistTaskDirectly, createTodoistTaskDirectly } from './chatTodoistActions.js';
 import { openEmailDirectly } from './chatEmailCards.js';

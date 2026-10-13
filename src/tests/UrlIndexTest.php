@@ -151,6 +151,29 @@ class UrlIndexTest
         $this->testEq('an empty map reuses nothing', null,
             SearchPipeline::alreadyReadId('https://huggingface.co/Qwen/Qwen3.8-Flash-Next', []));
 
+        // ── a video link is deferred out of web search, never fetched as a page ──
+        $candidates = [
+            (object)['url' => 'https://example.com/guide'],
+            (object)['url' => 'https://www.youtube.com/watch?v=NA9D49kQFuU'],
+            (object)['url' => 'https://youtu.be/abc123'],
+            (object)['url' => 'https://huggingface.co/Qwen/Qwen3.8-Flash-Next'],
+        ];
+        $split = SearchPipeline::deferVideoCandidates($candidates);
+        $this->testEq('page candidates are kept', ['https://example.com/guide', 'https://huggingface.co/Qwen/Qwen3.8-Flash-Next'],
+            array_map(static fn(object $c): string => $c->url, $split['kept']));
+        $this->testEq('video candidates are deferred, youtu.be included',
+            ['https://www.youtube.com/watch?v=NA9D49kQFuU', 'https://youtu.be/abc123'], $split['deferred']);
+        $this->testEq('a full video URL in a question is recognised', ['https://youtu.be/abc123'],
+            SearchPipeline::videoReferences('watch this https://youtu.be/abc123 please'));
+        $this->testEq('a bare youtube.com/watch reference is recognised',
+            ['youtube.com/watch?v=NA9D49kQFuU'], SearchPipeline::videoReferences('youtube.com/watch?v=NA9D49kQFuU video'));
+        $this->testEq('an ordinary URL is not a video reference', [],
+            SearchPipeline::videoReferences('https://example.com/guide'));
+        $this->testEq('a lookalike host is not a video reference', [],
+            SearchPipeline::videoReferences('https://notyoutube.com/watch?v=abc123'));
+        $this->testNEq('the deferral note tells the model to stop searching it',
+            false, str_contains(SearchPipeline::videoDeferralNote(['https://youtu.be/abc123']), 'Do not search'));
+
         echo "\n--- UrlIndex: {$this->passed} passed, {$this->failed} failed ---\n";
         foreach ($this->failures as $f) echo "  FAIL: {$f}\n";
         return $this->failed === 0;

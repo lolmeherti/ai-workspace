@@ -15,6 +15,7 @@ use App\Services\Tools\GetTodoistTasksTool;
 use App\Services\Tools\DeleteTodoistTaskTool;
 use App\Services\Tools\UpdateTodoistTaskTool;
 use App\Services\Tools\SearchMemoriesTool;
+use App\Services\Tools\CalculateTool;
 
 class ToolExecutionService
 {
@@ -31,6 +32,7 @@ class ToolExecutionService
     private DeleteTodoistTaskTool $deleteTodoistTaskTool;
     private UpdateTodoistTaskTool $updateTodoistTaskTool;
     private SearchMemoriesTool $searchMemoriesTool;
+    private CalculateTool $calculateTool;
 
     public function __construct(Database $db, AgentManager $agent, string $uploadDir, ?TodoistApiClient $todoist = null)
     {
@@ -48,6 +50,7 @@ class ToolExecutionService
         $this->deleteTodoistTaskTool = new DeleteTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->updateTodoistTaskTool = new UpdateTodoistTaskTool($db, $agent, $uploadDir, $this->todoist);
         $this->searchMemoriesTool = new SearchMemoriesTool($db, $agent);
+        $this->calculateTool = new CalculateTool();
     }
 
     /**
@@ -127,6 +130,38 @@ class ToolExecutionService
         ], 'warn', 'ToolExecutionService::normalizeToolArguments');
     }
 
+    /**
+     * Whether a tool call carries anything executable. Most tools need their queries; two do not:
+     *
+     *   - search_session_evidence takes NO arguments by design. A bare call is the one that lists what the
+     *     stored sources contain, so requiring arguments here would discard exactly the call the model is
+     *     invited to make (and its only other form is `ids`, also not a query).
+     *   - create_calendar_task validates its own content and reports a proper error.
+     *   - calculate takes `operation` and values, never a query: a bare call must reach the dispatch, and its own
+     *     validation is what rejects a malformed one.
+     *
+     * Called before dispatch, where an empty call used to be logged as `llm_tool_no_match` and dropped.
+     */
+    public static function hasExecutableArguments(string $toolName, array $args): bool
+    {
+        if (in_array($toolName, ['search_session_evidence', 'create_calendar_task', 'calculate'], true)) {
+            return true;
+        }
+
+        $queries = $args['queries'] ?? null;
+        if (is_array($queries)) {
+            foreach ($queries as $query) {
+                if (trim((string)$query) !== '') {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return trim((string)($queries ?? '')) !== '';
+    }
+
     public function executeToolByName(string $toolName, array $args, int $sessionId, callable $emit): string
     {
         $args = self::normalizeToolArguments($args, $toolName);   // idempotent: a list passes straight through
@@ -185,6 +220,17 @@ class ToolExecutionService
         return $this->searchSessionEvidenceTool->getLastRetrievedSourceIds();
     }
 
+    /** @return array<string,mixed> the numbers of the last stored-evidence call (read vs available, withheld) */
+    public function getLastEvidenceCallStats(): array
+    {
+        return $this->searchSessionEvidenceTool->getLastCallStats();
+    }
+
+    public function resetEvidenceCallStats(): void
+    {
+        $this->searchSessionEvidenceTool->resetLastCallStats();
+    }
+
     public function resetRetrievedSourceIds(): void
     {
         $this->searchSessionEvidenceTool->resetRetrievedSourceIds();
@@ -226,6 +272,7 @@ class ToolExecutionService
                 Tool::UPDATE_CALENDAR_TASK => $this->updateTodoistTaskTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_MEMORIES => $this->searchMemoriesTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
                 Tool::SEARCH_SESSION_EVIDENCE => $this->searchSessionEvidenceTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
+                Tool::CALCULATE => $this->calculateTool->execute($toolData, $sessionId, $messages, $emit, $cleanJson),
             };
 
             \App\Logger::logEvent('tool_executed', "Tool {$toolName} executed successfully", [

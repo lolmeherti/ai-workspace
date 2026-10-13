@@ -4,6 +4,15 @@ namespace App;
 
 class HealthCheck
 {
+    /**
+     * The engine probe costs the inference engine real requests, and the chat window asks on a two-second poll — which put
+     * a probe (and its load) on the engine twice a second, felt as the whole interface being sluggish. The answer is
+     * cached for five seconds; pass `$fresh = true` when it must be current, which is exactly the case when deciding
+     * whether a failure was the engine's fault or the work's.
+     */
+    private const AI_CACHE_SECONDS = 5;
+    private const AI_CACHE_KEY = 'health:ai';
+
     public function check(): \stdClass
     {
         $status = new \stdClass();
@@ -41,7 +50,35 @@ class HealthCheck
         }
     }
 
-    public function checkAi(): array
+    public function checkAi(bool $fresh = false): array
+    {
+        // In Redis, not in a static: the two-second poll is a new PHP process every time, so a per-process memo would
+        // never be hit and the engine would be probed twice a second regardless. Five seconds of staleness is invisible to
+        // the status this drives, and it takes the load off the engine entirely.
+        if (!$fresh) {
+            try {
+                $cached = Cache::get(self::AI_CACHE_KEY);
+                $decoded = $cached !== null ? json_decode($cached, true) : null;
+                if (is_array($decoded) && $decoded !== []) {
+                    return $decoded;
+                }
+            } catch (\Throwable $e) {
+                // Redis trouble: fall through and ask the engine.
+            }
+        }
+
+        $result = $this->probeAi();
+        try {
+            Cache::set(self::AI_CACHE_KEY, (string)json_encode($result), self::AI_CACHE_SECONDS);
+        } catch (\Throwable $e) {
+            // A cache that cannot be written must not turn a health answer into a failure.
+        }
+
+        return $result;
+    }
+
+    /** Ask the engine itself, with what it reports about the model. */
+    private function probeAi(): array
     {
         $host = rtrim(Config::get('LLM_API_URL', 'http://host.docker.internal:1234/v1'), '/');
 

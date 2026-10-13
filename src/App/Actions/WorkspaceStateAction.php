@@ -6,7 +6,9 @@ use App\Cache;
 use App\Database;
 use App\HealthCheck;
 use App\Repositories\ChatSessionRepository;
+use App\Services\JobQueue;
 use App\Services\ModelLock;
+use App\Services\PendingPromptQueue;
 
 /**
  * Small read-only UI responses. These intentionally run before the full page
@@ -15,7 +17,7 @@ use App\Services\ModelLock;
  */
 final class WorkspaceStateAction
 {
-    public const ACTIONS = ['get_ai_availability', 'get_conversation', 'get_reply_rating'];
+    public const ACTIONS = ['get_ai_availability', 'get_conversation', 'get_reply_rating', 'get_session_pipeline'];
 
     public function execute(string $action): void
     {
@@ -31,6 +33,8 @@ final class WorkspaceStateAction
                 $result = $this->availability();
             } elseif ($action === 'get_reply_rating') {
                 $result = $this->rating();
+            } elseif ($action === 'get_session_pipeline') {
+                $result = $this->pipeline();
             } else {
                 $result = $this->conversation();
             }
@@ -44,9 +48,11 @@ final class WorkspaceStateAction
 
     private function availability(): array
     {
-        $occupancy = ModelLock::availability();
-        if ($occupancy['busy']) {
-            return ['status' => 'success', 'state' => 'busy', 'message' => $occupancy['message']];
+        // The pill reports the MODEL, nothing else: loaded, or not. Whoever holds the inference lock is by definition
+        // generating — the model is loaded and working — so that is a "loaded" answer without probing the engine, which
+        // also keeps the probe off an engine that is mid-generation.
+        if (ModelLock::availability()['busy']) {
+            return ['status' => 'success', 'state' => 'ready', 'message' => 'AI Loaded'];
         }
         // Reuse the existing AI probe, without database/launcher checks.
         $cached = Cache::get('ui_ai_health');
@@ -56,16 +62,38 @@ final class WorkspaceStateAction
             Cache::set('ui_ai_health', json_encode($health), 15);
         }
         // The lock may have changed while a health probe was in flight.
-        $occupancy = ModelLock::availability();
-        if ($occupancy['busy']) {
-            return ['status' => 'success', 'state' => 'busy', 'message' => $occupancy['message']];
+        if (ModelLock::availability()['busy']) {
+            return ['status' => 'success', 'state' => 'ready', 'message' => 'AI Loaded'];
         }
         return ['status' => 'success', 'state' => $health['online'] ? 'ready' : 'offline',
             'message' => $health['online']
-                ? 'AI ready'
+                ? 'AI Loaded'
                 : (string) ($health['message'] ?? 'The AI service is offline. Check the launcher.'),
             'detail' => $health['detail'] ?? null,
             'model' => $health['model'] ?? null];
+    }
+
+    /**
+     * What the app is still doing for this conversation. Read-only, and every field has exactly one source: the queue
+     * for the jobs, the inference lock for the engine. The composer uses it to hold a message instead of refusing it,
+     * and the trace uses it to say what is happening (plan §2.4).
+     *
+     * Deliberately no staleness window of our own: an engine that died stops holding the lock when its TTL runs out,
+     * and a job whose worker died is returned to the queue by the next worker's `releaseStale` — so there is nothing
+     * here to expire by hand.
+     */
+    private function pipeline(): array
+    {
+        $sessionId = filter_var($_GET['session_id'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        if ($sessionId === false) {
+            http_response_code(400);
+
+            return ['status' => 'error', 'message' => 'Invalid conversation.'];
+        }
+
+        // One definition of the payload, shared with the publisher (App\Services\SessionState), so a polled state and a
+        // pushed state can never disagree.
+        return \App\Services\SessionState::payload($sessionId);
     }
 
     private function conversation(): array

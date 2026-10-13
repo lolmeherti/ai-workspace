@@ -39,9 +39,9 @@ class ToolSchemaTest
             $byName[$name] = $s['function'];
         }
 
-        $this->testEq('exposes exactly 5 tools', 5, count($names));
+        $this->testEq('exposes exactly 6 tools', 6, count($names));
 
-        $expected = ['search_local', 'search_web', 'search_calendar', 'search_session_evidence', 'create_calendar_task'];
+        $expected = ['search_local', 'search_web', 'search_calendar', 'search_session_evidence', 'create_calendar_task', 'calculate'];
         $sortedNames = $names;
         $sortedExpected = $expected;
         sort($sortedNames);

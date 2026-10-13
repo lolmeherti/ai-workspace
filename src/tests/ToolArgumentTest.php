@@ -89,6 +89,23 @@ class ToolArgumentTest
         $left = (int) ($this->db->query("SELECT COUNT(*) c FROM app_events WHERE {$where}")[0]['c'] ?? 0);
         $this->testEq('probe rows are cleaned up after the run', 0, $left);
 
+        // ── what counts as an executable call ───────────────────────────────
+        // The browsing tool is called with NO arguments on purpose (that call lists what the stored
+        // sources contain), so a guard that demanded queries would silently discard it — the model would
+        // look like it never tried. This is the regression that guard exists to prevent.
+        $this->test('a bare browsing call is executable',
+            ToolExecutionService::hasExecutableArguments('search_session_evidence', []));
+        $this->test('a browsing call with only ids is executable',
+            ToolExecutionService::hasExecutableArguments('search_session_evidence', ['ids' => ['S1-C4']]));
+        $this->test('an empty search_web call is not executable',
+            !ToolExecutionService::hasExecutableArguments('search_web', []));
+        $this->test('and neither is one with blank queries',
+            !ToolExecutionService::hasExecutableArguments('search_web', ['queries' => ['', '  ']]));
+        $this->test('a search_web call with a real query is executable',
+            ToolExecutionService::hasExecutableArguments('search_web', ['queries' => ['x']]));
+        $this->test('the calendar tool validates its own content',
+            ToolExecutionService::hasExecutableArguments('create_calendar_task', []));
+
         echo "\n--- ToolArgument: {$this->passed} passed, {$this->failed} failed ---\n";
         foreach ($this->failures as $f) echo "  FAIL: {$f}\n";
         return $this->failed === 0;

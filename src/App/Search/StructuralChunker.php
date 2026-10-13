@@ -45,6 +45,18 @@ class StructuralChunker
         return $chunks;
     }
 
+    /**
+     * The units the chunker would emit for a text, with the metadata a caller needs to address them: one per
+     * passage, each carrying its heading path. Fetched pages go through this so a page becomes a table of
+     * contents of itself instead of one address for the whole document.
+     *
+     * @return array<int, array{text:string, type:string, headingTitles:array<int,string>}>
+     */
+    public function units(string $text): array
+    {
+        return $this->buildChunkUnits($text);
+    }
+
     public function chunkText(string $text): array
     {
         if (empty(trim($text))) {

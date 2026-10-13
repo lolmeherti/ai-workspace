@@ -681,3 +681,23 @@ body .animate-ping { animation: none; display: none; }
     .ui-spinner, .switch-spinner, .stop .send-spinner { animation-duration: 1.8s !important; animation-iteration-count: infinite !important; }
     .streaming-cursor { animation: none; opacity: 1; }
 }
+
+/* A message the user sent while the engine was busy (sent — the answer simply is not ready), and one the stop
+   control dropped before it was answered. The state travels with the bubble in both directions: live and on reload. */
+.msg-state {
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--line-soft);
+    border-radius: 9999px;
+    color: var(--muted);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.chat-message-container.is-waiting .msg-state { border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
+.chat-message-container.is-not-sent { opacity: 0.55; }
+.chat-message-container.is-not-sent .msg-state { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+
+/* The line the server appends when a turn is stopped — the live view shows the same one, so a reload matches. */
+p.stop-notice { margin-top: 0.5rem; color: var(--muted); font-size: 0.8rem; font-style: italic; }

@@ -9,6 +9,8 @@ export const state = {
     generation: null,
     jobRun: null,
     memoryConsolidating: false,
+    /** Last read of the app's own background work for this conversation (see chat/pipelineStatus.js). Null = not read yet. */
+    pipeline: null,
     contextLocked: false,
     isGenerating: false,
     pastedImageFile: null,

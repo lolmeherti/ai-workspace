@@ -8,7 +8,9 @@ db_errors.log
 App/db_errors.log
 env
 json_parser_errors.log
-src/logs/app.log
+*.log
+src/logs/
+src/tests/live/results/
 .hermes/plans/
 docs/
 AGENTS.md

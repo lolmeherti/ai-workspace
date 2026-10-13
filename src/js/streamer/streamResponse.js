@@ -1,4 +1,5 @@
 import { renderSourcesList } from '../chat/sourceCards.js';
+import { badgeLabelFor, createBadgeTracker } from './toolBadges.js';
 import { substituteRefBadges, refMapFromSources } from '../markdown.js';
 import { flushDraftChanges } from '../chat/draftSync.js';
 import { updateConversation } from '../chat/chatNavigation.js';
@@ -17,6 +18,7 @@ import { extractThinking, addCodeCopyButtons } from '../markdown.js';
 import { addContextItem, refreshContextItem } from '../chat/chatContextData.js';
 import { renderBriefingActions } from '../chat/chatBriefingCards.js';
 import { renderReplyRating } from '../chat/replyRating.js';
+import { clearWaitingMarks, startPipelineWatch } from '../chat/pipelineStatus.js';
 
 // Citation tokens are turned into source badges (see markdown.js: substituteRefBadges). The older strip
 // helpers that used to live here are gone: one implementation, or the streamed answer and the restored one
@@ -315,9 +317,79 @@ function scrollIfStuck(chatWindow) {
     }
 }
 
+/** The line the server appends when a turn is stopped. Same string, so the live view matches a reload. */
+const STOP_NOTICE = 'Generation has been stopped by the user.';
+
+/**
+ * Mark the bubble of a message that is held for the assistant: it was sent, the answer just is not ready yet.
+ *
+ * The user's bubble is not in scope here (it is appended by the caller), and the element the stream writes into sits
+ * inside the assistant's container rather than beside the user's bubble — so walk out to the nearest container and then
+ * back to the previous container, which is the message being held. Measured: looking at the inner element's own
+ * previous sibling marked nothing at all, because the writer element is nested one level deeper.
+ */
+function markWaitingBubble(aiBubble) {
+    const container = aiBubble && aiBubble.closest ? aiBubble.closest('.chat-message-container') : null;
+    let node = container ? container.previousElementSibling : (aiBubble ? aiBubble.previousElementSibling : null);
+    while (node && !(node.classList && node.classList.contains('chat-message-container'))) {
+        node = node.previousElementSibling;
+    }
+    if (!node) return null;
+    node.classList.add('is-waiting');
+    // The label itself, not just the class: the class only colours a badge, and the badge is server-rendered on reload.
+    // One word, and the same word the server writes, so live and reload agree.
+    const label = node.querySelector('.flex.items-center');
+    if (label && !label.querySelector('.msg-state')) {
+        const badge = document.createElement('span');
+        badge.className = 'msg-state';
+        badge.textContent = 'Queued';
+        label.append(badge);
+    }
+    return node;
+}
+
+/**
+ * Stop ends the turn; it never silently loses a message. The server does three things when it sees this: drops the
+ * messages queued while the engine was busy, marks the running turn as stopped by the user (so the disconnect this
+ * abort is about to cause is not read as a browser that merely walked away), and puts the fixed line at the end of the
+ * answer. This sends the signal first, then aborts — order matters.
+ */
 function stopGeneration() {
+    const sessionId = state.sessionId;
+    try {
+        fetch('index.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: 'action=stop_turn&session_id=' + encodeURIComponent(sessionId),
+            keepalive: true,
+        }).catch(() => {});
+    } catch (e) {
+        // The abort below still ends the turn. Without the flag it reads as a client that walked away — which is the
+        // case that deliberately lets the answer finish, so it would look like stop did nothing.
+    }
+
     if (window.__activeChatAbort) {
         window.__activeChatAbort.abort();
+    }
+
+    // Messages that were still queued will never be sent: say so on the bubble instead of letting it vanish. The badge
+    // text changes with the class, so a reload shows the same words this view shows.
+    document.querySelectorAll('.chat-message-container.is-waiting').forEach(node => {
+        node.classList.remove('is-waiting');
+        node.classList.add('is-not-sent');
+        const badge = node.querySelector('.msg-state');
+        if (badge) badge.textContent = 'not sent';
+    });
+
+    // The live view gets the same line the server persists, so a reload shows what is already on screen.
+    const cursor = document.querySelector('.streaming-cursor');
+    const bubble = cursor ? cursor.closest('.chat-message-container') : null;
+    const host = bubble ? (bubble.querySelector('.markdown-content') || bubble) : null;
+    if (host && !host.querySelector('.stop-notice')) {
+        const line = document.createElement('p');
+        line.className = 'stop-notice';
+        line.textContent = STOP_NOTICE;
+        host.append(line);
     }
 }
 
@@ -426,12 +498,18 @@ async function verifyStreamIntegrity(data, markdownBuffer) {
 }
 
 export async function streamResponse(formData, originalMessage) {
-    if (state.generation) return { recoverDraft: true, started: false };
+    // A message sent while an answer streams is a message, not a refusal: the server holds it and streams the answer
+    // back on THIS request once the engine frees (verified: the held turn's stream stays open and answers when the lock
+    // releases). This guard used to return `{recoverDraft:true, started:false}` — the request never ran, the client said
+    // "The request could not start", and the queue never got a chance (measured).
+    //
+    // The running generation keeps the slot rather than being overwritten: Stop must keep targeting the answer that is
+    // actually streaming, and the `finally` of the earlier stream must still be able to clear its own state.
     const generation = { sessionId: Number(formData.get('session_id')) || 0,
         title: document.getElementById('conversation-title')?.textContent || 'this conversation',
         context: document.getElementById('context-data-items'), editorFile: formData.get('active_edit_file') };
     const isVisible = () => state.sessionId === generation.sessionId;
-    state.generation = generation;
+    if (!state.generation) state.generation = generation;
     state.isGenerating = true;
     setSendStopMode(true);
     paintAvailability();
@@ -702,12 +780,12 @@ export async function streamResponse(formData, originalMessage) {
     }
 
     const TOOL_DISPLAY = {
-        search_web:              { present: 'Searching the web',               past: 'Searched the web',               query: true },
-        search_local:            { present: 'Searching files & memories',      past: 'Searched files & memories',      query: true },
-        search_memories:         { present: 'Searching memories',             past: 'Searched memories',              query: true },
-        search_calendar:         { present: 'Reading calendar entries',        past: 'Read calendar entries',          query: false },
-        search_session_evidence: { present: 'Re-reading earlier search results', past: 'Re-read earlier search results', query: true },
-        create_calendar_task:     { present: 'Creating calendar task',          past: 'Created calendar task',          query: false },
+        search_web:              { present: 'Model asked: searching the web',            past: 'Model asked: searched the web',            query: true },
+        search_local:            { present: 'Model asked: searching files & memories',   past: 'Model asked: searched files & memories',   query: true },
+        search_memories:         { present: 'Model asked: searching memories',           past: 'Model asked: searched memories',           query: true },
+        search_calendar:         { present: 'Model asked: reading calendar entries',     past: 'Model asked: read calendar entries',       query: false },
+        search_session_evidence: { present: 'Model asked: reading stored passages',      past: 'Model asked: read stored passages',        query: true },
+        create_calendar_task:     { present: 'Model asked: creating a calendar task',    past: 'Model asked: created a calendar task',     query: false },
     };
 
     const TOOL_ICONS = {
@@ -727,6 +805,18 @@ export async function streamResponse(formData, originalMessage) {
         search_session_evidence: { bg: 'bg-violet-500/10', text: 'text-violet-300', border: 'border-violet-500/40', accent: 'bg-violet-400' },
         create_calendar_task:     { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/40', accent: 'bg-indigo-400' },
     };
+
+    // One badge per KIND of access per turn, not one per call — see streamer/toolBadges.js. The label row is the
+    // summary; the Execution Trace beside it is the detail, query text and all.
+    const badgeTracker = createBadgeTracker();
+
+    /** The turn's summary marker for a kind of access — rendered once, whatever the call count was. */
+    function renderToolBadgeOnce(tool) {
+        if (!badgeTracker.claim(tool)) {
+            return;
+        }
+        renderToolBadge(tool, badgeLabelFor(tool));
+    }
 
     function renderToolBadge(tool, text) {
         const s = TOOL_SPEC[tool] || { bg: 'bg-slate-500/10', text: 'text-slate-300', border: 'border-slate-500/30', accent: 'bg-slate-400' };
@@ -951,6 +1041,36 @@ export async function streamResponse(formData, originalMessage) {
                             return { recoverDraft: true, started };
                         }
 
+                        if (event === 'queued') {
+                            // The engine is busy with something else (the app's own work, or another conversation's turn).
+                            // The message is stored and will be answered as soon as that finishes — so this is not a
+                            // generation: the composer stays usable, nothing failed, and there is nothing to announce.
+                            // The bubble says "Queued", and the spinner carries the server's own sentence for it — the
+                            // state BEFORE the turn's statuses ("Analyzing your request…"), which take the spinner over
+                            // the moment the queue consumes this message. No popup (owner's rule: state the page already
+                            // shows does not get a toast).
+                            state.isGenerating = false;
+                            state.generation = null;
+                            setSendStopMode(false);
+                            markWaitingBubble(aiBubble);
+                            if (loadingText && data.message) loadingText.textContent = data.message;
+                            startPipelineWatch({ held: Number(data.held || 1) });
+                            paintAvailability();
+                        }
+
+                        if (event === 'answering_elsewhere') {
+                            // The batch will be answered with no client attached, so this stream ends without an answer.
+                            // Stop pretending to generate, keep the user's bubbles (marked "Queued"), and let the watcher
+                            // refresh when the reply lands. Nothing is lost and nothing failed, so no popup.
+                            state.isGenerating = false;
+                            state.generation = null;
+                            setSendStopMode(false);
+                            if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                            if (aiWrapper && aiWrapper.parentNode) aiWrapper.remove();
+                            startPipelineWatch();
+                            paintAvailability();
+                        }
+
                         if (event === 'limit_warning') {
                             state.isGenerating = false;
                             aiWrapper.remove();
@@ -1057,8 +1177,8 @@ export async function streamResponse(formData, originalMessage) {
                                 commitActiveTask(data.label || 'Done.');
                             } else if (ctx.tool !== 'create_calendar_task') {
                                 const pastLabel = (ctx.showQuery && ctx.queryText) ? `${ctx.past} for \u201c${ctx.shortQuery}\u201d` : ctx.past;
-                                commitActiveTask(pastLabel);
-                                renderToolBadge(ctx.tool, pastLabel);
+                                commitActiveTask(pastLabel);          // the trace keeps every call, query text included
+                                renderToolBadgeOnce(ctx.tool);        // the badge is the turn's summary: one per kind of access
                             }
                             // create_calendar_task: the aggregated calendar_task_created event is the signal.
                         }
@@ -1069,7 +1189,7 @@ export async function streamResponse(formData, originalMessage) {
                             const contents = tasks.map(t => t.content).filter(Boolean);
                             const summary = n === 1 ? 'Created calendar task' : `Created ${n} calendar tasks`;
                             addTraceEntry(contents.length ? `${summary}: ${contents.join(', ')}` : summary, 'indigo');
-                            renderToolBadge('create_calendar_task', summary);
+                            renderToolBadgeOnce('create_calendar_task');
                         }
 
                         if (event === 'trace') {
@@ -1141,7 +1261,7 @@ export async function streamResponse(formData, originalMessage) {
                                 : 'new conversation';
                             ctxParts.push(memoryNote);
 
-                            addTraceEntry(`Context assembled with ${ctxParts.join(' + ')}`, 'emerald');
+                            addTraceEntry(`App: context assembled — ${ctxParts.join(' + ')}`, 'emerald');
                         }
 
                         if (event === 'context_data_added') {
@@ -1342,6 +1462,10 @@ export async function streamResponse(formData, originalMessage) {
 
                         if (event === 'done') {
                             completed = true;
+                            // This stream produced the answer to the messages that were being held, so they are no
+                            // longer waiting: drop the marks (a bubble must not keep saying "waiting for the assistant"
+                            // under its own answer).
+                            clearWaitingMarks();
                             verifyStreamIntegrity(data, markdownBuffer);
                             const cursor = textContainer.querySelector('.streaming-cursor');
                             if (cursor) cursor.remove();
@@ -1456,14 +1580,21 @@ export async function streamResponse(formData, originalMessage) {
         if (markdownBuffer && !completed) flushFinalRender();
         if (generation.editorFile) { try { await flushDraftChanges(); } catch {} }
         aiWrapper.querySelectorAll('.thinking-pulse-dot, .trace-pulse-dot').forEach(el => el.classList.add('hidden'));
-        if (state.generation === generation) {
+        // Whatever happened (the `queued` path clears the generation without ending the stream), the abort handle, the
+        // button mode and the status must be reset — otherwise a stale "generating" state keeps the composer refusing
+        // messages after the stream that set it has already ended (measured). The generation itself is only cleared if
+        // it is still ours, so a newer turn that took over is left alone.
+        const ours = state.generation === generation;
+        if (ours) {
             state.isGenerating = false;
             state.generation = null;
+        }
+        if (ours || !state.generation) {
             window.__activeChatAbort = null;
             setSendStopMode(false);
-            paintAvailability();
-            refreshAvailability();
         }
+        paintAvailability();
+        refreshAvailability();
         if (lockOverlay) {
             lockOverlay.classList.remove('opacity-100', 'pointer-events-auto');
             lockOverlay.classList.add('opacity-0', 'pointer-events-none');

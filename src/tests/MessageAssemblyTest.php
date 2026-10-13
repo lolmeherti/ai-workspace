@@ -25,6 +25,7 @@ class MessageAssemblyTest
         $this->runBuildMessagesArray();
         $this->runRefIds();
         $this->runStableSystemPrompt();
+        $this->runSourceIdentityLines();
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);
@@ -40,6 +41,81 @@ class MessageAssemblyTest
         }
 
         return empty($this->failures);
+    }
+
+    private function runSourceIdentityLines(): void
+    {
+        echo "\n=== source identity lines (who the row's sources are) ===\n";
+
+        $method = new \ReflectionMethod(PromptAssemblyService::class, 'injectedEvidenceContent');
+        $method->setAccessible(true);
+
+        $atoms = json_encode([
+            ['source_id' => 'S1', 'chunk_ids' => ['S1-C5'], 'claim' => 'Battery life is 71 hours.'],
+        ]);
+
+        $row = [
+            'id' => 1,
+            'tool_name' => 'search_web',
+            'message' => 'raw text',
+            'raw_evicted' => 1,
+            'atomic_context' => $atoms,
+            'source_map' => json_encode([
+                'S1' => ['title' => 'ZQX-77 Weatherpod specifications', 'domain' => 'example.test', 'url' => 'https://example.test/zqx-77'],
+            ]),
+        ];
+
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('an atomized row names its source before its facts',
+            str_starts_with($content, '[S1] ZQX-77 Weatherpod specifications — example.test'));
+        $this->test('and the facts still follow it', str_contains($content, '#REFID_1 Battery life is 71 hours.'));
+        $this->test('the identity comes before the facts, not after',
+            strpos($content, '[S1]') < strpos($content, '#REFID_1'));
+        $this->test('identity costs one short line, no coverage or state',
+            !str_contains($content, 'Atomized') && !str_contains($content, 'chunks') && !str_contains($content, 'tokens'));
+        $this->test('and, once the raw is gone, says the notes are selective and the source is stored',
+            str_contains($content, 'selective notes; full source stored and readable'));
+
+        // No title: the host still identifies the page, so the line survives.
+        $row['source_map'] = json_encode(['S1' => ['title' => '', 'domain' => 'www.example.test']]);
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('a missing title falls back to the host, with www stripped',
+            str_starts_with($content, '[S1] example.test'));
+
+        // No domain, URL only: still identifiable.
+        $row['source_map'] = json_encode(['S1' => ['title' => 'Some page', 'url' => 'https://a.test/x']]);
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('a missing domain is recovered from the url',
+            str_starts_with($content, '[S1] Some page — a.test'));
+
+        // Two sources in one row: one line each, in source order.
+        $row['source_map'] = json_encode([
+            'S1' => ['title' => 'First', 'domain' => 'one.test'],
+            'S2' => ['title' => 'Second', 'domain' => 'two.test'],
+        ]);
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('every source in the row gets its own line',
+            str_contains($content, '[S1] First — one.test') && str_contains($content, '[S2] Second — two.test'));
+
+        // Empty source map (a note row, a refusal): nothing is invented.
+        $row['source_map'] = null;
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('a row with no sources gains no identity line', !str_contains($content, '['));
+
+        // A source with neither title nor host must not produce a bare id.
+        $row['source_map'] = json_encode(['S1' => ['title' => '', 'domain' => '']]);
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('a source with no title and no host is skipped entirely',
+            str_starts_with($content, '#REFID_1'));
+
+        // The line is also present while the raw is still live: identity is not an atom-only feature.
+        $row['source_map'] = json_encode(['S1' => ['title' => 'Live page', 'domain' => 'live.test']]);
+        $row['raw_evicted'] = 0;
+        $content = $method->invoke($this->prompt, $row, []);
+        $this->test('raw rows carry identity too', str_starts_with($content, '[S1] Live page — live.test'));
+        $this->test('and raw still follows it', str_contains($content, 'raw text'));
+        $this->test('a row whose raw is still shown does NOT claim more is stored',
+            !str_contains($content, 'stored and readable'));
     }
 
     private function test(string $label, bool $condition): void
@@ -359,6 +435,32 @@ class MessageAssemblyTest
         $this->test('evidence carries valid_sources', $evidenceBlock !== null);
         $this->test('evidence carries fetched_at',
             $evidenceBlock !== null && str_contains($evidenceBlock, 'fetched_at="2026-09-22 19:00:00"'));
+
+        // The resident block is named for what it is: notes taken from the source, not the source. Nothing in the
+        // code parses the tag, but the name is what the model reads, so it is locked here.
+        $this->test('the resident block is named source_notes', $evidenceBlock !== null
+            && str_contains($evidenceBlock, '<source_notes ')
+            && str_contains($evidenceBlock, '</source_notes>')
+            && !str_contains($evidenceBlock, '<evidence '));
+
+        // The model's own summary of a fetch reads like the source unless it is marked. The assistant message that
+        // directly follows an evidence block carries the marker; nothing else does.
+        $sum = [
+            ['role' => 'system', 'message' => '<source id="S1">x</source>', 'message_type' => 'data_fetching', 'created_at' => '2026-09-22 19:00:00'],
+            ['role' => 'assistant', 'message' => 'The article says X.', 'message_type' => 'text'],
+            ['role' => 'user', 'message' => 'thanks', 'message_type' => 'text'],
+            ['role' => 'assistant', 'message' => 'You are welcome.', 'message_type' => 'text'],
+        ];
+        $m5 = $this->prompt->buildMessagesArray($sys, $sum);
+        $marked = 0;
+        foreach ($m5 as $msg) {
+            $c = is_string($msg['content']) ? $msg['content'] : '';
+            if (str_contains($c, 'selective, not the original')) {
+                $marked++;
+                $this->test('the fetch summary carries the marker', str_contains($c, 'The article says X.'));
+            }
+        }
+        $this->testEq('exactly one message carries the summary marker', 1, $marked);
     }
 
     private function countContent(array $messages, string $needle): int

@@ -67,6 +67,7 @@ class Schema
                 backing_chunks JSON NULL,
                 atomic_context JSON NULL,
                 atomic_tokens INT NULL,
+                chunk_map JSON NULL,
                 perf_metrics JSON NULL,
                 model VARCHAR(255) NULL,
                 rating TINYINT NULL,
@@ -78,6 +79,24 @@ class Schema
                     FOREIGN KEY (session_id)
                     REFERENCES chat_sessions(id)
                     ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+
+        // The terminal link: which user row(s) a terminal row closes. An assistant answer and the stop's closing
+        // line are both terminal rows. The primary key makes "one terminal row per user row" a database rule rather
+        // than a convention, so a second runner that answers the same turn is refused instead of stored, and the
+        // owed-work derivations ("a user row with no terminal row") become plain queries instead of ordering guesses.
+        $this->db->executeStatement("
+            CREATE TABLE IF NOT EXISTS turn_answers (
+                user_row_id INT NOT NULL PRIMARY KEY,
+                terminal_row_id INT NOT NULL,
+                kind ENUM('answer', 'stopped') NOT NULL DEFAULT 'answer',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_turn_answers_terminal (terminal_row_id),
+                CONSTRAINT fk_turn_answers_user
+                    FOREIGN KEY (user_row_id) REFERENCES chat_history(id) ON DELETE CASCADE,
+                CONSTRAINT fk_turn_answers_terminal
+                    FOREIGN KEY (terminal_row_id) REFERENCES chat_history(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
 
@@ -232,6 +251,50 @@ class Schema
             $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'atomic_context'");
             if (empty($columns)) {
                 $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN atomic_context JSON NULL AFTER backing_chunks");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // The per-submit choices a user message carries, stored on the row itself so every consumer of the turn — the
+        // worker's own turn, a batch of held messages, a re-derivation after a restart — reads the same facts and
+        // behaves identically. Kept in the job payload they were a second source of truth, and a collapsed one: a null
+        // ("no decision") and an empty list ("the user turned links off") both arrived as empty, which silently disabled
+        // the link scan on every ordinary message. See
+        // .hermes/plans/tools/2026-10-12_tool-lifecycle-and-queue-integrity.md.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'turn_effort'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN turn_effort VARCHAR(16) NULL AFTER atomic_context");
+            }
+        } catch (PDOException $e) {
+        }
+
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'turn_edit_file'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN turn_edit_file VARCHAR(255) NULL AFTER turn_effort");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // TEXT rather than JSON on purpose: JSON cannot distinguish SQL NULL ("no decision — apply the app's link rule")
+        // from a JSON null or [] ("the user said: none"), and that distinction is the defect this column removes.
+        // NULL = apply the rule · '[]' = open nothing · '["url", …]' = exactly these.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'turn_fetch_urls'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN turn_fetch_urls TEXT NULL AFTER turn_edit_file");
+            }
+        } catch (PDOException $e) {
+        }
+
+        // The per-unit table of contents for stored evidence (one entry per emitted chunk):
+        // generated beside the atoms, never injected, read on demand. Null means "never built" —
+        // the source is browse-able only through phrase search until an enrichment pass fills it.
+        try {
+            $columns = $this->db->query("SHOW COLUMNS FROM chat_history LIKE 'chunk_map'");
+            if (empty($columns)) {
+                $this->db->executeStatement("ALTER TABLE chat_history ADD COLUMN chunk_map JSON NULL AFTER atomic_tokens");
             }
         } catch (PDOException $e) {
         }

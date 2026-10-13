@@ -19,5 +19,6 @@ enum Action: string
     case DELETE_EMAIL_ACCOUNT = 'delete_email_account';
     case SEND_REPLY = 'send_reply';
     case ATOMIZE_CONTEXT = 'atomize_context';
+    case STOP_TURN = 'stop_turn';
     case SET_REASONING_EFFORT = 'set_reasoning_effort';
 }
