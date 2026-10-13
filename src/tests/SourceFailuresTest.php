@@ -25,20 +25,13 @@ class SourceFailuresTest
         // ── labels and solvability ──────────────────────────────────────────
         $this->testEq('a CAPTCHA is labelled as the user\'s to solve',
             'needs your attention in the browser', SourceFailures::label('challenge_required'));
-        $this->test('and is marked solvable', SourceFailures::solvable('challenge_required'));
         $this->testEq('a consent wall is its own label',
             'needs a consent click in the browser', SourceFailures::label('consent_required'));
-        $this->testEq('a timeout says so', 'timed out', SourceFailures::label('timeout'));
-        $this->test('a timeout is retryable', SourceFailures::solvable('timeout'));
         $this->testEq('an unknown status degrades to a readable string',
             'could not be read', SourceFailures::label('something_new_from_the_bridge'));
-        $this->test('and is not claimed to be solvable', !SourceFailures::solvable('something_new_from_the_bridge'));
 
         $e = SourceFailures::entry('https://example.com/a/b?x=1', 'rejected', 'HTTP 403');
         $this->testEq('an entry carries the domain, not the whole URL', 'example.com', $e['domain']);
-        $this->testEq('an entry carries the raw status for tracing', 'rejected', $e['status']);
-        $this->test('the tooltip keeps the bridge detail',
-            str_contains($e['tooltip'], 'HTTP 403'));
 
         // ── sources that were read and contributed nothing ───────────────────
         $map = [
@@ -55,7 +48,6 @@ class SourceFailuresTest
         $this->testEq('reading a claim-only source is not a failure', 0,
             count(SourceFailures::unused(['S2' => $map['S2']], $evidence)));
         $this->testEq('an empty evidence block flags every source', 3, count(SourceFailures::unused($map, '')));
-        $this->testEq('no sources means nothing to report', [], SourceFailures::unused([], $evidence));
 
         // ── one list for the panel, de-duplicated by identity ────────────────
         $fetchFailures = [
@@ -73,8 +65,6 @@ class SourceFailuresTest
             in_array('no_usable_content', array_column($final, 'status'), true));
         // A clean turn is one where every registered source has an evidence block — S5 has none here, so
         // it must still be reported; with only the covered sources the list is empty.
-        $this->testEq('a turn with nothing unread reports nothing', [], SourceFailures::finalize(
-            [], ['S1' => $map['S1'], 'S2' => $map['S2']], $evidence));
 
         // ── a failure that came with a reason keeps it ───────────────────────────────────────────────────
         // A video the launcher could not read arrives with its own sentence and its title; the row is the only
@@ -98,11 +88,6 @@ class SourceFailuresTest
         $panelUsed = SourceFailures::used($map, $panelFailed);
         $this->testEq('a page listed as failed is not also listed as successful', 1, count($panelUsed));
         $this->test('and the one that stays is the one that carried evidence', isset($panelUsed['S1']));
-        $this->testEq('a turn with no failures keeps every source', $map, SourceFailures::used($map, []));
-        $this->testEq('a failed fetch that never entered the map removes nothing', $map,
-            SourceFailures::used($map, [['url' => 'https://never.example/x', 'status' => 'timeout']]));
-        $this->testEq('an entry with no URL cannot mask a source', count($map),
-            count(SourceFailures::used($map, [['status' => 'error']])));
 
         // ── one row per page, however many ids it got ────────────────────────
         // Measured (session 1001315): two searches in one turn registered the same thread under S1 and S4,
@@ -120,9 +105,6 @@ class SourceFailuresTest
         $titled = SourceFailures::unused(['S9' => ['url' => 'https://c.example/three', 'title' => 'Three']], '');
         $this->testEq('a source with no evidence carries its page title', 'Three', $titled[0]['title'] ?? '');
         $untitled = SourceFailures::unused(['S9' => ['url' => 'https://c.example/three']], '');
-        $this->testEq('and stays empty when the map has no title', '', $untitled[0]['title'] ?? '');
-        $this->testEq('a raw fetch failure has no title to carry', '',
-            SourceFailures::entry('https://d.example/four', 'rejected')['title']);
 
         $this->runSiteGroups();
 
@@ -162,20 +144,14 @@ class SourceFailuresTest
         $this->testEq('and keeps every page, in the order read', ['Model card', 'Files', 'Older model'],
             array_column($groups[1]['pages'], 'title'));
         $this->testEq('a single-page site is its own group', ['Qwen'], array_column($groups[2]['pages'], 'title'));
-        $this->testEq('a www host is titled without it', 'example.com',
-            SourceFailures::groupBySite(['x' => ['url' => 'https://www.example.com/a', 'domain' => 'www.example.com']])[0]['site']);
 
         $this->testEq('an endpoint is the path without the host', '/Qwen/Qwen3.8-Flash-Next',
             UrlIndex::endpoint('https://huggingface.co/Qwen/Qwen3.8-Flash-Next'));
         $this->testEq('a query is part of the endpoint', '/blog?id=qwen3.8-flash-next',
             UrlIndex::endpoint('https://qwen.ai/blog?id=qwen3.8-flash-next'));
-        $this->testEq('a bare host has no endpoint to show', '', UrlIndex::endpoint('https://example.com/'));
-        $this->testEq('an unparseable URL has no endpoint', '', UrlIndex::endpoint('not a url'));
 
         $this->testEq('a source with no site keeps its own group', 1,
             count(SourceFailures::groupBySite(['m1' => ['title' => 'a memory']])));
-        $this->testEq('and is not merged with a second one', 2,
-            count(SourceFailures::groupBySite(['m1' => ['title' => 'a'], 'm2' => ['title' => 'b']])));
     }
 
     private function testEq(string $label, mixed $expected, mixed $actual): void

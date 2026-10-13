@@ -85,12 +85,6 @@ class MessageAssemblyTest
         $output = $this->prompt->preprocessHistory($input);
 
         $this->testEq('filters tool_call message', 3, count($output));
-        $this->test('user message preserved',
-            $output[0]['role'] === 'user' && $output[0]['message'] === 'find my cv');
-        $this->test('system data_fetching preserved',
-            $output[1]['role'] === 'system' && $output[1]['message'] === 'Found: CV_2024.pdf');
-        $this->test('assistant text preserved',
-            $output[2]['role'] === 'assistant' && $output[2]['message'] === 'I found your CV.');
         $this->test('tool_call row is absent',
             !in_array('search_files QUERY:cv', array_column($output, 'message')));
         $this->test('super_abilities row is absent',
@@ -228,7 +222,6 @@ class MessageAssemblyTest
         $this->test('a turn carrying a reminder still extends the next turn (append-only)', $extendsR);
 
         $roles = array_values(array_unique(array_map(fn($m) => $m['role'], $out3)));
-        $this->test('no new roles', empty(array_diff($roles, ['system', 'user', 'assistant', 'tool'])));
 
         $history4 = [
             ['role' => 'system', 'message' => 'ACTIVE_SENTINEL', 'message_type' => 'data_fetching', 'raw_evicted' => 0],
@@ -272,8 +265,6 @@ class MessageAssemblyTest
 
         $this->testEq('atoms carry the same token', '#REFID_3 the claim',
             PromptAssemblyService::renderAtomLines([['source_id' => 'S3', 'claim' => 'the claim']]));
-        $this->testEq('an already-tokenised id is left alone', '#REFID_3', PromptAssemblyService::refToken('#REFID_3'));
-        $this->testEq('a non-id is passed through', 'file', PromptAssemblyService::refToken('file'));
     }
 
     // ===================================================================

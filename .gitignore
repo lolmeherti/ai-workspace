@@ -12,3 +12,11 @@ src/logs/app.log
 .hermes/plans/
 docs/
 AGENTS.md
+
+# Live probes drive the real app, the real engine and the real browser, so their source and their output carry the
+# owner's actual browsing: real hostnames, session ids, captured page text. Machine-only — never tracked, never
+# committed. Their runtime stores (a Chrome profile, captured runs) are the same data and are ignored for the same
+# reason.
+src/tests/live/
+src/tests/extraction-compare/browser-profile/
+src/tests/extraction-compare/runs/

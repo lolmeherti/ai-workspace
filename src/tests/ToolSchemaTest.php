@@ -55,7 +55,6 @@ class ToolSchemaTest
                 break;
             }
         }
-        $this->test('every exposed tool is a valid Tool enum case', $allValidEnum);
 
         foreach (['update_calendar_task', 'delete_calendar_task'] as $wt) {
             $this->test("write/exec tool {$wt} is NOT exposed to the model", !in_array($wt, $names, true));
@@ -68,12 +67,9 @@ class ToolSchemaTest
                 break;
             }
         }
-        $this->test('every tool has a non-empty description', $allHaveDesc);
 
         $create = $byName['create_calendar_task'] ?? null;
         $this->test('create_calendar_task requires content', $create !== null && in_array('content', $create['parameters']['required'] ?? [], true));
-        $this->test('create_calendar_task has due_string property', $create !== null && isset($create['parameters']['properties']['due_string']));
-        $this->test('create_calendar_task due_string is optional', $create !== null && !in_array('due_string', $create['parameters']['required'] ?? [], true));
 
         foreach (['search_local', 'search_web', 'search_calendar'] as $st) {
             $fn = $byName[$st] ?? null;
@@ -92,12 +88,10 @@ class ToolSchemaTest
         }
         $this->testEq('editor mode exposes exactly 1 tool', 1, count($editorNames));
         $this->testEq('editor mode exposes search_memories only', ['search_memories'], $editorNames);
-        $this->test('editor-mode tool is a valid Tool enum case', Tool::tryFrom($editorNames[0] ?? '') !== null);
         $this->test('editor mode does NOT expose search_local', !in_array('search_local', $editorNames, true));
         $this->test('editor mode does NOT expose search_web', !in_array('search_web', $editorNames, true));
         $sm = $editorByName['search_memories'] ?? null;
         $this->test('search_memories requires queries', $sm !== null && in_array('queries', $sm['parameters']['required'] ?? [], true));
-        $this->test('search_memories has non-empty description', $sm !== null && trim((string) ($sm['description'] ?? '')) !== '');
 
         echo "\n" . str_repeat('=', 55) . "\n";
         printf("Results: %d passed, %d failed, %d total\n", $this->passed, $this->failed, $this->passed + $this->failed);

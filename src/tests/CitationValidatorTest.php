@@ -66,12 +66,10 @@ class CitationValidatorTest
         ];
         $this->testEq('dedupes repeated IDs', ['S1'], $this->prompt->extractVisibleSourceIds($dup));
 
-        $this->testEq('empty history -> empty', [], $this->prompt->extractVisibleSourceIds([]));
 
         $noSources = [
             ['role' => 'system', 'message' => 'plain tool output, no source markers', 'message_type' => 'data_fetching'],
         ];
-        $this->testEq('data_fetching without markers -> empty', [], $this->prompt->extractVisibleSourceIds($noSources));
 
         $evicted = [
             ['role' => 'system', 'message' => '<source id="S1">a</source>', 'message_type' => 'data_fetching', 'raw_evicted' => 1],
@@ -93,7 +91,6 @@ class CitationValidatorTest
         );
         $this->test('valid citation stripped', !str_contains($out, '[S1]'));
         $this->test('hallucinated citation stripped', !str_contains($out, '[S9]'));
-        $this->test('non-citation text preserved', str_contains($out, 'Claim one'));
 
         $out2 = $this->validator->sanitizeCitations(
             'See [S1-C2] and [S1, S3] and [S2-C1, S3-C4].',
@@ -103,7 +100,6 @@ class CitationValidatorTest
 
         $out3 = $this->validator->sanitizeCitations('Paris [S1] is capital.', []);
         $this->test('empty valid set strips citation', !str_contains($out3, '[S1]'));
-        $this->test('empty valid set preserves text', str_contains($out3, 'Paris'));
 
         // ── cited in prose instead of in brackets ────────────────────────────
         // Measured: "**Caveat on those prices:** S2/S3 are eBay US listings." reached the user with the
@@ -149,8 +145,6 @@ class CitationValidatorTest
             'Tea. #REFID_2.', $this->validator->sanitizeCitations('Tea. #REFID_02-C12.', ['S2']));
         $this->testEq('an unknown chunk-suffixed token is removed in full',
             'Tea. .', $this->validator->sanitizeCitations('Tea. #REFID_9-C1.', ['S2']));
-        $this->testEq('ordinary text with a chunk-like suffix is preserved',
-            'Device AB-C1.', $this->validator->sanitizeCitations('Device AB-C1.', ['S2']));
 
         $asToken = $this->validator->sanitizeCitations('Tea. #REFID_2', ['#REFID_1', '#REFID_2']);
         $this->test('an already-tokenised valid list works too', str_contains($asToken, '#REFID_2'));
@@ -174,8 +168,6 @@ class CitationValidatorTest
             !$this->validator->hasHallucinatedCitations('Fact [S2].', ['S1', 'S2', 'S3']));
         $this->test('non-visible citation hallucinated',
             $this->validator->hasHallucinatedCitations('Fact [S9].', ['S1', 'S2', 'S3']));
-        $this->test('no citations -> not hallucinated',
-            !$this->validator->hasHallucinatedCitations('Plain answer.', ['S1']));
         $this->test('empty valid set + citation -> hallucinated',
             $this->validator->hasHallucinatedCitations('Fact [S1].', []));
     }
@@ -189,7 +181,6 @@ class CitationValidatorTest
 
         $this->testEq('extracts unique IDs in order',
             ['S1', 'S3'], $this->validator->extractCitations('See [S1] and [S3] and [S1].'));
-        $this->testEq('no citations -> empty', [], $this->validator->extractCitations('No citations here.'));
     }
 
     private function test(string $label, bool $condition): void

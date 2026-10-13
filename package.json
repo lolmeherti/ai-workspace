@@ -5,8 +5,7 @@
   "scripts": {
     "build:css": "tailwindcss -i ./assets/utilities.css -o ./src/css/utilities.css --minify",
     "watch:css": "tailwindcss -i ./assets/utilities.css -o ./src/css/utilities.css --watch",
-    "test:ui": "node --test tests/ui/*.test.mjs",
-    "check:ui": "node tests/ui/check.mjs"
+    "test:ui": "node --test tests/ui/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.0",

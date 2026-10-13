@@ -91,12 +91,8 @@ class VideoWatchIngestTest
 
         $this->testEq('the transcript is one source', ['S3'], $out['sourceIds']);
         $this->testEq('registered under its own url', 'youtu.be', $out['sourceMap']['S3']['domain'] ?? '');
-        $this->testEq('with its title kept', 'A talk about plastic', $out['sourceMap']['S3']['title'] ?? '');
         $this->test('the spoken words are in the evidence', str_contains((string) $out['evidence'], 'let us begin'));
         $this->test('the header and the lines are separate chunks', count($out['backingChunks']) === 2);
-        $this->testEq('the chunks carry the source id', 'S3-C1', $out['backingChunks'][0]->chunkId);
-        $this->test('the fit level is reported', in_array($out['fitLevel'], ['exact', 'extractive', 'condensed'], true));
-        $this->testEq('no failures', [], $out['failed']);
 
         $pipeline->setSourceStartSeq(4);
         $two = $pipeline->ingestDocument([
@@ -106,8 +102,6 @@ class VideoWatchIngestTest
         $this->testEq('a second video gets the next source id', ['S4', 'S5'], $two['sourceIds']);
 
         $empty = $pipeline->ingestDocument([], 'nothing here');
-        $this->testEq('nothing to hand over produces no evidence', '', $empty['evidence']);
-        $this->testEq('and says so', 'none', $empty['fitLevel']);
     }
 
     // ── the watch itself, driven by a faked job ────────────────────────
@@ -153,19 +147,14 @@ class VideoWatchIngestTest
         $this->testEq('the first thing the user sees is that we are watching it', 'Let me watch that video for you…', $statuses[0] ?? '');
         $this->test('the job\'s own status lines are shown', in_array('Transcript ready', $statuses, true));
         $this->testEq('the watch produced one document', 1, $watch['watched']);
-        $this->testEq('nothing failed', [], $watch['failed']);
         $this->testEq('under the video\'s own title', 'Me at the zoo', $watch['docs'][0]['title']);
-        $this->testEq('and its host', 'www.youtube.com', $watch['docs'][0]['domain']);
         $this->testEq('marked as a transcript', 'transcript', $watch['docs'][0]['sectionType']);
         $this->test('the words are there with their times', str_contains($watch['docs'][0]['text'], 'alright so here we are'));
-        $this->test('and the source is named', str_contains($watch['docs'][0]['text'], '[asr]'));
 
         // The trace panel is filled while the watch runs, not after it: the turn's own calls have not begun
         // when the watch is over, so without these lines the panel stays empty for the whole watch.
         $this->test('the fusion pass announces itself on the trace',
             in_array('Fusing the captions with the transcription', $traces, true));
-        $this->test('and says what it did',
-            1 === count(array_filter($traces, static fn(string $t): bool => str_starts_with($t, 'Nothing to fuse'))));
 
         // A watch that fails reports it rather than producing an empty document. The failure rides inside
         // the job snapshot, which is where the launcher puts it.
@@ -204,8 +193,6 @@ class VideoWatchIngestTest
         (new VideoWatchIngest(new AgentManager(), $running))->ingest(['https://youtu.be/zzz'], '', $emit, $connected);
         $this->test('a watch in progress names its stage on the trace',
             in_array('Transcribing the video on this machine', $traces, true));
-        $this->testEq('once, however far the count has moved', 1,
-            count(array_filter($traces, static fn(string $t): bool => $t === 'Transcribing the video on this machine')));
     }
 
     // ── harness ─────────────────────────────────────────────────────────

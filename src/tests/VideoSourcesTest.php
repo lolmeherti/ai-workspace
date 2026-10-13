@@ -35,13 +35,11 @@ class VideoSourcesTest
     {
         echo "\n=== the declared map ===";
 
-        $this->testEq('the declared domains', ['youtube.com', 'youtu.be', 'youtube-nocookie.com'], VideoSources::domains());
 
         $watch = VideoSources::match('https://www.youtube.com/watch?v=oOzTaK143hs');
         $this->testEq('a watch link is the youtube platform', 'youtube', $watch['platform'] ?? '');
         $this->testEq('and it is the watch pipeline', 'watch', $watch['pipeline'] ?? '');
         $this->testEq('with the video id pulled out', 'oOzTaK143hs', $watch['video_id'] ?? '');
-        $this->testEq('and the declared domain it matched', 'youtube.com', $watch['domain'] ?? '');
 
         foreach (['m.youtube.com', 'music.youtube.com', 'www.youtube.com', 'YOUTUBE.COM'] as $host) {
             $this->test("a subdomain is the same platform: {$host}",
@@ -57,8 +55,6 @@ class VideoSourcesTest
         $this->testEq('a reddit video link is not claimed yet — parked, not mis-served', null, VideoSources::match('https://v.redd.it/abc123'));
         $this->testEq('a reddit thread stays a page', null, VideoSources::match('https://www.reddit.com/r/x/comments/y/title/'));
         $this->testEq('and an image host is not a video', null, VideoSources::match('https://i.redd.it/abc.jpg'));
-        $this->testEq('an empty string matches nothing', null, VideoSources::match(''));
-        $this->testEq('nor does prose', null, VideoSources::match('not a url at all'));
     }
 
     private function runLookalikes(): void

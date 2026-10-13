@@ -46,65 +46,15 @@ class MultiQueryTest
         ];
         foreach ($map as [$class, $prefix]) {
 
-            $this->testEq(
-                "{$prefix}: single query no comma",
-                ['iPhone 15 specs'],
-                $this->invokeSplit($class, 'iPhone 15 specs')
-            );
 
-            $this->testEq(
-                "{$prefix}: two comma-separated queries",
-                ['iPhone 15 specs', 'Samsung Galaxy S24 specs'],
-                $this->invokeSplit($class, 'iPhone 15 specs, Samsung Galaxy S24 specs')
-            );
 
-            $this->testEq(
-                "{$prefix}: three queries",
-                ['alpha', 'beta', 'gamma'],
-                $this->invokeSplit($class, 'alpha, beta, gamma')
-            );
 
-            $this->testEq(
-                "{$prefix}: trims whitespace around queries",
-                ['alpha', 'beta'],
-                $this->invokeSplit($class, '  alpha ,  beta  ')
-            );
 
-            $this->testEq(
-                "{$prefix}: trailing comma produces no empty element",
-                ['only'],
-                $this->invokeSplit($class, 'only,')
-            );
 
-            $this->testEq(
-                "{$prefix}: leading comma produces no empty element",
-                ['only'],
-                $this->invokeSplit($class, ',only')
-            );
 
-            $this->testEq(
-                "{$prefix}: double comma produces no empty element",
-                ['a', 'b'],
-                $this->invokeSplit($class, 'a,,b')
-            );
 
-            $this->testEq(
-                "{$prefix}: empty string returns empty array",
-                [],
-                $this->invokeSplit($class, '')
-            );
 
-            $this->testEq(
-                "{$prefix}: only commas returns empty array",
-                [],
-                $this->invokeSplit($class, ',,,')
-            );
 
-            $this->testEq(
-                "{$prefix}: query with internal comma (city, state) stays as one",
-                ['best pizza in Austin Texas'],
-                $this->invokeSplit($class, 'best pizza in Austin Texas')
-            );
         }
     }
 

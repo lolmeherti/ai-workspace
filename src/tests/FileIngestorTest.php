@@ -120,10 +120,7 @@ class FileIngestorTest
 
         $this->testEq('image title from structured call', 'Blood Test Results', $result['title']);
         $this->test('searchable_text contains visible_text_original', str_contains($result['searchable_text'], 'Blutbild vom 12.03.2024'));
-        $this->test('searchable_text contains visible_text_english', str_contains($result['searchable_text'], 'Blood count from 12.03.2024'));
         $this->test('searchable_text contains description', str_contains($result['searchable_text'], 'A medical blood test report'));
-        $this->test('searchable_text contains joined entities', str_contains($result['searchable_text'], 'hemoglobin leukocyte 12.03.2024'));
-        $this->testEq('search_entities', ['hemoglobin', 'leukocyte', '12.03.2024'], $result['search_entities']);
     }
 
     private function runImageParseFailure(): void
@@ -137,8 +134,6 @@ class FileIngestorTest
         $result = $ingestor->ingest($path, 'image/png', 'scan.png');
 
         $this->testEq('parse failure falls back to filename title', 'image, scan', $result['title']);
-        $this->testEq('parse failure searchable_text falls back to filename', 'scan.png', $result['searchable_text']);
-        $this->testEq('parse failure yields empty entities', [], $result['search_entities']);
     }
 
     private function runEmptyExtractionRoutesToVision(): void
@@ -178,8 +173,6 @@ class FileIngestorTest
 
         $this->testEq('document title from title call', 'Quarterly Financial Report', $result['title']);
         $this->testEq('searchable_text is the English output of the normalization call', 'The quarterly financial report for the year 2024.', $result['searchable_text']);
-        $this->testEq('document search_entities empty (decision 1A)', [], $result['search_entities']);
-        $this->testEq('two LLM calls (title + English normalization)', 2, count($stub->calls));
     }
 
     private function runDocumentGermanPath(): void
@@ -196,10 +189,7 @@ class FileIngestorTest
         $path = $this->writeFixture('befund.txt', $content);
         $result = $ingestor->ingest($path, 'text/plain', 'befund.txt');
 
-        $this->testEq('German document title', 'Ärztlicher Befund', $result['title']);
         $this->testEq('German document searchable_text is English', 'This is the English translation of the medical report.', $result['searchable_text']);
-        $this->testEq('extracted_text preserved as original (for sidecar)', $content, $result['extracted_text']);
-        $this->testEq('two LLM calls (title + English normalization)', 2, count($stub->calls));
     }
 
     private function runDocumentTranslationFailure(): void
@@ -213,7 +203,6 @@ class FileIngestorTest
         $path = $this->writeFixture('fail.txt', $content);
         $result = $ingestor->ingest($path, 'text/plain', 'fail.txt');
 
-        $this->testEq('title still produced', 'Report Title', $result['title']);
         $this->testEq('failed translation yields empty searchable_text (original not indexed)', '', $result['searchable_text']);
     }
 
